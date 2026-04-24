@@ -34,7 +34,7 @@ A cross-platform Flutter app for capturing egocentric RGB video from smartphone 
 ## Project Structure
 
 ```
-mobile-app/
+digients-capture-app/
 ├── lib/
 │   ├── main.dart                 # App entry point
 │   ├── models/
@@ -109,7 +109,7 @@ The `metadata.json` follows the specification in `MOBILE_APP_SPECS.md` and inclu
 
 1. **Clone and navigate to the project**:
    ```bash
-   cd mobile-app
+   cd digients-capture-app
    ```
 
 2. **Install Flutter dependencies**:
