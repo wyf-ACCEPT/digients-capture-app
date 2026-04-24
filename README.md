@@ -1,4 +1,4 @@
-# Digients App
+# Digients Capture
 
 A cross-platform Flutter app for capturing egocentric RGB video from smartphone cameras, designed for robo foundation model training data collection. The app captures camera intrinsics, produces standardized recording packages, and ensures compatibility with downstream HaWoR + depth estimation pipelines.
 
