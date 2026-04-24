@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -195,7 +196,7 @@ class RecordingManager {
     }
   }
 
-  Future<void> shareRecording(String sessionId) async {
+  Future<void> shareRecording(String sessionId, {Rect? sharePositionOrigin}) async {
     try {
       final String? archivePath = await exportRecording(sessionId);
 
@@ -208,6 +209,7 @@ class RecordingManager {
         [file],
         subject: 'Egocentric Video Recording - $sessionId',
         text: 'Egocentric video recording data package',
+        sharePositionOrigin: sharePositionOrigin ?? const Rect.fromLTWH(0, 0, 1, 1),
       );
     } catch (e) {
       print('Error sharing recording: $e');

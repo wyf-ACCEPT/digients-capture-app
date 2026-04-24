@@ -72,6 +72,11 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   }
 
   Future<void> _shareRecording(Recording recording) async {
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    final Rect? origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+
     try {
       // Show loading dialog
       if (mounted) {
@@ -91,7 +96,10 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         );
       }
 
-      await _recordingManager.shareRecording(recording.sessionId);
+      await _recordingManager.shareRecording(
+        recording.sessionId,
+        sharePositionOrigin: origin,
+      );
 
       if (mounted) {
         Navigator.of(context).pop(); // Close loading dialog

@@ -14,6 +14,9 @@ import UIKit
     let cameraHandler = CameraCaptureHandler(channel: channel)
     channel.setMethodCallHandler(cameraHandler.handle)
 
+    let previewFactory = CameraPreviewFactory(cameraHandler: cameraHandler)
+    registrar(forPlugin: "camera-preview")?.register(previewFactory, withId: "digients_app/camera_preview")
+
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

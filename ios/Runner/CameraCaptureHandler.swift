@@ -6,7 +6,7 @@ import CoreMotion
 
 class CameraCaptureHandler: NSObject, FlutterPlugin {
     private var channel: FlutterMethodChannel
-    private var captureSession: AVCaptureSession?
+    var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureVideoDataOutput?
     private var assetWriter: AVAssetWriter?
     private var assetWriterInput: AVAssetWriterInput?
@@ -77,6 +77,9 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
 
         do {
             try setupCaptureSession()
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.captureSession?.startRunning()
+            }
             result(true)
         } catch {
             result(FlutterError(code: "INIT_FAILED", message: "Failed to initialize camera: \(error.localizedDescription)", details: nil))
@@ -95,11 +98,6 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
 
         // Configure device
         try device.lockForConfiguration()
-
-        // Disable video stabilization
-        if device.activeFormat.isVideoStabilizationModeSupported(.off) {
-            device.activeVideoStabilizationMode = .off
-        }
 
         // Set focus mode
         if device.isFocusModeSupported(.continuousAutoFocus) {
@@ -193,9 +191,9 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
         let cameraInfo: [String: Any] = [
             "lensId": device.uniqueID,
             "lensType": lensType,
-            "physicalFocalLengthMm": nil, // iOS doesn't expose this easily
-            "sensorPhysicalSizeMm": nil,  // iOS doesn't expose this
-            "sensorPixelArraySize": nil,  // iOS doesn't expose this
+            "physicalFocalLengthMm": NSNull(),
+            "sensorPhysicalSizeMm": NSNull(),
+            "sensorPixelArraySize": NSNull(),
             "horizontalFovDeg": fov,
             "videoStabilizationEnabled": false,
             "opticalStabilizationEnabled": false
@@ -238,7 +236,7 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
         let machineMirror = Mirror(reflecting: systemInfo.machine)
         let identifier = machineMirror.children.reduce("") { identifier, element in
             guard let value = element.value as? Int8, value != 0 else { return identifier }
-            return identifier + String(UnicodeScalar(UInt8(value))!)
+            return identifier + String(UnicodeScalar(UInt8(value)))
         }
         return identifier
     }
@@ -266,8 +264,6 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
             frameCounter = 0
             recordingStartTime = nil
 
-            captureSession?.startRunning()
-
             result(true)
         } catch {
             result(FlutterError(code: "START_FAILED", message: "Failed to start recording: \(error.localizedDescription)", details: nil))
@@ -285,8 +281,7 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
             AVVideoWidthKey: 1920,
             AVVideoHeightKey: 1080,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 15_000_000,
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264MainAutoLevel
+                AVVideoAverageBitRateKey: 15_000_000
             ]
         ]
 
@@ -322,7 +317,6 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
         }
 
         isRecording = false
-        captureSession?.stopRunning()
 
         assetWriterInput?.markAsFinished()
 
@@ -331,10 +325,11 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
                 self?.framesFileHandle?.closeFile()
                 self?.framesFileHandle = nil
 
+                let frames = self?.frameCounter ?? 0
                 let recordingData: [String: Any] = [
                     "directoryPath": self?.outputDirectory ?? "",
-                    "durationSeconds": self?.frameCounter ?? 0 / 30, // Approximate duration
-                    "frameCount": self?.frameCounter ?? 0
+                    "durationSeconds": frames / 30,
+                    "frameCount": frames
                 ]
 
                 result(recordingData)

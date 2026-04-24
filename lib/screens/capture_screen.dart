@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/camera_service.dart';
 import '../services/recording_manager.dart';
@@ -141,15 +142,27 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
         final DateTime capturedAt = _recordingStartTime ?? DateTime.now();
         final int? fileSizeMB = await _recordingManager.calculateRecordingSize(_currentSessionId!);
 
+        final int durationSeconds = (result['durationSeconds'] as int?) ?? 0;
+        final int frameCount = (result['frameCount'] as int?) ?? 0;
+
         final Recording recording = Recording(
           sessionId: _currentSessionId!,
           capturedAt: capturedAt,
           directoryPath: result['directoryPath'] ?? '',
-          durationSeconds: result['durationSeconds'] as int?,
+          durationSeconds: durationSeconds,
           fileSizeMB: fileSizeMB,
         );
 
         await _recordingManager.saveRecording(recording);
+        await _recordingManager.saveMetadata(
+          _currentSessionId!,
+          _buildMetadata(
+            sessionId: _currentSessionId!,
+            capturedAt: capturedAt,
+            durationSeconds: durationSeconds,
+            frameCount: frameCount,
+          ),
+        );
 
         setState(() {
           _recordingState = RecordingState.idle;
@@ -177,6 +190,74 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
         _recordingState = RecordingState.error;
       });
     }
+  }
+
+  RecordingMetadata _buildMetadata({
+    required String sessionId,
+    required DateTime capturedAt,
+    required int durationSeconds,
+    required int frameCount,
+  }) {
+    final Map<String, dynamic> cam = _cameraInfo ?? <String, dynamic>{};
+    final Map<String, dynamic> dev = _deviceInfo ?? <String, dynamic>{};
+
+    final List<double>? sensorSize = (cam['sensorPhysicalSizeMm'] as List?)
+        ?.map((e) => (e as num).toDouble())
+        .toList();
+    final List<int>? sensorPixels = (cam['sensorPixelArraySize'] as List?)
+        ?.map((e) => (e as num).toInt())
+        .toList();
+
+    final bool stabilizationEnabled =
+        (cam['videoStabilizationEnabled'] as bool?) ?? false;
+
+    return RecordingMetadata(
+      schemaVersion: '1.0',
+      sessionId: sessionId,
+      capturedAtUtc: capturedAt,
+      appVersion: '1.0.0',
+      device: DeviceInfo(
+        os: (dev['os'] as String?) ?? 'ios',
+        osVersion: (dev['osVersion'] as String?) ?? '',
+        manufacturer: (dev['manufacturer'] as String?) ?? 'Apple',
+        model: (dev['model'] as String?) ?? '',
+        modelIdentifier: (dev['modelIdentifier'] as String?) ?? '',
+      ),
+      camera: CameraInfo(
+        lensId: (cam['lensId'] as String?) ?? '',
+        lensType: (cam['lensType'] as String?) ?? 'unknown',
+        physicalFocalLengthMm: (cam['physicalFocalLengthMm'] as num?)?.toDouble(),
+        sensorPhysicalSizeMm: sensorSize,
+        sensorPixelArraySize: sensorPixels,
+        horizontalFovDeg: (cam['horizontalFovDeg'] as num?)?.toDouble(),
+        videoStabilizationEnabled: stabilizationEnabled,
+        opticalStabilizationEnabled:
+            (cam['opticalStabilizationEnabled'] as bool?) ?? false,
+      ),
+      video: VideoInfo(
+        codec: 'hevc',
+        container: 'mp4',
+        width: 1920,
+        height: 1080,
+        framerate: 30,
+        durationSec: durationSeconds.toDouble(),
+        frameCount: frameCount,
+        bitrateBps: 15000000,
+        colorSpace: 'bt709',
+        pixelFormat: 'yuv420p',
+        hasAudioTrack: false,
+      ),
+      intrinsics: IntrinsicsInfo(
+        source: 'per_frame',
+        perFrameFile: 'frames.jsonl',
+        reliable: !stabilizationEnabled,
+        notes: 'Per-frame intrinsics from CMSampleBuffer attachment; stabilization disabled on connection.',
+      ),
+      capturePlatform: const CapturePlatformInfo(
+        flutterVersion: '3.41.7',
+        nativeSdkVersion: 'ios',
+      ),
+    );
   }
 
   String _formatDuration(Duration duration) {
@@ -234,6 +315,21 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
               ),
             ),
             const SizedBox(height: 16),
+
+            // Camera Preview
+            if (_isInitialized) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: const UiKitView(
+                    viewType: 'digients_app/camera_preview',
+                    creationParamsCodec: StandardMessageCodec(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Camera Info Card
             if (_cameraInfo != null || _deviceInfo != null) ...[
