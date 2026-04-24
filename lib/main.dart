@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 
 void main() {
-  runApp(const EgocentricVideoCaptureApp());
+  runApp(const DigientsApp());
 }
 
-class EgocentricVideoCaptureApp extends StatelessWidget {
-  const EgocentricVideoCaptureApp({super.key});
+class DigientsApp extends StatelessWidget {
+  const DigientsApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Egocentric Video Capture',
+      title: 'Digients App',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,

@@ -189,7 +189,7 @@ class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserv
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Egocentric Video Capture'),
+        title: const Text('Digients App'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: Padding(

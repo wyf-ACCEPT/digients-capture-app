@@ -1,4 +1,4 @@
-# Egocentric Video Capture App
+# Digients App
 
 A cross-platform Flutter app for capturing egocentric RGB video from smartphone cameras, designed for robo foundation model training data collection. The app captures camera intrinsics, produces standardized recording packages, and ensures compatibility with downstream HaWoR + depth estimation pipelines.
 
@@ -34,7 +34,7 @@ A cross-platform Flutter app for capturing egocentric RGB video from smartphone 
 ## Project Structure
 
 ```
-egocentric_video_capture/
+mobile-app/
 ├── lib/
 │   ├── main.dart                 # App entry point
 │   ├── models/
@@ -57,8 +57,9 @@ egocentric_video_capture/
 │       │   ├── MainActivity.kt             # Android main activity
 │       │   └── CameraCaptureHandler.kt     # Android camera implementation
 │       └── AndroidManifest.xml            # Permissions and config
-└── tools/
-    └── validate_recording.py     # Python schema validator
+├── tools/
+│   └── validate_recording.py     # Python schema validator
+└── MOBILE_APP_SPECS.md          # Detailed technical specifications
 ```
 
 ## Output Data Format
@@ -108,7 +109,7 @@ The `metadata.json` follows the specification in `MOBILE_APP_SPECS.md` and inclu
 
 1. **Clone and navigate to the project**:
    ```bash
-   cd egocentric_video_capture
+   cd mobile-app
    ```
 
 2. **Install Flutter dependencies**:

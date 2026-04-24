@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "egocentric_video_capture" "\0"
+            VALUE "FileDescription", "Digients App" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "egocentric_video_capture" "\0"
+            VALUE "InternalName", "Digients App" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "egocentric_video_capture.exe" "\0"
-            VALUE "ProductName", "egocentric_video_capture" "\0"
+            VALUE "OriginalFilename", "Digients App.exe" "\0"
+            VALUE "ProductName", "Digients App" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -25,7 +25,7 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
     }
 
     static func register(with registrar: FlutterPluginRegistrar) {
-        let channel = FlutterMethodChannel(name: "egocentric_video_capture/camera", binaryMessenger: registrar.messenger())
+        let channel = FlutterMethodChannel(name: "digients_app/camera", binaryMessenger: registrar.messenger())
         let instance = CameraCaptureHandler(channel: channel)
         registrar.addMethodCallDelegate(instance, channel: channel)
     }

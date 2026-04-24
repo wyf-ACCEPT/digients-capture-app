@@ -9,7 +9,7 @@ import UIKit
   ) -> Bool {
 
     let controller = window?.rootViewController as! FlutterViewController
-    let channel = FlutterMethodChannel(name: "egocentric_video_capture/camera", binaryMessenger: controller.binaryMessenger)
+    let channel = FlutterMethodChannel(name: "digients_app/camera", binaryMessenger: controller.binaryMessenger)
 
     let cameraHandler = CameraCaptureHandler(channel: channel)
     channel.setMethodCallHandler(cameraHandler.handle)

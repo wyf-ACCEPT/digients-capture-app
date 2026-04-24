@@ -36,7 +36,7 @@ import kotlin.math.atan2
 class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
 
     companion object {
-        private const val CHANNEL_NAME = "egocentric_video_capture/camera"
+        private const val CHANNEL_NAME = "digients_app/camera"
         private const val TAG = "CameraCaptureHandler"
         private const val CAMERA_PERMISSION_REQUEST_CODE = 1001
     }

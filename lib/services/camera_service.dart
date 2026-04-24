@@ -8,7 +8,7 @@ enum RecordingState {
 }
 
 class CameraService {
-  static const MethodChannel _channel = MethodChannel('egocentric_video_capture/camera');
+  static const MethodChannel _channel = MethodChannel('digients_app/camera');
 
   RecordingState _recordingState = RecordingState.idle;
   String? _currentSessionId;
