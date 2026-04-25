@@ -2,9 +2,12 @@
 
 A cross-platform Flutter app for capturing egocentric RGB video from smartphone cameras, designed for robo foundation model training data collection. The app captures camera intrinsics, produces standardized recording packages, and ensures compatibility with downstream HaWoR + depth estimation pipelines.
 
+The current build ships the **V2 UI**: a polished, low-literacy interface with a 3-tab shell (Home / Submissions / Me), task discovery, animated mount instructions, and a dark/light theme system. The capture engine itself (V1) is unchanged and remains the source of truth for the data contract.
+
 ## Features
 
-- **Cross-platform**: iOS and Android support
+### Capture engine (V1)
+- **Cross-platform**: iOS and Android support (iOS is the actively tested platform)
 - **Wide-angle capture**: Automatically selects the widest FOV rear camera (ultrawide preferred)
 - **Hardware HEVC encoding**: 1080p @ 30fps with 15 Mbps bitrate
 - **Camera intrinsics capture**:
@@ -12,8 +15,17 @@ A cross-platform Flutter app for capturing egocentric RGB video from smartphone 
   - Android: Static or derived intrinsics via Camera2 API
 - **No audio recording**: Privacy-first approach eliminates ambient conversation capture
 - **Standardized output**: Self-describing recording packages with metadata
-- **Export functionality**: Tar.gz archives for easy sharing and transfer
+- **Export functionality**: Tar.gz archives via the system share sheet
 - **Video stabilization disabled**: Preserves intrinsic matrix validity
+
+### UI layer (V2)
+- **11 screens**: Auth, Home, Task Pool, Task Detail, Mount Instructions, Recording, Submit Success, Submissions, Submission Detail, Profile, Settings
+- **3-tab navigation** via `go_router`, with the Recording screen as a full-screen modal
+- **Animated mount instructions**: Two illustrated slides (phone-with-arrow, headband-mount) shown before each recording
+- **Live camera preview** during recording via an iOS PlatformView wrapping `AVCaptureVideoPreviewLayer`
+- **Theme system**: Dark (default) / Light / Auto, persisted across launches
+- **Custom design system**: DCButton, DCChip, DCStatusBadge, DCKVTile, DCSegmented, DCToggle, DCNavBar, DCTabBar (Inter + JetBrains Mono via `google_fonts`)
+- **Local-only data**: No cloud upload yet; the V2 "submit" maps to the V1 share-sheet export. Cloud upload, real auth, and server-driven task pool are V3 work.
 
 ## Technical Specifications
 
@@ -36,30 +48,61 @@ A cross-platform Flutter app for capturing egocentric RGB video from smartphone 
 ```
 digients-capture-app/
 ├── lib/
-│   ├── main.dart                 # App entry point
+│   ├── main.dart                          # App entry; wires ThemeController + GoRouter
+│   ├── router.dart                        # go_router config (shell + modal routes)
+│   ├── theme/
+│   │   ├── tokens.dart                    # DCColors (dark + light palettes)
+│   │   ├── text_styles.dart               # Inter + JetBrains Mono helpers
+│   │   └── app_theme.dart                 # ThemeData builder
+│   ├── state/
+│   │   └── theme_controller.dart          # ChangeNotifier; persists theme mode to JSON
+│   ├── widgets/                           # V2 design-system primitives
+│   │   ├── buttons.dart                   # DCButton, DCIconButton
+│   │   ├── chips.dart                     # DCChip, DCPointsPill, DCStatusBadge
+│   │   ├── cards.dart                     # DCCard, DCKVTile, DCImagePlaceholder
+│   │   ├── forms.dart                     # DCSegmented, DCToggle, DCInputField
+│   │   └── nav.dart                       # DCNavBar, DCTabBar
+│   ├── screens/v2/                        # V2 UI screens
+│   │   ├── auth_screen.dart               # 00 Sign In / Register (placeholder)
+│   │   ├── shell_scaffold.dart            # 3-tab shell wrapper
+│   │   ├── home_screen.dart               # 01 Home (categories grid)
+│   │   ├── pool_screen.dart               # 02 Task Pool
+│   │   ├── task_detail_screen.dart        # 03 Task Detail
+│   │   ├── mount_instructions_screen.dart # 04 Mount Instructions (animated)
+│   │   ├── record_screen.dart             # 05 Recording (modal, real engine)
+│   │   ├── success_screen.dart            # 06 Submit Success (confetti)
+│   │   ├── submissions_screen.dart        # 07 Submissions (real)
+│   │   ├── submission_detail_screen.dart  # 08 Submission Detail (real)
+│   │   ├── profile_screen.dart            # 09 Profile (radar + leaderboard)
+│   │   └── settings_screen.dart           # 10 Settings (theme toggle is real)
+│   ├── fixtures/
+│   │   └── data.dart                      # V2 placeholder data (categories, tasks, profile)
 │   ├── models/
-│   │   └── recording.dart        # Data models for recordings and metadata
-│   ├── screens/
-│   │   ├── home_screen.dart      # Main navigation
-│   │   ├── capture_screen.dart   # Recording interface
-│   │   └── recordings_screen.dart # Recording list and export
+│   │   ├── recording.dart                 # V1 recording / metadata data classes
+│   │   └── task.dart                      # V2 Task / Category / Profile / LeaderRow
 │   └── services/
-│       ├── camera_service.dart   # Platform channel interface
-│       └── recording_manager.dart # File management and export
+│       ├── camera_service.dart            # V1 platform channel interface (untouched)
+│       └── recording_manager.dart         # V1 file management + share export (untouched)
 ├── ios/
 │   └── Runner/
-│       ├── AppDelegate.swift          # iOS app delegate
-│       ├── CameraCaptureHandler.swift # iOS camera implementation
-│       └── Info.plist                # Permissions and config
+│       ├── AppDelegate.swift              # iOS app delegate (registers PlatformView)
+│       ├── CameraCaptureHandler.swift     # iOS camera implementation
+│       ├── CameraPreviewView.swift        # PlatformView for live preview
+│       └── Info.plist                     # Permissions and config
 ├── android/
 │   └── app/src/main/
 │       ├── kotlin/com/example/egocentric_video_capture/
-│       │   ├── MainActivity.kt             # Android main activity
-│       │   └── CameraCaptureHandler.kt     # Android camera implementation
-│       └── AndroidManifest.xml            # Permissions and config
+│       │   ├── MainActivity.kt            # Android main activity
+│       │   └── CameraCaptureHandler.kt    # Android camera implementation
+│       └── AndroidManifest.xml           # Permissions and config
 ├── tools/
-│   └── validate_recording.py     # Python schema validator
-└── MOBILE_APP_SPECS.md          # Detailed technical specifications
+│   └── validate_recording.py              # Python schema validator
+├── docs/
+│   ├── specs/
+│   │   ├── MOBILE_APP_SPECS_V1.md         # Capture engine spec (locked)
+│   │   └── MOBILE_APP_SPECS_V2.md         # UI layer spec
+│   └── ui_design/v2/                      # HTML/React mockup that drove V2
+└── README.md
 ```
 
 ## Output Data Format
@@ -75,7 +118,7 @@ recording_<session_id>/
 
 ### Metadata Schema
 
-The `metadata.json` follows the specification in `MOBILE_APP_SPECS.md` and includes:
+The `metadata.json` follows the specification in `docs/specs/MOBILE_APP_SPECS_V1.md` and includes:
 
 - Session information (ID, timestamp, app version)
 - Device details (OS, version, model)
@@ -335,13 +378,20 @@ Recording packages are designed for the downstream HaWoR + depth estimation pipe
 3. **Standardized format**: Consistent structure across iOS and Android
 4. **Self-describing**: Metadata includes all necessary processing parameters
 
-## Future Enhancements (v2+)
+## Roadmap
 
-- Cloudflare R2 direct upload
-- Real-time preview with hand detection overlay
-- Variable quality/bitrate settings
-- Background recording support
-- Live streaming capabilities
+### V2 (current)
+- ✅ Polished UI layer with 11 screens, 3-tab navigation, dark/light theme
+- ✅ Live camera preview during recording (iOS)
+- ✅ Animated mount-instruction onboarding
+- ✅ Local recording list + share-sheet export
+
+### V3 (planned — see `docs/specs/MOBILE_APP_SPECS_V3_TBD.md`)
+- Cloudflare R2 direct upload (replaces share-sheet export)
+- Real authentication (OTP + OAuth) replacing the V2 placeholder
+- Server-driven task pool, points balance, leaderboard, and review status
+- Push notifications for approval / point credits
+- Background uploads with Wi-Fi-only toggle
 
 ## License
 
@@ -375,8 +425,19 @@ Key settings are defined in:
 ### Schema Changes
 
 If modifying the output schema:
-1. Update `MOBILE_APP_SPECS.md` first
+1. Update `docs/specs/MOBILE_APP_SPECS_V1.md` first
 2. Modify data models in `lib/models/recording.dart`
 3. Update native platform code
 4. Update `tools/validate_recording.py` validator
 5. Increment schema version in metadata
+
+### Adding a New Screen (V2)
+
+1. Create the screen widget under `lib/screens/v2/`.
+2. Reuse design-system primitives from `lib/widgets/` — don't roll new buttons/chips/cards inline.
+3. Add the route in `lib/router.dart`. Use `ShellRoute` for tabbed screens; standalone `GoRoute` (with `pageBuilder` + `fullscreenDialog`) for modals.
+4. If the screen needs new placeholder data, extend `lib/fixtures/data.dart` rather than embedding fixtures in widgets.
+
+### Theming
+
+Color tokens live in `lib/theme/tokens.dart` (`DCColors.dark` / `DCColors.light`). Read them inside widgets with the `context.dc` extension (e.g. `context.dc.accent`). The active palette is selected by `MaterialApp`'s `themeMode`, driven by `ThemeController`.
