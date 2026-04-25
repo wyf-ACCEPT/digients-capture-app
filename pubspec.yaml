@@ -51,6 +51,11 @@ dependencies:
   # File system utilities
   path: ^1.8.3
 
+  # V2 additions
+  go_router: ^14.6.2
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
