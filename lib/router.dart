@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import 'screens/v2/auth_screen.dart';
 import 'screens/v2/shell_scaffold.dart';
 import 'screens/v2/home_screen.dart';
@@ -12,10 +13,21 @@ import 'screens/v2/submissions_screen.dart';
 import 'screens/v2/submission_detail_screen.dart';
 import 'screens/v2/profile_screen.dart';
 import 'screens/v2/settings_screen.dart';
+import 'state/auth_controller.dart';
 
-GoRouter buildRouter() {
+GoRouter buildRouter(AuthController auth) {
   return GoRouter(
     initialLocation: '/auth',
+    // refreshListenable + redirect together act as the auth gate: every time
+    // the AuthController notifies, redirect re-runs and may bounce the user.
+    refreshListenable: auth,
+    redirect: (context, state) {
+      final loggedIn = auth.isAuthenticated;
+      final atAuth = state.matchedLocation == '/auth';
+      if (!loggedIn && !atAuth) return '/auth';
+      if (loggedIn && atAuth) return '/home';
+      return null;
+    },
     routes: [
       GoRoute(path: '/auth', builder: (_, __) => const AuthScreen()),
       ShellRoute(

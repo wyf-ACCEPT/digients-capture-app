@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../../theme/tokens.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/auth.dart';
+import '../../services/auth_service.dart';
+import '../../state/auth_controller.dart';
 import '../../theme/text_styles.dart';
+import '../../theme/tokens.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/forms.dart';
 
 enum AuthMode { signIn, register }
-enum AuthMethod { phone, email }
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -17,7 +20,7 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   AuthMode _mode = AuthMode.signIn;
-  AuthMethod _method = AuthMethod.phone;
+  AuthIdentifierType _method = AuthIdentifierType.phone;
   bool _otpSent = false;
   final _idController = TextEditingController();
   final _otpController = TextEditingController();
@@ -29,14 +32,90 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  void _onAuth() {
-    context.go('/home');
+  Future<void> _sendOtp() async {
+    final id = _idController.text.trim();
+    if (id.isEmpty) {
+      _showError(_method == AuthIdentifierType.phone
+          ? 'Enter a phone number first.'
+          : 'Enter an email first.');
+      return;
+    }
+    try {
+      await context
+          .read<AuthController>()
+          .startOtp(identifier: id, type: _method);
+      if (!mounted) return;
+      setState(() => _otpSent = true);
+    } catch (e) {
+      if (!mounted) return;
+      _showError(_describe(e));
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    final id = _idController.text.trim();
+    final code = _otpController.text.trim();
+    if (code.length != 6) {
+      _showError('Enter the 6-digit code.');
+      return;
+    }
+    try {
+      await context
+          .read<AuthController>()
+          .verifyOtp(identifier: id, code: code);
+      // Router redirect picks up the auth state change and navigates.
+    } catch (e) {
+      if (!mounted) return;
+      _showError(_describe(e));
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    try {
+      // Real Apple Sign-In is not wired yet; the mock returns a synthetic
+      // session so the rest of the flow stays testable end-to-end.
+      await context.read<AuthController>().signInWithApple(
+            identityToken: 'mock-identity-token',
+            nonce: 'mock-nonce',
+          );
+    } catch (e) {
+      if (!mounted) return;
+      _showError(_describe(e));
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    try {
+      await context
+          .read<AuthController>()
+          .signInWithGoogle(idToken: 'mock-id-token');
+    } catch (e) {
+      if (!mounted) return;
+      _showError(_describe(e));
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _describe(Object e) {
+    if (e is AuthException) return e.message;
+    return 'Something went wrong: $e';
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final auth = context.watch<AuthController>();
     final isRegister = _mode == AuthMode.register;
+    final busy = auth.isBusy;
+
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
@@ -71,18 +150,26 @@ class _AuthScreenState extends State<AuthScreen> {
                 style: DCText.inter(size: 15, weight: FontWeight.w500, color: c.textDim),
               ),
               const SizedBox(height: 28),
-              DCSegmented<AuthMethod>(
-                values: const [AuthMethod.phone, AuthMethod.email],
+              DCSegmented<AuthIdentifierType>(
+                values: const [AuthIdentifierType.phone, AuthIdentifierType.email],
                 labels: const ['Phone', 'Email'],
                 selected: _method,
-                onChanged: (v) => setState(() => _method = v),
+                onChanged: (v) {
+                  if (busy) return;
+                  setState(() {
+                    _method = v;
+                    _otpSent = false;
+                    _otpController.clear();
+                  });
+                },
               ),
               const SizedBox(height: 16),
               DCInputField(
                 controller: _idController,
-                hint: _method == AuthMethod.phone ? '+1 555 0100' : 'you@example.com',
-                keyboardType:
-                    _method == AuthMethod.phone ? TextInputType.phone : TextInputType.emailAddress,
+                hint: _method == AuthIdentifierType.phone ? '+1 555 0100' : 'you@example.com',
+                keyboardType: _method == AuthIdentifierType.phone
+                    ? TextInputType.phone
+                    : TextInputType.emailAddress,
               ),
               if (_otpSent) ...[
                 const SizedBox(height: 12),
@@ -95,7 +182,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Code sent · 60s',
+                  'Mock backend · the code is 123456',
                   style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
                 ),
               ],
@@ -117,15 +204,11 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 18),
               DCButton(
                 label: !_otpSent
-                    ? 'Send verification code'
-                    : (isRegister ? 'Create account' : 'Sign in'),
-                onPressed: () {
-                  if (!_otpSent) {
-                    setState(() => _otpSent = true);
-                  } else {
-                    _onAuth();
-                  }
-                },
+                    ? (busy ? 'Sending…' : 'Send verification code')
+                    : (busy
+                        ? 'Verifying…'
+                        : (isRegister ? 'Create account' : 'Sign in')),
+                onPressed: busy ? null : (!_otpSent ? _sendOtp : _verifyOtp),
               ),
               const SizedBox(height: 20),
               Row(
@@ -141,18 +224,33 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(child: DCButton.secondary(label: 'Apple', leadingIcon: Icons.apple, onPressed: _onAuth)),
+                  Expanded(
+                    child: DCButton.secondary(
+                      label: 'Apple',
+                      leadingIcon: Icons.apple,
+                      onPressed: busy ? null : _signInWithApple,
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: DCButton.secondary(label: 'Google', leadingIcon: Icons.g_mobiledata, onPressed: _onAuth)),
+                  Expanded(
+                    child: DCButton.secondary(
+                      label: 'Google',
+                      leadingIcon: Icons.g_mobiledata,
+                      onPressed: busy ? null : _signInWithGoogle,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
               Center(
                 child: GestureDetector(
-                  onTap: () => setState(() {
-                    _mode = isRegister ? AuthMode.signIn : AuthMode.register;
-                    _otpSent = false;
-                  }),
+                  onTap: busy
+                      ? null
+                      : () => setState(() {
+                            _mode = isRegister ? AuthMode.signIn : AuthMode.register;
+                            _otpSent = false;
+                            _otpController.clear();
+                          }),
                   child: Text.rich(
                     TextSpan(
                       style: DCText.inter(size: 14, weight: FontWeight.w500, color: c.textDim),
