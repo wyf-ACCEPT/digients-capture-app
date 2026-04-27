@@ -1,28 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'router.dart';
+import 'services/auth_service.dart';
+import 'services/token_storage.dart';
+import 'state/auth_controller.dart';
 import 'state/theme_controller.dart';
 import 'theme/app_theme.dart';
 import 'theme/tokens.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   final themeController = ThemeController();
   await themeController.load();
-  runApp(DigientsApp(themeController: themeController));
+
+  final authController = AuthController(
+    service: MockAuthService(),
+    tokens: TokenStorage(),
+  );
+  // Restore session from a stored refresh token if one exists. Blocks first
+  // frame so the router never flashes the auth screen for a logged-in user.
+  await authController.bootstrap();
+
+  runApp(DigientsApp(
+    themeController: themeController,
+    authController: authController,
+  ));
 }
 
 class DigientsApp extends StatelessWidget {
   final ThemeController themeController;
-  const DigientsApp({super.key, required this.themeController});
+  final AuthController authController;
+
+  const DigientsApp({
+    super.key,
+    required this.themeController,
+    required this.authController,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<ThemeController>.value(
-      value: themeController,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ThemeController>.value(value: themeController),
+        ChangeNotifierProvider<AuthController>.value(value: authController),
+      ],
       child: Consumer<ThemeController>(
         builder: (context, ctl, _) {
-          final router = buildRouter();
+          final router = buildRouter(authController);
           return MaterialApp.router(
             title: 'Digients Capture',
             debugShowCheckedModeBanner: false,

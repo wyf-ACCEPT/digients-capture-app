@@ -5,6 +5,7 @@ import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/forms.dart';
 import '../../widgets/nav.dart';
+import '../../state/auth_controller.dart';
 import '../../state/theme_controller.dart';
 import '../../fixtures/data.dart';
 
@@ -27,6 +28,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final c = context.dc;
     final p = fixtureProfile;
     final themeCtl = context.watch<ThemeController>();
+    final auth = context.watch<AuthController>();
+    final profile = auth.session?.profile;
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -38,9 +41,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.only(top: 8, bottom: 32),
               children: [
                 _Section(title: 'ACCOUNT', children: [
-                  _SettingsRow(label: 'Email', valueText: 'maya@example.com'),
-                  _SettingsRow(label: 'Phone', valueText: '+1 (555) ••• 0100'),
-                  _SettingsRow(label: 'UID', valueText: p.uid, mono: true, isLast: true),
+                  _SettingsRow(label: 'Email', valueText: profile?.email ?? '—'),
+                  _SettingsRow(label: 'Phone', valueText: profile?.phone ?? '—'),
+                  _SettingsRow(label: 'UID', valueText: profile?.uid ?? p.uid, mono: true, isLast: true),
                 ]),
                 _Section(title: 'UPLOADS', children: [
                   _SettingsRow(
@@ -87,7 +90,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _SettingsRow(label: 'Open-source licenses', trailing: Icon(Icons.chevron_right, color: c.textDim), isLast: true),
                 ]),
                 _Section(title: '', children: [
-                  _SettingsRow(label: 'Sign Out', danger: true),
+                  _SettingsRow(
+                    label: 'Sign Out',
+                    danger: true,
+                    onTap: () => context.read<AuthController>().logout(),
+                  ),
                   _SettingsRow(label: 'Delete account', danger: true, isLast: true),
                 ]),
               ],
@@ -140,6 +147,7 @@ class _SettingsRow extends StatelessWidget {
   final bool mono;
   final bool danger;
   final bool isLast;
+  final VoidCallback? onTap;
   const _SettingsRow({
     required this.label,
     this.valueText,
@@ -147,12 +155,13 @@ class _SettingsRow extends StatelessWidget {
     this.mono = false,
     this.danger = false,
     this.isLast = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
-    return Container(
+    final row = Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: isLast ? Colors.transparent : c.border)),
@@ -176,6 +185,12 @@ class _SettingsRow extends StatelessWidget {
           if (trailing != null) trailing!,
         ],
       ),
+    );
+    if (onTap == null) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: row,
     );
   }
 }
