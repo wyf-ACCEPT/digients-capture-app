@@ -72,6 +72,8 @@ class DCKVTile extends StatelessWidget {
           Text(
             value,
             style: DCText.inter(size: 14, weight: FontWeight.w500, color: c.text),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

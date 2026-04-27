@@ -73,7 +73,7 @@ class TaskDetailScreen extends StatelessWidget {
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
-                    childAspectRatio: 2.6,
+                    childAspectRatio: 2.2,
                     children: [
                       DCKVTile(label: 'Duration', value: task.duration, icon: Icons.access_time),
                       DCKVTile(label: 'Difficulty', value: task.difficulty, icon: Icons.tune),
