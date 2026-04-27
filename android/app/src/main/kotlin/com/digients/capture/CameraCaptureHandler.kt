@@ -1,4 +1,4 @@
-package com.example.egocentric_video_capture
+package com.digients.capture
 
 import android.Manifest
 import android.content.Context
@@ -25,10 +25,7 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
-import java.io.FileWriter
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlin.math.atan2
@@ -56,12 +53,14 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
     private var mediaCodec: MediaCodec? = null
     private var mediaMuxer: MediaMuxer? = null
     private var encoderSurface: Surface? = null
+    private var previewSurface: Surface? = null
     private var isRecording = false
     private var videoTrackIndex = -1
+    private var muxerStarted = false
+    private var encoderThread: Thread? = null
     private var frameCounter = 0
     private var sessionId: String? = null
     private var outputDirectory: String? = null
-    private var framesWriter: FileWriter? = null
 
     // Background thread
     private var backgroundThread: HandlerThread? = null
@@ -75,9 +74,19 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
         cameraManager = context?.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+
+        flutterPluginBinding.platformViewRegistry.registerViewFactory(
+            "digients_app/camera_preview",
+            CameraPreviewFactory(this),
+        )
+    }
+
+    fun setPreviewSurface(surface: Surface?) {
+        previewSurface = surface
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        cleanup()
         channel.setMethodCallHandler(null)
     }
 
@@ -172,8 +181,16 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
 
             selectedCameraId = bestCameraId
             cameraCharacteristics = cameraManager?.getCameraCharacteristics(bestCameraId)
-            openCamera(bestCameraId)
-            result.success(true)
+
+            // Close any leftover session/camera from a previous record-screen visit.
+            // Re-opening an already-open camera fails on Camera2 with onError, leaving
+            // cameraDevice null and the next startRecording call broken.
+            captureSession?.close()
+            captureSession = null
+            cameraDevice?.close()
+            cameraDevice = null
+
+            openCamera(bestCameraId, result)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize camera", e)
             result.error("INIT_FAILED", "Failed to initialize camera: ${e.message}", null)
@@ -247,21 +264,28 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
         }
     }
 
-    private fun openCamera(cameraId: String) {
+    private fun openCamera(cameraId: String, result: MethodChannel.Result) {
         if (!cameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
-            throw RuntimeException("Time out waiting to lock camera opening.")
+            result.error("TIMEOUT", "Time out waiting to lock camera opening.", null)
+            return
         }
 
         try {
             if (ActivityCompat.checkSelfPermission(context!!, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                cameraOpenCloseLock.release()
+                result.error("NO_PERMISSION", "Camera permission not granted", null)
                 return
             }
 
+            // Resolve the Dart future from the callback, not synchronously, so Dart
+            // doesn't proceed to startRecording with cameraDevice still null.
+            val replied = java.util.concurrent.atomic.AtomicBoolean(false)
             cameraManager?.openCamera(cameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
                     cameraOpenCloseLock.release()
                     cameraDevice = camera
                     Log.d(TAG, "Camera opened successfully")
+                    if (replied.compareAndSet(false, true)) result.success(true)
                 }
 
                 override fun onDisconnected(camera: CameraDevice) {
@@ -269,6 +293,9 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
                     camera.close()
                     cameraDevice = null
                     Log.w(TAG, "Camera disconnected")
+                    if (replied.compareAndSet(false, true)) {
+                        result.error("DISCONNECTED", "Camera disconnected", null)
+                    }
                 }
 
                 override fun onError(camera: CameraDevice, error: Int) {
@@ -276,11 +303,14 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
                     camera.close()
                     cameraDevice = null
                     Log.e(TAG, "Camera error: $error")
+                    if (replied.compareAndSet(false, true)) {
+                        result.error("CAMERA_ERROR", "Camera error: $error", null)
+                    }
                 }
             }, backgroundHandler)
         } catch (e: CameraAccessException) {
             cameraOpenCloseLock.release()
-            throw e
+            result.error("CAMERA_ERROR", "Camera access exception: ${e.message}", null)
         }
     }
 
@@ -302,18 +332,63 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
 
             val focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
             val sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+            val pixelArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)
+
+            val intrinsicCalibration = characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)
+            val hwLevel = characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL) ?: -1
+            val hwLevelFull = hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL ||
+                hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3
+
+            // Static intrinsics. Vocabulary follows tools/validate_recording.py:
+            //   "static"             — vendor-calibrated via LENS_INTRINSIC_CALIBRATION
+            //   "estimated_fallback" — derived from focal length + sensor size
+            //   "none"               — neither path produced usable values
+            val intrinsicMatrix: List<List<Double>>?
+            val intrinsicSource: String
+            if (intrinsicCalibration != null && intrinsicCalibration.size >= 5) {
+                val fx = intrinsicCalibration[0].toDouble()
+                val fy = intrinsicCalibration[1].toDouble()
+                val cx = intrinsicCalibration[2].toDouble()
+                val cy = intrinsicCalibration[3].toDouble()
+                intrinsicMatrix = listOf(
+                    listOf(fx, 0.0, cx),
+                    listOf(0.0, fy, cy),
+                    listOf(0.0, 0.0, 1.0)
+                )
+                intrinsicSource = "static"
+            } else {
+                val focal = focalLengths?.minOrNull() ?: 0f
+                if (sensorSize != null && pixelArraySize != null && focal > 0f) {
+                    val fx = (focal / sensorSize.width * pixelArraySize.width).toDouble()
+                    val fy = (focal / sensorSize.height * pixelArraySize.height).toDouble()
+                    intrinsicMatrix = listOf(
+                        listOf(fx, 0.0, 960.0),
+                        listOf(0.0, fy, 540.0),
+                        listOf(0.0, 0.0, 1.0)
+                    )
+                    intrinsicSource = "estimated_fallback"
+                } else {
+                    intrinsicMatrix = null
+                    intrinsicSource = "none"
+                }
+            }
+
+            val distortionCoeffs = characteristics.get(CameraCharacteristics.LENS_DISTORTION)
+                ?.toList()?.map { it.toDouble() }
 
             val cameraInfo = mapOf(
                 "lensId" to cameraId,
                 "lensType" to lensType,
                 "physicalFocalLengthMm" to focalLengths?.minOrNull(),
                 "sensorPhysicalSizeMm" to sensorSize?.let { listOf(it.width, it.height) },
-                "sensorPixelArraySize" to characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)?.let {
-                    listOf(it.width, it.height)
-                },
+                "sensorPixelArraySize" to pixelArraySize?.let { listOf(it.width, it.height) },
                 "horizontalFovDeg" to calculateHorizontalFOV(characteristics),
                 "videoStabilizationEnabled" to false,
-                "opticalStabilizationEnabled" to false
+                "opticalStabilizationEnabled" to false,
+                "intrinsicMatrix" to intrinsicMatrix,
+                "intrinsicSource" to intrinsicSource,
+                "distortionCoeffs" to distortionCoeffs,
+                "hardwareLevelFull" to hwLevelFull
             )
 
             result.success(cameraInfo)
@@ -349,20 +424,94 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
             return
         }
 
-        this.sessionId = sessionId
-        this.outputDirectory = outputDirectory
+        // The TextureView (CameraPreviewView) mounts asynchronously after Flutter
+        // renders the AndroidView, so previewSurface may still be null when Dart
+        // calls startRecording immediately after setState. Camera2 sessions are
+        // immutable — if we configure now without the preview surface, recording
+        // works but the preview stays black forever. Run the wait on backgroundHandler
+        // so the platform thread (and Dart's await) isn't blocked.
+        val mainHandler = Handler(android.os.Looper.getMainLooper())
+        backgroundHandler?.post {
+            val deadline = System.currentTimeMillis() + 800L
+            while (previewSurface == null && System.currentTimeMillis() < deadline) {
+                try {
+                    Thread.sleep(20)
+                } catch (e: InterruptedException) {
+                    break
+                }
+            }
+            if (previewSurface == null) {
+                Log.w(TAG, "Preview surface not ready after 800ms; recording without live preview")
+            }
 
-        try {
-            setupMediaCodec(outputDirectory)
-            setupFramesFile(outputDirectory)
-            createCaptureSession()
-            isRecording = true
-            frameCounter = 0
-            result.success(true)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start recording", e)
-            result.error("START_FAILED", "Failed to start recording: ${e.message}", null)
+            try {
+                this@CameraCaptureHandler.sessionId = sessionId
+                this@CameraCaptureHandler.outputDirectory = outputDirectory
+                setupMediaCodec(outputDirectory)
+                // Note: Android records static intrinsics in metadata.json (per spec).
+                // No per-frame frames.jsonl — that's iOS-only via CMSampleBuffer attachments.
+                isRecording = true
+                frameCounter = 0
+                startEncoderDrain()
+                createCaptureSession()
+                mainHandler.post { result.success(true) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start recording", e)
+                mainHandler.post {
+                    result.error("START_FAILED", "Failed to start recording: ${e.message}", null)
+                }
+            }
         }
+    }
+
+    // Drains MediaCodec's output buffers and writes them to MediaMuxer.
+    // Without this, encoded frames have nowhere to go: the encoder back-pressures
+    // the camera (causing preview to stall), and video.mp4 stays empty.
+    private fun startEncoderDrain() {
+        videoTrackIndex = -1
+        muxerStarted = false
+        encoderThread = Thread({
+            val codec = mediaCodec ?: return@Thread
+            val muxer = mediaMuxer ?: return@Thread
+            val bufferInfo = MediaCodec.BufferInfo()
+            try {
+                while (true) {
+                    val index = codec.dequeueOutputBuffer(bufferInfo, 10_000L)
+                    when {
+                        index == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                            // No buffer ready yet — keep polling.
+                        }
+                        index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            if (muxerStarted) {
+                                Log.e(TAG, "Output format changed twice; dropping")
+                                continue
+                            }
+                            videoTrackIndex = muxer.addTrack(codec.outputFormat)
+                            muxer.start()
+                            muxerStarted = true
+                        }
+                        index >= 0 -> {
+                            val buffer = codec.getOutputBuffer(index)
+                            if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+                                // Codec config (CSD) is already in MediaFormat; skip writing.
+                                bufferInfo.size = 0
+                            }
+                            if (buffer != null && bufferInfo.size > 0 && muxerStarted) {
+                                buffer.position(bufferInfo.offset)
+                                buffer.limit(bufferInfo.offset + bufferInfo.size)
+                                muxer.writeSampleData(videoTrackIndex, buffer, bufferInfo)
+                            }
+                            codec.releaseOutputBuffer(index, false)
+                            if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                                return@Thread
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Encoder drain failed", e)
+            }
+        }, "encoder-drain").also { it.start() }
     }
 
     private fun setupMediaCodec(outputDirectory: String) {
@@ -386,21 +535,20 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
         }
     }
 
-    private fun setupFramesFile(outputDirectory: String) {
-        val framesFile = File(outputDirectory, "frames.jsonl")
-        framesWriter = FileWriter(framesFile)
-    }
-
     private fun createCaptureSession() {
         val camera = cameraDevice ?: throw RuntimeException("Camera not available")
         val surface = encoderSurface ?: throw RuntimeException("Encoder surface not available")
 
-        val surfaces = listOf(surface)
+        // Include the preview surface if a CameraPreviewView has handed one over.
+        // Camera2 sessions are immutable, so any surface added here is fixed for the
+        // session lifetime; preview attached after recording starts is unsupported.
+        val preview = previewSurface
+        val surfaces = if (preview != null) listOf(surface, preview) else listOf(surface)
 
         camera.createCaptureSession(surfaces, object : CameraCaptureSession.StateCallback() {
             override fun onConfigured(session: CameraCaptureSession) {
                 captureSession = session
-                startRepeatingRequest(session, surface)
+                startRepeatingRequest(session, surface, preview)
             }
 
             override fun onConfigureFailed(session: CameraCaptureSession) {
@@ -409,12 +557,17 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
         }, backgroundHandler)
     }
 
-    private fun startRepeatingRequest(session: CameraCaptureSession, surface: Surface) {
+    private fun startRepeatingRequest(
+        session: CameraCaptureSession,
+        encoder: Surface,
+        preview: Surface?,
+    ) {
         val cameraId = selectedCameraId ?: return
         val characteristics = cameraCharacteristics ?: return
 
         val requestBuilder = cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)?.apply {
-            addTarget(surface)
+            addTarget(encoder)
+            preview?.let { addTarget(it) }
 
             // Disable video stabilization
             set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF)
@@ -433,7 +586,6 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
             session.setRepeatingRequest(builder.build(), object : CameraCaptureSession.CaptureCallback() {
                 override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
                     if (isRecording) {
-                        writeFrameIntrinsics(result)
                         frameCounter++
                     }
                 }
@@ -441,74 +593,6 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
         }
     }
 
-    private fun writeFrameIntrinsics(result: TotalCaptureResult) {
-        try {
-            val characteristics = cameraCharacteristics ?: return
-            val cameraId = selectedCameraId ?: return
-
-            // Get intrinsics if available
-            val intrinsicCalibration = characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION)
-            val distortionCoeffs = characteristics.get(CameraCharacteristics.LENS_DISTORTION)
-
-            val matrix: Array<DoubleArray> = if (intrinsicCalibration != null && intrinsicCalibration.size >= 5) {
-                // Use calibrated intrinsics
-                val fx = intrinsicCalibration[0].toDouble()
-                val fy = intrinsicCalibration[1].toDouble()
-                val cx = intrinsicCalibration[2].toDouble()
-                val cy = intrinsicCalibration[3].toDouble()
-
-                arrayOf(
-                    doubleArrayOf(fx, 0.0, cx),
-                    doubleArrayOf(0.0, fy, cy),
-                    doubleArrayOf(0.0, 0.0, 1.0)
-                )
-            } else {
-                // Derive intrinsics from focal length and sensor size
-                val focalLength = result.get(CaptureResult.LENS_FOCAL_LENGTH) ?: 0f
-                val sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
-                val pixelArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)
-
-                if (sensorSize != null && pixelArraySize != null && focalLength > 0) {
-                    val fx = (focalLength / sensorSize.width * pixelArraySize.width).toDouble()
-                    val fy = (focalLength / sensorSize.height * pixelArraySize.height).toDouble()
-                    val cx = (1920 / 2).toDouble()
-                    val cy = (1080 / 2).toDouble()
-
-                    arrayOf(
-                        doubleArrayOf(fx, 0.0, cx),
-                        doubleArrayOf(0.0, fy, cy),
-                        doubleArrayOf(0.0, 0.0, 1.0)
-                    )
-                } else {
-                    // Default fallback matrix
-                    arrayOf(
-                        doubleArrayOf(1500.0, 0.0, 960.0),
-                        doubleArrayOf(0.0, 1500.0, 540.0),
-                        doubleArrayOf(0.0, 0.0, 1.0)
-                    )
-                }
-            }
-
-            val timestampNs = result.get(CaptureResult.SENSOR_TIMESTAMP) ?: System.nanoTime()
-
-            val frameData = JSONObject().apply {
-                put("frame_idx", frameCounter)
-                put("timestamp_ns", timestampNs)
-                put("intrinsic_matrix", JSONArray().apply {
-                    for (row in matrix) {
-                        put(JSONArray(row.toList()))
-                    }
-                })
-                put("lens_id", cameraId)
-            }
-
-            framesWriter?.appendLine(frameData.toString())
-            framesWriter?.flush()
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error writing frame intrinsics", e)
-        }
-    }
 
     private fun stopRecording(result: MethodChannel.Result) {
         if (!isRecording) {
@@ -519,12 +603,21 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
         try {
             isRecording = false
 
-            // Stop capture session
+            // Stop the camera from sending more frames into the encoder input.
             captureSession?.stopRepeating()
             captureSession?.close()
             captureSession = null
 
-            // Stop and release MediaCodec
+            // Tell the encoder no more input is coming, then wait for the drain
+            // thread to flush remaining frames and emit BUFFER_FLAG_END_OF_STREAM.
+            try {
+                mediaCodec?.signalEndOfInputStream()
+            } catch (e: Exception) {
+                Log.e(TAG, "signalEndOfInputStream failed", e)
+            }
+            encoderThread?.join(2_000L)
+            encoderThread = null
+
             mediaCodec?.stop()
             mediaCodec?.release()
             mediaCodec = null
@@ -532,16 +625,13 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
             encoderSurface?.release()
             encoderSurface = null
 
-            // Stop MediaMuxer
-            if (videoTrackIndex >= 0) {
+            if (muxerStarted) {
                 mediaMuxer?.stop()
             }
             mediaMuxer?.release()
             mediaMuxer = null
-
-            // Close frames file
-            framesWriter?.close()
-            framesWriter = null
+            muxerStarted = false
+            videoTrackIndex = -1
 
             val recordingData = mapOf(
                 "directoryPath" to (outputDirectory ?: ""),
@@ -606,6 +696,5 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
         mediaCodec?.release()
         mediaMuxer?.release()
         encoderSurface?.release()
-        framesWriter?.close()
     }
 }

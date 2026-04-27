@@ -17,7 +17,7 @@ class DCNavBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(56);
+  Size get preferredSize => const Size.fromHeight(64);
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +31,7 @@ class DCNavBar extends StatelessWidget implements PreferredSizeWidget {
       child: SafeArea(
         bottom: false,
         child: SizedBox(
-          height: 40,
+          height: 48,
           child: Row(
             children: [
               if (onBack != null)

@@ -77,7 +77,7 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.dc;
     return GestureDetector(
-      onTap: () => context.go('/task/${task.id}'),
+      onTap: () => context.push('/task/${task.id}'),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: Container(

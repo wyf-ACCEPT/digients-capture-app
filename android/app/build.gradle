@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.egocentric_video_capture"
+    namespace = "com.digients.capture"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,11 +20,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.egocentric_video_capture"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.digients.capture"
+        // API 26+ required: Camera2 LENS_INTRINSIC_CALIBRATION + HEVC encoder.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

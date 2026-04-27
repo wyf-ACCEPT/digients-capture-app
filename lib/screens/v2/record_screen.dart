@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -125,15 +126,55 @@ class _RecordScreenState extends State<RecordScreen> {
     final cam = _cameraInfo ?? <String, dynamic>{};
     final dev = _deviceInfo ?? <String, dynamic>{};
     final stab = (cam['videoStabilizationEnabled'] as bool?) ?? false;
+    final os = (dev['os'] as String?) ?? (Platform.isAndroid ? 'android' : 'ios');
+    final isAndroid = os == 'android';
+
+    final IntrinsicsInfo intrinsics;
+    if (isAndroid) {
+      final matrix = (cam['intrinsicMatrix'] as List?)
+          ?.map((row) => (row as List).cast<num>().map((n) => n.toDouble()).toList())
+          .toList();
+      final source = (cam['intrinsicSource'] as String?) ?? 'none';
+      final hwLevelFull = (cam['hardwareLevelFull'] as bool?) ?? false;
+      final coeffs = (cam['distortionCoeffs'] as List?)
+          ?.cast<num>()
+          .map((n) => n.toDouble())
+          .toList();
+      // Per CLAUDE.md spec: Android intrinsics are reliable iff calibrated
+      // (LENS_INTRINSIC_CALIBRATION available), hardware level is FULL/LEVEL_3,
+      // and stabilization is off. The "static" source string here means calibrated.
+      final reliable = source == 'static' && hwLevelFull && !stab;
+      final notes = switch (source) {
+        'static' => 'Static intrinsics from Camera2 LENS_INTRINSIC_CALIBRATION.',
+        'estimated_fallback' => 'Static intrinsics derived from focal length and sensor size.',
+        _ => 'No intrinsics available from Camera2 characteristics.',
+      };
+      intrinsics = IntrinsicsInfo(
+        source: source,
+        staticMatrix: matrix,
+        distortionModel: coeffs != null && coeffs.isNotEmpty ? 'opencv5' : null,
+        distortionCoeffs: coeffs,
+        reliable: reliable,
+        notes: notes,
+      );
+    } else {
+      intrinsics = IntrinsicsInfo(
+        source: 'per_frame',
+        perFrameFile: 'frames.jsonl',
+        reliable: !stab,
+        notes: 'Per-frame intrinsics from CMSampleBuffer attachment.',
+      );
+    }
+
     return RecordingMetadata(
       schemaVersion: '1.0',
       sessionId: sessionId,
       capturedAtUtc: capturedAt,
       appVersion: '2.0.0',
       device: DeviceInfo(
-        os: (dev['os'] as String?) ?? 'ios',
+        os: os,
         osVersion: (dev['osVersion'] as String?) ?? '',
-        manufacturer: (dev['manufacturer'] as String?) ?? 'Apple',
+        manufacturer: (dev['manufacturer'] as String?) ?? (isAndroid ? '' : 'Apple'),
         model: (dev['model'] as String?) ?? '',
         modelIdentifier: (dev['modelIdentifier'] as String?) ?? '',
       ),
@@ -141,8 +182,14 @@ class _RecordScreenState extends State<RecordScreen> {
         lensId: (cam['lensId'] as String?) ?? '',
         lensType: (cam['lensType'] as String?) ?? 'unknown',
         physicalFocalLengthMm: (cam['physicalFocalLengthMm'] as num?)?.toDouble(),
-        sensorPhysicalSizeMm: null,
-        sensorPixelArraySize: null,
+        sensorPhysicalSizeMm: (cam['sensorPhysicalSizeMm'] as List?)
+            ?.cast<num>()
+            .map((n) => n.toDouble())
+            .toList(),
+        sensorPixelArraySize: (cam['sensorPixelArraySize'] as List?)
+            ?.cast<num>()
+            .map((n) => n.toInt())
+            .toList(),
         horizontalFovDeg: (cam['horizontalFovDeg'] as num?)?.toDouble(),
         videoStabilizationEnabled: stab,
         opticalStabilizationEnabled: (cam['opticalStabilizationEnabled'] as bool?) ?? false,
@@ -160,15 +207,10 @@ class _RecordScreenState extends State<RecordScreen> {
         pixelFormat: 'yuv420p',
         hasAudioTrack: false,
       ),
-      intrinsics: IntrinsicsInfo(
-        source: 'per_frame',
-        perFrameFile: 'frames.jsonl',
-        reliable: !stab,
-        notes: 'Per-frame intrinsics from CMSampleBuffer attachment.',
-      ),
-      capturePlatform: const CapturePlatformInfo(
+      intrinsics: intrinsics,
+      capturePlatform: CapturePlatformInfo(
         flutterVersion: '3.41.7',
-        nativeSdkVersion: 'ios',
+        nativeSdkVersion: isAndroid ? 'android' : 'ios',
       ),
     );
   }
@@ -186,11 +228,16 @@ class _RecordScreenState extends State<RecordScreen> {
       body: Stack(
         children: [
           if (_isInitialized)
-            const Positioned.fill(
-              child: UiKitView(
-                viewType: 'digients_app/camera_preview',
-                creationParamsCodec: StandardMessageCodec(),
-              ),
+            Positioned.fill(
+              child: Platform.isIOS
+                  ? const UiKitView(
+                      viewType: 'digients_app/camera_preview',
+                      creationParamsCodec: StandardMessageCodec(),
+                    )
+                  : const AndroidView(
+                      viewType: 'digients_app/camera_preview',
+                      creationParamsCodec: StandardMessageCodec(),
+                    ),
             ),
           Positioned.fill(
             child: IgnorePointer(
