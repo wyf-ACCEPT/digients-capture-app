@@ -40,3 +40,11 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // ARCore (Google AR Core) — provides 6DOF pose via Shared Camera mode so we
+    // can keep Camera2 + MediaCodec recording while pose data is computed alongside.
+    // Declared "optional" in the manifest, so devices without ARCore install simply
+    // fall back to the imu_raw tier per RECORDING_DATA_STRUCTURE_V1.1.md §4.
+    implementation 'com.google.ar:core:1.46.0'
+}

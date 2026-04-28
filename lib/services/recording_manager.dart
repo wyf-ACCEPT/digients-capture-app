@@ -133,19 +133,6 @@ class RecordingManager {
     }
   }
 
-  Future<void> writeFrameIntrinsics(String sessionId, FrameIntrinsics frameIntrinsics) async {
-    try {
-      final Directory recordingsDir = await _getRecordingsDirectory();
-      final Directory recordingDir = Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
-      final File framesFile = File(path.join(recordingDir.path, 'frames.jsonl'));
-
-      final String line = '${frameIntrinsics.toJsonString()}\n';
-      await framesFile.writeAsString(line, mode: FileMode.append);
-    } catch (e) {
-      print('Error writing frame intrinsics: $e');
-    }
-  }
-
   Future<String?> exportRecording(String sessionId) async {
     try {
       final Directory recordingsDir = await _getRecordingsDirectory();
