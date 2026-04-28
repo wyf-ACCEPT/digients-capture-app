@@ -42,6 +42,8 @@ class DeviceInfo {
   final String manufacturer;
   final String model;
   final String modelIdentifier;
+  final bool? hasArkit;
+  final bool? hasArcore;
 
   const DeviceInfo({
     required this.os,
@@ -49,6 +51,8 @@ class DeviceInfo {
     required this.manufacturer,
     required this.model,
     required this.modelIdentifier,
+    this.hasArkit,
+    this.hasArcore,
   });
 
   Map<String, dynamic> toJson() {
@@ -58,6 +62,8 @@ class DeviceInfo {
       'manufacturer': manufacturer,
       'model': model,
       'model_identifier': modelIdentifier,
+      if (hasArkit != null) 'has_arkit': hasArkit,
+      if (hasArcore != null) 'has_arcore': hasArcore,
     };
   }
 }
@@ -173,19 +179,87 @@ class IntrinsicsInfo {
   }
 }
 
+class PoseInfo {
+  // source ∈ {"arkit", "arcore", "imu_raw", "none"} per spec §3.1.
+  final String source;
+  final String? frameOrigin;
+  final String? coordinateConvention;
+  final String? transformKind;
+  final double? rateHz;
+  final String? trackingStateField;
+  final String? notes;
+
+  const PoseInfo({
+    required this.source,
+    this.frameOrigin,
+    this.coordinateConvention,
+    this.transformKind,
+    this.rateHz,
+    this.trackingStateField,
+    this.notes,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'source': source,
+      if (frameOrigin != null) 'frame_origin': frameOrigin,
+      if (coordinateConvention != null) 'coordinate_convention': coordinateConvention,
+      if (transformKind != null) 'transform_kind': transformKind,
+      if (rateHz != null) 'rate_hz': rateHz,
+      if (trackingStateField != null) 'tracking_state_field': trackingStateField,
+      if (notes != null) 'notes': notes,
+    };
+  }
+}
+
+class MotionInfo {
+  final bool recorded;
+  final double? rateHz;
+  final String? gyroUnits;
+  final String? accelUnits;
+  final bool? accelIncludesGravity;
+  final String? frame;
+  final String? notes;
+
+  const MotionInfo({
+    required this.recorded,
+    this.rateHz,
+    this.gyroUnits,
+    this.accelUnits,
+    this.accelIncludesGravity,
+    this.frame,
+    this.notes,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'recorded': recorded,
+      if (rateHz != null) 'rate_hz': rateHz,
+      if (gyroUnits != null) 'gyro_units': gyroUnits,
+      if (accelUnits != null) 'accel_units': accelUnits,
+      if (accelIncludesGravity != null) 'accel_includes_gravity': accelIncludesGravity,
+      if (frame != null) 'frame': frame,
+      if (notes != null) 'notes': notes,
+    };
+  }
+}
+
 class CapturePlatformInfo {
   final String flutterVersion;
   final String nativeSdkVersion;
+  final String? capturePipelineVersion;
 
   const CapturePlatformInfo({
     required this.flutterVersion,
     required this.nativeSdkVersion,
+    this.capturePipelineVersion,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'flutter_version': flutterVersion,
       'native_sdk_version': nativeSdkVersion,
+      if (capturePipelineVersion != null) 'capture_pipeline_version': capturePipelineVersion,
     };
   }
 }
@@ -194,22 +268,30 @@ class RecordingMetadata {
   final String schemaVersion;
   final String sessionId;
   final DateTime capturedAtUtc;
+  // Per spec §3.1: "unix_epoch" or "session_start". Tells consumers what
+  // timestamp_ns is referenced to. Required for v1.1.
+  final String sessionClockOrigin;
   final String appVersion;
   final DeviceInfo device;
   final CameraInfo camera;
   final VideoInfo video;
   final IntrinsicsInfo intrinsics;
+  final PoseInfo pose;
+  final MotionInfo motion;
   final CapturePlatformInfo capturePlatform;
 
   const RecordingMetadata({
     required this.schemaVersion,
     required this.sessionId,
     required this.capturedAtUtc,
+    required this.sessionClockOrigin,
     required this.appVersion,
     required this.device,
     required this.camera,
     required this.video,
     required this.intrinsics,
+    required this.pose,
+    required this.motion,
     required this.capturePlatform,
   });
 
@@ -218,11 +300,14 @@ class RecordingMetadata {
       'schema_version': schemaVersion,
       'session_id': sessionId,
       'captured_at_utc': capturedAtUtc.toUtc().toIso8601String(),
+      'session_clock_origin': sessionClockOrigin,
       'app_version': appVersion,
       'device': device.toJson(),
       'camera': camera.toJson(),
       'video': video.toJson(),
       'intrinsics': intrinsics.toJson(),
+      'pose': pose.toJson(),
+      'motion': motion.toJson(),
       'capture_platform': capturePlatform.toJson(),
     };
   }

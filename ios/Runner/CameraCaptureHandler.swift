@@ -1,27 +1,63 @@
 import Foundation
+import ARKit
 import AVFoundation
+import CoreMotion
 import Flutter
 import UIKit
-import CoreMotion
+import VideoToolbox
+import simd
 
 class CameraCaptureHandler: NSObject, FlutterPlugin {
     private var channel: FlutterMethodChannel
-    var captureSession: AVCaptureSession?
-    private var videoOutput: AVCaptureVideoDataOutput?
+
+    // ARKit owns the camera (per RECORDING_DATA_STRUCTURE_V1.1.md). The ARSession
+    // is exposed so CameraPreviewView can attach an ARSCNView to it.
+    let arSession = ARSession()
+    private var configuration: ARWorldTrackingConfiguration?
+    private var selectedVideoFormat: ARConfiguration.VideoFormat?
+    // Captured at format-selection time so the encoder, metadata, and HUD all
+    // agree on dimensions even when ARKit picks a non-1080p format.
+    private var captureWidth: Int = 1920
+    private var captureHeight: Int = 1080
+    private var captureFps: Int = 30
+    // 30 fps is the spec target. ARKit on most devices runs at 60 fps; we drop
+    // every other frame in that case. Computed from captureFps at start time.
+    private var frameDropModulus: Int = 1
+    private var arFrameCounter: Int = 0
+
+    // Asset writer pipeline — fed from ARFrame.capturedImage
     private var assetWriter: AVAssetWriter?
     private var assetWriterInput: AVAssetWriterInput?
-    private var currentDevice: AVCaptureDevice?
-    private var currentInput: AVCaptureDeviceInput?
+    private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+
+    // Recording state
     private var isRecording = false
-    private var recordingStartTime: CMTime?
+    private var recordingStartTimestamp: TimeInterval?
+    private var unixEpochOffset: TimeInterval = 0
     private var outputDirectory: String?
     private var sessionId: String?
     private var frameCounter = 0
     private var framesFileHandle: FileHandle?
+    private var posesFileHandle: FileHandle?
+    private var motionFileHandle: FileHandle?
+
+    // IMU (motion.jsonl). Spec §7: target 100 Hz on iOS via CMMotionManager.
+    private let motionManager = CMMotionManager()
+    private let motionQueue = OperationQueue()
+    private let motionRateHz: Double = 100.0
+    // CMDeviceMotion.userAcceleration is reported in units of g; convert to m/s²
+    // before writing (spec mandates accel_units = "m/s^2").
+    private let gToMetersPerSecondSquared: Double = 9.80665
+
+    // Cached lens info, populated on first ARFrame so it reflects the active video format.
+    private var cachedLensType: String = "wide"
+    private var cachedHorizontalFOVDeg: Double = 78.0
 
     init(channel: FlutterMethodChannel) {
         self.channel = channel
         super.init()
+        motionQueue.name = "digients.motionQueue"
+        motionQueue.qualityOfService = .userInitiated
     }
 
     static func register(with registrar: FlutterPluginRegistrar) {
@@ -51,182 +87,149 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
         case "getAvailableCameras":
             getAvailableCameras(result: result)
         case "switchCamera":
-            if let args = call.arguments as? [String: Any] {
-                switchCamera(args: args, result: result)
-            } else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
-            }
+            // ARKit picks the lens via ARConfiguration.VideoFormat; runtime switching
+            // would require re-running the session with a different config. Not used in v3.
+            result(true)
         default:
             result(FlutterMethodNotImplemented)
         }
     }
 
+    // MARK: - Permissions
+
     private func requestPermissions(result: @escaping FlutterResult) {
         AVCaptureDevice.requestAccess(for: .video) { granted in
-            DispatchQueue.main.async {
-                result(granted)
-            }
+            DispatchQueue.main.async { result(granted) }
         }
     }
+
+    // MARK: - Initialization
 
     private func initializeCamera(result: @escaping FlutterResult) {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
             result(FlutterError(code: "NO_PERMISSION", message: "Camera permission not granted", details: nil))
             return
         }
-
-        do {
-            try setupCaptureSession()
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.captureSession?.startRunning()
-            }
-            result(true)
-        } catch {
-            result(FlutterError(code: "INIT_FAILED", message: "Failed to initialize camera: \(error.localizedDescription)", details: nil))
-        }
-    }
-
-    private func setupCaptureSession() throws {
-        captureSession = AVCaptureSession()
-        guard let captureSession = captureSession else { throw CameraError.sessionCreationFailed }
-
-        captureSession.sessionPreset = .hd1920x1080
-
-        // Find the best camera (ultrawide preferred, then wide)
-        currentDevice = findBestCamera()
-        guard let device = currentDevice else { throw CameraError.noCameraFound }
-
-        // Configure device
-        try device.lockForConfiguration()
-
-        // Set focus mode
-        if device.isFocusModeSupported(.continuousAutoFocus) {
-            device.focusMode = .continuousAutoFocus
-        }
-
-        // Set frame rate to 30fps
-        let targetFrameRate: Double = 30
-        let frameRateRange = device.activeFormat.videoSupportedFrameRateRanges.first { range in
-            range.minFrameRate <= targetFrameRate && range.maxFrameRate >= targetFrameRate
-        }
-
-        if let range = frameRateRange {
-            device.activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: Int32(targetFrameRate))
-            device.activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: Int32(targetFrameRate))
-        }
-
-        device.unlockForConfiguration()
-
-        // Create input
-        currentInput = try AVCaptureDeviceInput(device: device)
-        guard let input = currentInput else { throw CameraError.inputCreationFailed }
-
-        if captureSession.canAddInput(input) {
-            captureSession.addInput(input)
-        } else {
-            throw CameraError.cannotAddInput
-        }
-
-        // Create video output
-        videoOutput = AVCaptureVideoDataOutput()
-        guard let videoOutput = videoOutput else { throw CameraError.outputCreationFailed }
-
-        videoOutput.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-        ]
-
-        let videoQueue = DispatchQueue(label: "videoQueue", qos: .userInitiated)
-        videoOutput.setSampleBufferDelegate(self, queue: videoQueue)
-
-        if captureSession.canAddOutput(videoOutput) {
-            captureSession.addOutput(videoOutput)
-        } else {
-            throw CameraError.cannotAddOutput
-        }
-
-        // Configure connection for intrinsics
-        if let connection = videoOutput.connection(with: .video) {
-            connection.preferredVideoStabilizationMode = .off
-
-            if connection.isCameraIntrinsicMatrixDeliverySupported {
-                connection.isCameraIntrinsicMatrixDeliveryEnabled = true
-            }
-        }
-    }
-
-    private func findBestCamera() -> AVCaptureDevice? {
-        // Prefer ultrawide camera
-        if let ultraWideDevice = AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) {
-            return ultraWideDevice
-        }
-
-        // Fall back to wide camera
-        if let wideDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) {
-            return wideDevice
-        }
-
-        return nil
-    }
-
-    private func getCameraInfo(result: @escaping FlutterResult) {
-        guard let device = currentDevice else {
-            result(FlutterError(code: "NO_CAMERA", message: "No camera initialized", details: nil))
+        guard ARWorldTrackingConfiguration.isSupported else {
+            result(FlutterError(code: "ARKIT_UNSUPPORTED", message: "ARKit world tracking not supported on this device", details: nil))
             return
         }
 
-        let lensType: String
-        switch device.deviceType {
-        case .builtInUltraWideCamera:
-            lensType = "ultrawide"
-        case .builtInWideAngleCamera:
-            lensType = "wide"
-        case .builtInTelephotoCamera:
-            lensType = "telephoto"
-        default:
-            lensType = "unknown"
+        let cfg = ARWorldTrackingConfiguration()
+        cfg.planeDetection = []
+        cfg.isAutoFocusEnabled = false
+        cfg.frameSemantics = []
+        if let format = selectBestVideoFormat() {
+            cfg.videoFormat = format
+            selectedVideoFormat = format
+            cachedLensType = lensType(for: format)
+            cachedHorizontalFOVDeg = approximateFOV(for: format)
+            captureWidth = Int(format.imageResolution.width)
+            captureHeight = Int(format.imageResolution.height)
+            captureFps = Int(format.framesPerSecond)
+            // Keep recorded video close to the spec's 30 fps target. If the
+            // hardware reports 60 fps, drop every other frame; if 30 fps, no drop.
+            frameDropModulus = max(1, Int((Double(captureFps) / 30.0).rounded()))
         }
+        configuration = cfg
 
-        let fov = calculateHorizontalFOV(device: device)
+        // Capture an offset converting CACurrentMediaTime() (ARFrame.timestamp) to
+        // wall-clock seconds. Spec §3 requires session_clock_origin = "unix_epoch".
+        unixEpochOffset = Date().timeIntervalSince1970 - CACurrentMediaTime()
 
+        arSession.delegate = self
+        arSession.run(cfg, options: [.resetTracking, .removeExistingAnchors])
+
+        result(true)
+    }
+
+    private func selectBestVideoFormat() -> ARConfiguration.VideoFormat? {
+        let formats = ARWorldTrackingConfiguration.supportedVideoFormats
+        // ARKit on Pro models typically offers 1920×1440 @ 60 fps, 1920×1080 @ 60 fps,
+        // and 1280×720 — 30 fps is rarely available. Take any 1920×1080 and prefer
+        // ultra-wide; otherwise pick the smallest format whose pixel area is ≥ 1080p,
+        // and fall back to whatever's available.
+        let exact1080 = formats.filter {
+            Int($0.imageResolution.width) == 1920 && Int($0.imageResolution.height) == 1080
+        }
+        if let pick = exact1080.max(by: { approximateFOV(for: $0) < approximateFOV(for: $1) }) {
+            return pick
+        }
+        let above1080 = formats.filter {
+            $0.imageResolution.width * $0.imageResolution.height >= 1920 * 1080
+        }
+        if let pick = above1080.min(by: { $0.imageResolution.width * $0.imageResolution.height < $1.imageResolution.width * $1.imageResolution.height }) {
+            return pick
+        }
+        return formats.first
+    }
+
+    private func lensType(for format: ARConfiguration.VideoFormat) -> String {
+        if #available(iOS 16.0, *) {
+            switch format.captureDeviceType {
+            case .builtInUltraWideCamera: return "ultrawide"
+            case .builtInTelephotoCamera: return "telephoto"
+            case .builtInWideAngleCamera: return "wide"
+            default: return "wide"
+            }
+        }
+        return "wide"
+    }
+
+    private func approximateFOV(for format: ARConfiguration.VideoFormat) -> Double {
+        if #available(iOS 16.0, *) {
+            switch format.captureDeviceType {
+            case .builtInUltraWideCamera: return 120.0
+            case .builtInTelephotoCamera: return 48.0
+            case .builtInWideAngleCamera: return 78.0
+            default: return 78.0
+            }
+        }
+        return 78.0
+    }
+
+    // MARK: - Info getters
+
+    private func getCameraInfo(result: @escaping FlutterResult) {
+        // Report the post-decimation fps (target 30) — that's what we actually
+        // write to disk and what metadata.video.framerate / pose.rate_hz reflect.
+        let fps = 30.0
         let cameraInfo: [String: Any] = [
-            "lensId": device.uniqueID,
-            "lensType": lensType,
+            "lensId": "arkit:\(cachedLensType)",
+            "lensType": cachedLensType,
             "physicalFocalLengthMm": NSNull(),
             "sensorPhysicalSizeMm": NSNull(),
             "sensorPixelArraySize": NSNull(),
-            "horizontalFovDeg": fov,
+            "horizontalFovDeg": cachedHorizontalFOVDeg,
             "videoStabilizationEnabled": false,
-            "opticalStabilizationEnabled": false
+            "opticalStabilizationEnabled": false,
+            // v1.1 additions — consumed by record_screen.dart to build metadata.json.
+            "intrinsicsSource": "per_frame",
+            "poseSource": "arkit",
+            "poseRateHz": fps,
+            "poseFrameOrigin": "arkit_session",
+            "poseCoordinateConvention": "right_handed_y_up_neg_z_forward",
+            "poseTransformKind": "camera_to_world",
+            "motionRateHz": 100.0,
+            "motionGyroUnits": "rad/s",
+            "motionAccelUnits": "m/s^2",
+            "motionAccelIncludesGravity": false,
+            "motionFrame": "device_body",
         ]
-
         result(cameraInfo)
-    }
-
-    private func calculateHorizontalFOV(device: AVCaptureDevice) -> Double {
-        // This is an approximation - iOS doesn't provide easy access to exact FOV
-        switch device.deviceType {
-        case .builtInUltraWideCamera:
-            return 120.0
-        case .builtInWideAngleCamera:
-            return 78.0
-        case .builtInTelephotoCamera:
-            return 48.0
-        default:
-            return 78.0
-        }
     }
 
     private func getDeviceInfo(result: @escaping FlutterResult) {
         let device = UIDevice.current
-
         let deviceInfo: [String: Any] = [
             "os": "ios",
             "osVersion": device.systemVersion,
             "manufacturer": "Apple",
             "model": device.model,
-            "modelIdentifier": deviceModelIdentifier()
+            "modelIdentifier": deviceModelIdentifier(),
+            "hasArkit": ARWorldTrackingConfiguration.isSupported,
+            "hasArcore": false,
         ]
-
         result(deviceInfo)
     }
 
@@ -241,13 +244,14 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
         return identifier
     }
 
+    // MARK: - Recording lifecycle
+
     private func startRecording(args: [String: Any], result: @escaping FlutterResult) {
         guard let sessionId = args["sessionId"] as? String,
               let outputDirectory = args["outputDirectory"] as? String else {
             result(FlutterError(code: "INVALID_ARGUMENTS", message: "Missing sessionId or outputDirectory", details: nil))
             return
         }
-
         guard !isRecording else {
             result(FlutterError(code: "ALREADY_RECORDING", message: "Already recording", details: nil))
             return
@@ -258,12 +262,13 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
 
         do {
             try setupAssetWriter(outputDirectory: outputDirectory)
-            try setupFramesFile(outputDirectory: outputDirectory)
-
+            try setupJsonlFiles(outputDirectory: outputDirectory)
+            try setupMotionFile(outputDirectory: outputDirectory)
             isRecording = true
             frameCounter = 0
-            recordingStartTime = nil
-
+            arFrameCounter = 0
+            recordingStartTimestamp = nil
+            startMotionUpdates()
             result(true)
         } catch {
             result(FlutterError(code: "START_FAILED", message: "Failed to start recording: \(error.localizedDescription)", details: nil))
@@ -272,42 +277,106 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
 
     private func setupAssetWriter(outputDirectory: String) throws {
         let videoURL = URL(fileURLWithPath: "\(outputDirectory)/video.mp4")
-
-        assetWriter = try AVAssetWriter(outputURL: videoURL, fileType: .mp4)
-        guard let assetWriter = assetWriter else { throw CameraError.assetWriterCreationFailed }
-
-        let videoSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: 1920,
-            AVVideoHeightKey: 1080,
-            AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: 15_000_000
-            ]
-        ]
-
-        assetWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
-        guard let assetWriterInput = assetWriterInput else { throw CameraError.assetWriterInputCreationFailed }
-
-        assetWriterInput.expectsMediaDataInRealTime = true
-
-        if assetWriter.canAdd(assetWriterInput) {
-            assetWriter.add(assetWriterInput)
-        } else {
-            throw CameraError.cannotAddAssetWriterInput
+        if FileManager.default.fileExists(atPath: videoURL.path) {
+            try? FileManager.default.removeItem(at: videoURL)
         }
 
-        if !assetWriter.startWriting() {
-            throw CameraError.cannotStartWriting
+        assetWriter = try AVAssetWriter(outputURL: videoURL, fileType: .mp4)
+        guard let writer = assetWriter else { throw CameraError.assetWriterCreationFailed }
+
+        // Encode at the actual ARKit format dimensions. Hard-coding 1920×1080
+        // when ARKit hands a different size makes every append silently fail.
+        // Also pin profile + keyframe interval — without these the HEVC encoder
+        // defaults can leave the writer in a state where finishWriting fails to
+        // finalize the moov atom, producing a 38 MB mdat with no index.
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.hevc,
+            AVVideoWidthKey: captureWidth,
+            AVVideoHeightKey: captureHeight,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: 15_000_000,
+                AVVideoExpectedSourceFrameRateKey: 30,
+                AVVideoMaxKeyFrameIntervalKey: 30,
+                AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main_AutoLevel as String,
+            ],
+            // BT.709 since the spec asks for it in metadata.color_space.
+            AVVideoColorPropertiesKey: [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+            ],
+        ]
+
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        input.expectsMediaDataInRealTime = true
+
+        // ARKit's frame.capturedImage is 4:2:0 bi-planar FullRange (NV12 0-255).
+        // Stating that explicitly here so the encoder knows what format to
+        // expect — without it, the adaptor's defaults can mismatch the actual
+        // buffers, and the writer silently transitions to .failed.
+        let pixelBufferAttrs: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+            kCVPixelBufferWidthKey as String: captureWidth,
+            kCVPixelBufferHeightKey as String: captureHeight,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:],
+        ]
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: pixelBufferAttrs
+        )
+
+        guard writer.canAdd(input) else { throw CameraError.cannotAddAssetWriterInput }
+        writer.add(input)
+        guard writer.startWriting() else { throw CameraError.cannotStartWriting }
+
+        assetWriterInput = input
+        pixelBufferAdaptor = adaptor
+    }
+
+    private func setupJsonlFiles(outputDirectory: String) throws {
+        let framesURL = URL(fileURLWithPath: "\(outputDirectory)/frames.jsonl")
+        let posesURL = URL(fileURLWithPath: "\(outputDirectory)/poses.jsonl")
+        FileManager.default.createFile(atPath: framesURL.path, contents: nil, attributes: nil)
+        FileManager.default.createFile(atPath: posesURL.path, contents: nil, attributes: nil)
+        framesFileHandle = try FileHandle(forWritingTo: framesURL)
+        posesFileHandle = try FileHandle(forWritingTo: posesURL)
+    }
+
+    private func setupMotionFile(outputDirectory: String) throws {
+        let motionURL = URL(fileURLWithPath: "\(outputDirectory)/motion.jsonl")
+        FileManager.default.createFile(atPath: motionURL.path, contents: nil, attributes: nil)
+        motionFileHandle = try FileHandle(forWritingTo: motionURL)
+    }
+
+    private func startMotionUpdates() {
+        guard motionManager.isDeviceMotionAvailable else { return }
+        // 100 Hz per spec §7. CMDeviceMotion fuses gyro + accelerometer + magnetometer
+        // and reports bias-corrected rotation rate plus gravity-removed userAcceleration.
+        motionManager.deviceMotionUpdateInterval = 1.0 / motionRateHz
+        motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, _ in
+            guard let self = self, self.isRecording, let m = motion else { return }
+            self.writeMotionLine(motion: m)
         }
     }
 
-    private func setupFramesFile(outputDirectory: String) throws {
-        let framesURL = URL(fileURLWithPath: "\(outputDirectory)/frames.jsonl")
+    private func stopMotionUpdates() {
+        if motionManager.isDeviceMotionActive {
+            motionManager.stopDeviceMotionUpdates()
+        }
+    }
 
-        // Create empty file
-        FileManager.default.createFile(atPath: framesURL.path, contents: nil, attributes: nil)
-
-        framesFileHandle = try FileHandle(forWritingTo: framesURL)
+    private func writeMotionLine(motion: CMDeviceMotion) {
+        let timestampNs = Int64((motion.timestamp + unixEpochOffset) * 1_000_000_000)
+        let payload: [String: Any] = [
+            "timestamp_ns": timestampNs,
+            "gyro": [motion.rotationRate.x, motion.rotationRate.y, motion.rotationRate.z],
+            "accel": [
+                motion.userAcceleration.x * gToMetersPerSecondSquared,
+                motion.userAcceleration.y * gToMetersPerSecondSquared,
+                motion.userAcceleration.z * gToMetersPerSecondSquared,
+            ],
+        ]
+        writeJsonLine(payload, to: motionFileHandle)
     }
 
     private func stopRecording(result: @escaping FlutterResult) {
@@ -315,119 +384,175 @@ class CameraCaptureHandler: NSObject, FlutterPlugin {
             result(FlutterError(code: "NOT_RECORDING", message: "Not currently recording", details: nil))
             return
         }
-
         isRecording = false
+        stopMotionUpdates()
 
         assetWriterInput?.markAsFinished()
 
         assetWriter?.finishWriting { [weak self] in
+            // Surface writer failure modes so the next bug is debuggable from
+            // device logs instead of from a corrupt MP4 after the fact.
+            let writerStatus = self?.assetWriter?.status ?? .unknown
+            let writerError = self?.assetWriter?.error
+            if writerStatus != .completed {
+                NSLog("[CameraCaptureHandler] AVAssetWriter did not complete: status=\(writerStatus.rawValue) error=\(String(describing: writerError))")
+            }
+
             DispatchQueue.main.async {
                 self?.framesFileHandle?.closeFile()
                 self?.framesFileHandle = nil
+                self?.posesFileHandle?.closeFile()
+                self?.posesFileHandle = nil
+                self?.motionFileHandle?.closeFile()
+                self?.motionFileHandle = nil
 
                 let frames = self?.frameCounter ?? 0
+                // After decimation we target 30 fps; report duration accordingly so
+                // metadata.duration_sec stays consistent with metadata.video.framerate.
+                let effectiveFps = 30.0
+                let durationSec = Int(Double(frames) / effectiveFps)
                 let recordingData: [String: Any] = [
                     "directoryPath": self?.outputDirectory ?? "",
-                    "durationSeconds": frames / 30,
-                    "frameCount": frames
+                    "durationSeconds": durationSec,
+                    "frameCount": frames,
+                    "captureWidth": self?.captureWidth ?? 1920,
+                    "captureHeight": self?.captureHeight ?? 1080,
+                    "captureFps": Int(effectiveFps),
+                    "writerStatus": writerStatus.rawValue,
+                    "writerError": writerError?.localizedDescription as Any,
                 ]
-
                 result(recordingData)
             }
         }
     }
 
     private func getAvailableCameras(result: @escaping FlutterResult) {
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera],
-            mediaType: .video,
-            position: .back
-        )
-
-        let cameras = discoverySession.devices.map { $0.uniqueID }
-        result(cameras)
-    }
-
-    private func switchCamera(args: [String: Any], result: @escaping FlutterResult) {
-        guard let cameraId = args["cameraId"] as? String else {
-            result(FlutterError(code: "INVALID_ARGUMENTS", message: "Missing cameraId", details: nil))
-            return
-        }
-
-        guard !isRecording else {
-            result(FlutterError(code: "RECORDING", message: "Cannot switch camera while recording", details: nil))
-            return
-        }
-
-        // Implementation would switch to the specified camera
-        // For now, just return success
-        result(true)
+        // ARKit selects the camera implicitly via the chosen ARConfiguration.VideoFormat.
+        // Surface the active selection so the Flutter side has a stable identifier to display.
+        result(["arkit:\(cachedLensType)"])
     }
 }
 
-extension CameraCaptureHandler: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard isRecording else { return }
-
-        // Start asset writer session on first frame
-        if recordingStartTime == nil {
-            recordingStartTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-            assetWriter?.startSession(atSourceTime: recordingStartTime!)
+extension CameraCaptureHandler: ARSessionDelegate {
+    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        // Update cached lens info on the live ARFrame the first time we see one,
+        // so getCameraInfo reflects the actual selected format.
+        if recordingStartTimestamp == nil {
+            cachedHorizontalFOVDeg = liveHorizontalFOVDegrees(from: frame.camera.intrinsics,
+                                                              imageWidth: Double(frame.camera.imageResolution.width))
         }
 
-        // Write video frame
-        if assetWriterInput?.isReadyForMoreMediaData == true {
-            assetWriterInput?.append(sampleBuffer)
+        guard isRecording, let writer = assetWriter, let input = assetWriterInput, let adaptor = pixelBufferAdaptor else { return }
+
+        // Decimate to 30 fps. ARKit on iPhone Pro typically streams at 60 fps;
+        // we keep every Nth frame to honor the spec's 30 fps target. Increment
+        // arFrameCounter on every callback so the modulus stays even.
+        let myArIdx = arFrameCounter
+        arFrameCounter += 1
+        if frameDropModulus > 1 && (myArIdx % frameDropModulus) != 0 {
+            return
         }
 
-        // Extract intrinsics if available
-        if let intrinsicMatrix = CMGetAttachment(sampleBuffer, key: kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix, attachmentModeOut: nil) as? Data {
-            writeFrameIntrinsics(sampleBuffer: sampleBuffer, intrinsicMatrix: intrinsicMatrix)
+        if recordingStartTimestamp == nil {
+            recordingStartTimestamp = frame.timestamp
+            // Use timescale 600 — the standard MP4 video timescale, divisible by
+            // common frame rates (24, 25, 30, 60). Mixing different timescales
+            // between startSession and append can wedge finalization on some iOS
+            // versions, leaving moov unwritten despite mdat being intact.
+            writer.startSession(atSourceTime: CMTime(value: 0, timescale: 600))
+        }
+        let elapsed = frame.timestamp - (recordingStartTimestamp ?? frame.timestamp)
+        let presentationTime = CMTime(seconds: elapsed, preferredTimescale: 600)
+
+        guard input.isReadyForMoreMediaData else { return }
+        let pixelBuffer = frame.capturedImage
+        guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime) else {
+            // Append failed — usually means writer.status == .failed (encoder
+            // refused the buffer format/dimensions). Log once with details so
+            // the failure is debuggable; subsequent failures stay quiet.
+            if writer.status == .failed {
+                NSLog("[CameraCaptureHandler] adaptor.append failed at frame \(frameCounter): \(String(describing: writer.error))")
+            }
+            return
         }
 
+        let timestampNs = Int64((frame.timestamp + unixEpochOffset) * 1_000_000_000)
+        writeFramesLine(frame: frame, frameIdx: frameCounter, timestampNs: timestampNs)
+        writePosesLine(frame: frame, frameIdx: frameCounter, timestampNs: timestampNs)
         frameCounter += 1
     }
 
-    private func writeFrameIntrinsics(sampleBuffer: CMSampleBuffer, intrinsicMatrix: Data) {
-        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let timestampNs = Int64(timestamp.seconds * 1_000_000_000)
+    private func liveHorizontalFOVDegrees(from intrinsics: simd_float3x3, imageWidth: Double) -> Double {
+        let fx = Double(intrinsics.columns.0[0])
+        guard fx > 0 else { return cachedHorizontalFOVDeg }
+        return 2.0 * atan(imageWidth / (2.0 * fx)) * 180.0 / .pi
+    }
 
-        // Convert intrinsic matrix data to array
-        let matrixData = intrinsicMatrix.withUnsafeBytes { bytes in
-            return Array(bytes.bindMemory(to: Float32.self))
-        }
-
-        // Convert to 3x3 matrix
+    private func writeFramesLine(frame: ARFrame, frameIdx: Int, timestampNs: Int64) {
+        // Per spec §6.1: simd_float3x3 is column-major with columns
+        //   col0 = (fx, 0, 0), col1 = (0, fy, 0), col2 = (cx, cy, 1)
+        // Assemble row-major [[fx,0,cx],[0,fy,cy],[0,0,1]].
+        let m = frame.camera.intrinsics
         let matrix: [[Double]] = [
-            [Double(matrixData[0]), Double(matrixData[1]), Double(matrixData[2])],
-            [Double(matrixData[3]), Double(matrixData[4]), Double(matrixData[5])],
-            [Double(matrixData[6]), Double(matrixData[7]), Double(matrixData[8])]
+            [Double(m.columns.0[0]), Double(m.columns.1[0]), Double(m.columns.2[0])],
+            [Double(m.columns.0[1]), Double(m.columns.1[1]), Double(m.columns.2[1])],
+            [Double(m.columns.0[2]), Double(m.columns.1[2]), Double(m.columns.2[2])],
         ]
-
-        let frameData: [String: Any] = [
-            "frame_idx": frameCounter,
+        let payload: [String: Any] = [
+            "frame_idx": frameIdx,
             "timestamp_ns": timestampNs,
             "intrinsic_matrix": matrix,
-            "lens_id": currentDevice?.uniqueID ?? ""
+            "lens_id": "arkit:\(cachedLensType)",
         ]
+        writeJsonLine(payload, to: framesFileHandle)
+    }
 
-        if let jsonData = try? JSONSerialization.data(withJSONObject: frameData),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            let line = jsonString + "\n"
-            framesFileHandle?.write(line.data(using: .utf8) ?? Data())
+    private func writePosesLine(frame: ARFrame, frameIdx: Int, timestampNs: Int64) {
+        // simd_float4x4 is column-major; spec §5 requires row-major output.
+        let t = frame.camera.transform
+        let rows: [[Double]] = (0..<4).map { r in
+            (0..<4).map { c in Double(t[c][r]) }
         }
+        var trackingState = "normal"
+        var trackingReason: String? = nil
+        switch frame.camera.trackingState {
+        case .normal:
+            trackingState = "normal"
+        case .notAvailable:
+            trackingState = "not_available"
+        case .limited(let reason):
+            trackingState = "limited"
+            switch reason {
+            case .initializing: trackingReason = "initialization"
+            case .excessiveMotion: trackingReason = "excessive_motion"
+            case .insufficientFeatures: trackingReason = "insufficient_features"
+            case .relocalizing: trackingReason = "relocalizing"
+            @unknown default: trackingReason = "unknown"
+            }
+        }
+        var payload: [String: Any] = [
+            "frame_idx": frameIdx,
+            "timestamp_ns": timestampNs,
+            "transform": rows,
+            "tracking_state": trackingState,
+        ]
+        if let reason = trackingReason {
+            payload["tracking_state_reason"] = reason
+        }
+        writeJsonLine(payload, to: posesFileHandle)
+    }
+
+    private func writeJsonLine(_ obj: Any, to handle: FileHandle?) {
+        guard let handle = handle else { return }
+        guard let data = try? JSONSerialization.data(withJSONObject: obj),
+              let str = String(data: data, encoding: .utf8) else { return }
+        let line = (str + "\n").data(using: .utf8) ?? Data()
+        handle.write(line)
     }
 }
 
 enum CameraError: Error {
-    case sessionCreationFailed
-    case noCameraFound
-    case inputCreationFailed
-    case cannotAddInput
-    case outputCreationFailed
-    case cannotAddOutput
     case assetWriterCreationFailed
-    case assetWriterInputCreationFailed
     case cannotAddAssetWriterInput
     case cannotStartWriting
 }

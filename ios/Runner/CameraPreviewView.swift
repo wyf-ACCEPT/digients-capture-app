@@ -1,30 +1,37 @@
+import ARKit
 import Flutter
+import SceneKit
 import UIKit
-import AVFoundation
 
+// ARSCNView auto-renders the ARSession's camera background. We don't add any AR
+// content — it's purely a viewfinder bound to the same ARSession that the
+// recorder writes from.
 final class PreviewContainerView: UIView {
-    let previewLayer = AVCaptureVideoPreviewLayer()
+    let arView = ARSCNView()
 
-    init(session: AVCaptureSession?) {
+    init(session: ARSession) {
         super.init(frame: .zero)
         backgroundColor = .black
-        previewLayer.videoGravity = .resizeAspectFill
-        previewLayer.session = session
-        layer.addSublayer(previewLayer)
+        arView.session = session
+        arView.scene = SCNScene()
+        arView.automaticallyUpdatesLighting = false
+        arView.autoenablesDefaultLighting = false
+        arView.preferredFramesPerSecond = 30
+        addSubview(arView)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        previewLayer.frame = bounds
+        arView.frame = bounds
     }
 }
 
 final class CameraPreviewView: NSObject, FlutterPlatformView {
     private let containerView: PreviewContainerView
 
-    init(session: AVCaptureSession?) {
+    init(session: ARSession) {
         containerView = PreviewContainerView(session: session)
         super.init()
     }
@@ -41,7 +48,8 @@ final class CameraPreviewFactory: NSObject, FlutterPlatformViewFactory {
     }
 
     func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
-        return CameraPreviewView(session: cameraHandler?.captureSession)
+        let session = cameraHandler?.arSession ?? ARSession()
+        return CameraPreviewView(session: session)
     }
 
     func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {

@@ -96,6 +96,13 @@ class _RecordScreenState extends State<RecordScreen> {
     final fileSize = await _recordingManager.calculateRecordingSize(_sessionId!);
     final durationSec = (result['durationSeconds'] as int?) ?? _elapsed.inSeconds;
     final frameCount = (result['frameCount'] as int?) ?? 0;
+    final actualPoseSource = (result['poseSource'] as String?) ??
+        (_cameraInfo?['poseSource'] as String?);
+    final measuredMotionRateHz = (result['motionRateHzMeasured'] as num?)?.toDouble();
+    // Pull actual encoded dimensions from native; iOS may pick 1920×1440 etc.
+    final capW = (result['captureWidth'] as int?) ?? 1920;
+    final capH = (result['captureHeight'] as int?) ?? 1080;
+    final capFps = (result['captureFps'] as num?)?.toDouble() ?? 30.0;
 
     final recording = Recording(
       sessionId: _sessionId!,
@@ -110,6 +117,11 @@ class _RecordScreenState extends State<RecordScreen> {
       capturedAt: capturedAt,
       durationSeconds: durationSec,
       frameCount: frameCount,
+      poseSourceOverride: actualPoseSource,
+      measuredMotionRateHz: measuredMotionRateHz,
+      videoWidth: capW,
+      videoHeight: capH,
+      videoFps: capFps,
     ));
 
     if (!mounted) return;
@@ -122,6 +134,11 @@ class _RecordScreenState extends State<RecordScreen> {
     required DateTime capturedAt,
     required int durationSeconds,
     required int frameCount,
+    String? poseSourceOverride,
+    double? measuredMotionRateHz,
+    int videoWidth = 1920,
+    int videoHeight = 1080,
+    double videoFps = 30,
   }) {
     final cam = _cameraInfo ?? <String, dynamic>{};
     final dev = _deviceInfo ?? <String, dynamic>{};
@@ -129,7 +146,9 @@ class _RecordScreenState extends State<RecordScreen> {
     final os = (dev['os'] as String?) ?? (Platform.isAndroid ? 'android' : 'ios');
     final isAndroid = os == 'android';
 
+    // Intrinsics
     final IntrinsicsInfo intrinsics;
+    final intrinsicsSourceFromNative = cam['intrinsicsSource'] as String?;
     if (isAndroid) {
       final matrix = (cam['intrinsicMatrix'] as List?)
           ?.map((row) => (row as List).cast<num>().map((n) => n.toDouble()).toList())
@@ -140,9 +159,6 @@ class _RecordScreenState extends State<RecordScreen> {
           ?.cast<num>()
           .map((n) => n.toDouble())
           .toList();
-      // Per CLAUDE.md spec: Android intrinsics are reliable iff calibrated
-      // (LENS_INTRINSIC_CALIBRATION available), hardware level is FULL/LEVEL_3,
-      // and stabilization is off. The "static" source string here means calibrated.
       final reliable = source == 'static' && hwLevelFull && !stab;
       final notes = switch (source) {
         'static' => 'Static intrinsics from Camera2 LENS_INTRINSIC_CALIBRATION.',
@@ -158,25 +174,70 @@ class _RecordScreenState extends State<RecordScreen> {
         notes: notes,
       );
     } else {
+      // iOS: per-frame intrinsics from ARFrame.camera.intrinsics, written natively.
       intrinsics = IntrinsicsInfo(
-        source: 'per_frame',
+        source: intrinsicsSourceFromNative ?? 'per_frame',
         perFrameFile: 'frames.jsonl',
         reliable: !stab,
-        notes: 'Per-frame intrinsics from CMSampleBuffer attachment.',
+        notes: 'Per-frame intrinsics from ARFrame.camera.intrinsics.',
       );
     }
 
+    // Pose
+    final poseSource = poseSourceOverride ?? (cam['poseSource'] as String?) ?? 'none';
+    final poseInfo = PoseInfo(
+      source: poseSource,
+      frameOrigin: cam['poseFrameOrigin'] as String?,
+      coordinateConvention: cam['poseCoordinateConvention'] as String?,
+      transformKind: cam['poseTransformKind'] as String?,
+      rateHz: (cam['poseRateHz'] as num?)?.toDouble(),
+      trackingStateField: poseSource == 'arkit' || poseSource == 'arcore'
+          ? 'tracking_state'
+          : null,
+      notes: switch (poseSource) {
+        'arkit' => 'ARWorldTrackingConfiguration, autoFocusEnabled=false, planeDetection=none.',
+        'arcore' => 'ARCore Shared Camera mode. Default config.',
+        'imu_raw' => 'No system VIO available; offline VIO consumes motion.jsonl.',
+        _ => 'No pose source available.',
+      },
+    );
+
+    // Motion. Always recorded if we have a usable IMU; the device almost always
+    // does. Native side reports actual measured rate at stop time on Android.
+    final advertisedMotionRate = (cam['motionRateHz'] as num?)?.toDouble();
+    final motionRecorded = advertisedMotionRate != null && advertisedMotionRate > 0;
+    final motionInfo = MotionInfo(
+      recorded: motionRecorded,
+      rateHz: measuredMotionRateHz != null && measuredMotionRateHz > 0
+          ? measuredMotionRateHz
+          : advertisedMotionRate,
+      gyroUnits: motionRecorded ? (cam['motionGyroUnits'] as String?) ?? 'rad/s' : null,
+      accelUnits: motionRecorded ? (cam['motionAccelUnits'] as String?) ?? 'm/s^2' : null,
+      accelIncludesGravity: motionRecorded
+          ? (cam['motionAccelIncludesGravity'] as bool?) ?? (isAndroid ? true : false)
+          : null,
+      frame: motionRecorded ? (cam['motionFrame'] as String?) ?? 'device_body' : null,
+      notes: motionRecorded
+          ? (isAndroid
+              ? 'Android Sensor TYPE_GYROSCOPE + TYPE_ACCELEROMETER at SENSOR_DELAY_FASTEST.'
+              : 'iOS CMMotionManager.deviceMotion at 100 Hz.')
+          : null,
+    );
+
     return RecordingMetadata(
-      schemaVersion: '1.0',
+      schemaVersion: '1.1',
       sessionId: sessionId,
       capturedAtUtc: capturedAt,
-      appVersion: '2.0.0',
+      sessionClockOrigin: 'unix_epoch',
+      appVersion: '2.1.0',
       device: DeviceInfo(
         os: os,
         osVersion: (dev['osVersion'] as String?) ?? '',
         manufacturer: (dev['manufacturer'] as String?) ?? (isAndroid ? '' : 'Apple'),
         model: (dev['model'] as String?) ?? '',
         modelIdentifier: (dev['modelIdentifier'] as String?) ?? '',
+        hasArkit: dev['hasArkit'] as bool?,
+        hasArcore: dev['hasArcore'] as bool?,
       ),
       camera: CameraInfo(
         lensId: (cam['lensId'] as String?) ?? '',
@@ -197,9 +258,9 @@ class _RecordScreenState extends State<RecordScreen> {
       video: VideoInfo(
         codec: 'hevc',
         container: 'mp4',
-        width: 1920,
-        height: 1080,
-        framerate: 30,
+        width: videoWidth,
+        height: videoHeight,
+        framerate: videoFps,
         durationSec: durationSeconds.toDouble(),
         frameCount: frameCount,
         bitrateBps: 15000000,
@@ -208,9 +269,12 @@ class _RecordScreenState extends State<RecordScreen> {
         hasAudioTrack: false,
       ),
       intrinsics: intrinsics,
+      pose: poseInfo,
+      motion: motionInfo,
       capturePlatform: CapturePlatformInfo(
         flutterVersion: '3.41.7',
         nativeSdkVersion: isAndroid ? 'android' : 'ios',
+        capturePipelineVersion: '2.1.0',
       ),
     );
   }
@@ -266,7 +330,10 @@ class _RecordScreenState extends State<RecordScreen> {
               top: 110,
               left: 20,
               right: 20,
-              child: _ExpandedHud(taskTitle: findTask(widget.taskId)?.title ?? ''),
+              child: _ExpandedHud(
+                taskTitle: findTask(widget.taskId)?.title ?? '',
+                poseSource: (_cameraInfo?['poseSource'] as String?) ?? 'NONE',
+              ),
             ),
           if (_errorMessage != null)
             Positioned(
@@ -400,17 +467,24 @@ class _RecordingPillState extends State<_RecordingPill> with SingleTickerProvide
 
 class _ExpandedHud extends StatelessWidget {
   final String taskTitle;
-  const _ExpandedHud({required this.taskTitle});
+  final String poseSource;
+  const _ExpandedHud({required this.taskTitle, required this.poseSource});
 
   @override
   Widget build(BuildContext context) {
-    final stats = const [
-      ['FPS', '30'],
-      ['CODEC', 'HEVC'],
-      ['LENS', 'Ultrawide'],
-      ['BITRATE', '15 Mb/s'],
-      ['STAB', 'OFF'],
-      ['INTRINSICS', 'LIVE'],
+    final poseLabel = switch (poseSource) {
+      'arkit' => 'ARKIT',
+      'arcore' => 'ARCORE',
+      'imu_raw' => 'IMU',
+      _ => 'NONE',
+    };
+    final stats = [
+      const ['FPS', '30'],
+      const ['CODEC', 'HEVC'],
+      const ['LENS', 'Ultrawide'],
+      const ['BITRATE', '15 Mb/s'],
+      const ['STAB', 'OFF'],
+      ['POSE', poseLabel],
     ];
     return Container(
       padding: const EdgeInsets.all(14),
@@ -437,7 +511,16 @@ class _ExpandedHud extends StatelessWidget {
                 children: [
                   Text(s[0], style: DCText.mono(size: 9, weight: FontWeight.w500, color: Colors.white60, letterSpacing: 1.3)),
                   const SizedBox(height: 2),
-                  Text(s[1], style: DCText.mono(size: 13, weight: FontWeight.w600, color: s[1] == 'LIVE' ? const Color(0xFF14C9A8) : Colors.white)),
+                  Text(
+                    s[1],
+                    style: DCText.mono(
+                      size: 13,
+                      weight: FontWeight.w600,
+                      color: (s[0] == 'POSE' && s[1] != 'NONE')
+                          ? const Color(0xFF14C9A8)
+                          : Colors.white,
+                    ),
+                  ),
                 ],
               );
             }).toList(),
