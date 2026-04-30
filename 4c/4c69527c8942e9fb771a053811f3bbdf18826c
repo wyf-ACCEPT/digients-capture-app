@@ -1,0 +1,27 @@
+lib/screens/v2/home_screen.dart
+  4e3160421f2481f0 160
+lib/screens/v2/pool_screen.dart
+  4e3160421f2481f0 35
+lib/router.dart
+  4e3160421f2481f0 36-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "4c4c69527c8942e9fb771a053811f3bbdf18826c",
+  "prompts": {
+    "4e3160421f2481f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "416240b8-3fa2-44a9-a95e-839a7781a64a",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 14,
+      "total_deletions": 5,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    }
+  }
+}
