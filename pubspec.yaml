@@ -58,6 +58,7 @@ dependencies:
 
   # V3 additions
   flutter_secure_storage: ^9.2.2
+  sensors_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:

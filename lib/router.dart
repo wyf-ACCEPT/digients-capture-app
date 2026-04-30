@@ -33,9 +33,18 @@ GoRouter buildRouter(AuthController auth) {
       ShellRoute(
         builder: (context, state, child) => ShellScaffold(child: child),
         routes: [
-          GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
-          GoRoute(path: '/submissions', builder: (_, __) => const SubmissionsScreen()),
-          GoRoute(path: '/me', builder: (_, __) => const ProfileScreen()),
+          GoRoute(
+            path: '/home',
+            pageBuilder: (_, __) => const NoTransitionPage(child: HomeScreen()),
+          ),
+          GoRoute(
+            path: '/submissions',
+            pageBuilder: (_, __) => const NoTransitionPage(child: SubmissionsScreen()),
+          ),
+          GoRoute(
+            path: '/me',
+            pageBuilder: (_, __) => const NoTransitionPage(child: ProfileScreen()),
+          ),
         ],
       ),
       GoRoute(
