@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -326,6 +327,18 @@ class _RecordScreenState extends State<RecordScreen> {
     return '$m:$s';
   }
 
+  // Slide offset for the recording pill, in units of the pill's own size.
+  // After the pill rotates 90° around its center, it would extend upward into
+  // the Dynamic Island's footprint. We push it ~1.5 pill-heights along the
+  // device's Y axis (toward the bottom of the device frame) so it lands beside
+  // the Dynamic Island in the user's landscape view. |sin(2π·turns)| is 1 at
+  // any landscape quarter-turn and 0 at portrait / upside-down, so the slide
+  // animates back to zero whenever the device is upright.
+  Offset _pillSlideOffset(double turns) {
+    final amount = math.sin(2 * math.pi * turns).abs();
+    return Offset(0, amount * 1.5);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -362,13 +375,24 @@ class _RecordScreenState extends State<RecordScreen> {
             left: 0,
             right: 0,
             child: Center(
-              child: AnimatedRotation(
-                turns: _hudTurns,
+              // In landscape the pill rotates 90° around its own center, then
+              // shifts along the device's long axis (vertical in device frame)
+              // so it lands beside the Dynamic Island instead of on top of it.
+              // Sign of the slide is chosen so the pill ends up "below" the
+              // Dynamic Island in the user's landscape view, regardless of
+              // whether the device was rotated CW or CCW.
+              child: AnimatedSlide(
+                offset: _pillSlideOffset(_hudTurns),
                 duration: const Duration(milliseconds: 350),
                 curve: Curves.easeOutCubic,
-                child: GestureDetector(
-                  onTap: () => setState(() => _expanded = !_expanded),
-                  child: _RecordingPill(elapsed: _format(_elapsed)),
+                child: AnimatedRotation(
+                  turns: _hudTurns,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutCubic,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: _RecordingPill(elapsed: _format(_elapsed)),
+                  ),
                 ),
               ),
             ),
