@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import '../../theme/text_styles.dart';
 import '../../services/camera_service.dart';
 import '../../services/recording_manager.dart';
@@ -32,17 +33,57 @@ class _RecordScreenState extends State<RecordScreen> {
   Map<String, dynamic>? _cameraInfo;
   Map<String, dynamic>? _deviceInfo;
 
+  // Device-orientation overlay rotation. The app is locked to portrait at the
+  // OS level (Info.plist) so MediaQuery.orientation never flips; we read the
+  // accelerometer instead and rotate the HUD overlays in place. Tracked as an
+  // unbounded double so AnimatedRotation always takes the shortest arc.
+  StreamSubscription<AccelerometerEvent>? _accelSub;
+  double _hudTurns = 0.0;
+
   @override
   void initState() {
     super.initState();
     _bootstrap();
+    _accelSub = accelerometerEventStream(
+      samplingPeriod: const Duration(milliseconds: 200),
+    ).listen(_onAccel);
   }
 
   @override
   void dispose() {
+    _accelSub?.cancel();
     _ticker?.cancel();
     _cameraService.dispose();
     super.dispose();
+  }
+
+  // Map gravity to one of four target orientations. Threshold of ~7 m/s² keeps
+  // the orientation latched until the device is tilted well past 45° from the
+  // current axis, which is enough hysteresis in practice.
+  void _onAccel(AccelerometerEvent e) {
+    int? targetQuarters;
+    if (e.y > 7.0) {
+      targetQuarters = 0; // portrait normal
+    } else if (e.x < -7.0) {
+      targetQuarters = -1; // top edge to right (rotated 90° CW); UI rotates CCW
+    } else if (e.y < -7.0) {
+      targetQuarters = 2; // upside down
+    } else if (e.x > 7.0) {
+      targetQuarters = 1; // top edge to left (rotated 90° CCW); UI rotates CW
+    }
+    if (targetQuarters == null) return;
+
+    final currentQuarters = (_hudTurns * 4).round();
+    int delta = targetQuarters - currentQuarters;
+    while (delta > 2) {
+      delta -= 4;
+    }
+    while (delta < -2) {
+      delta += 4;
+    }
+    if (delta == 0) return;
+
+    setState(() => _hudTurns += delta * 0.25);
   }
 
   Future<void> _bootstrap() async {
@@ -320,10 +361,17 @@ class _RecordScreenState extends State<RecordScreen> {
             top: 56,
             left: 0,
             right: 0,
-            child: Center(child: GestureDetector(
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: _RecordingPill(elapsed: _format(_elapsed)),
-            )),
+            child: Center(
+              child: AnimatedRotation(
+                turns: _hudTurns,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                child: GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: _RecordingPill(elapsed: _format(_elapsed)),
+                ),
+              ),
+            ),
           ),
           if (_expanded)
             Positioned(
@@ -354,50 +402,63 @@ class _RecordScreenState extends State<RecordScreen> {
             left: 0,
             right: 0,
             bottom: 60,
-            child: Column(
-              children: [
-                GestureDetector(
-                  onTap: _stop,
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.transparent,
-                      border: Border.all(color: Colors.white, width: 4),
-                    ),
-                    child: Center(
+            child: Center(
+              child: AnimatedRotation(
+                turns: _hudTurns,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: _stop,
                       child: Container(
-                        width: 32,
-                        height: 32,
+                        width: 80,
+                        height: 80,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF14C9A8),
-                          borderRadius: BorderRadius.circular(6),
+                          shape: BoxShape.circle,
+                          color: Colors.transparent,
+                          border: Border.all(color: Colors.white, width: 4),
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF14C9A8),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'TAP TO STOP',
+                      style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'TAP TO STOP',
-                  style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
-                ),
-              ],
+              ),
             ),
           ),
           Positioned(
             top: 16,
             right: 16,
             child: SafeArea(
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () async {
-                  if (_sessionId != null) {
-                    await _cameraService.stopRecording();
-                  }
-                  if (mounted) context.pop();
-                },
+              child: AnimatedRotation(
+                turns: _hudTurns,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () async {
+                    if (_sessionId != null) {
+                      await _cameraService.stopRecording();
+                    }
+                    if (mounted) context.pop();
+                  },
+                ),
               ),
             ),
           ),
