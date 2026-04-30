@@ -32,7 +32,7 @@ class _PoolScreenState extends State<PoolScreen> {
           DCNavBar(
             title: cat?.title ?? 'Tasks',
             subtitle: '${tasks.length} tasks · sorted by reward',
-            onBack: () => context.go('/home'),
+            onBack: () => context.pop(),
           ),
           SizedBox(
             height: 48,

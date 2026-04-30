@@ -157,7 +157,7 @@ class _CategoryTile extends StatelessWidget {
     return Opacity(
       opacity: disabled ? 0.55 : 1.0,
       child: GestureDetector(
-        onTap: disabled ? null : () => context.go('/pool/${category.id}'),
+        onTap: disabled ? null : () => context.push('/pool/${category.id}'),
         child: DCCard(
           padding: const EdgeInsets.all(16),
           radius: 18,
