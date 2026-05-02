@@ -5,12 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import '../../state/hand_presence_settings_controller.dart';
+import '../../services/hand_presence/hand_presence_state.dart';
 import '../../theme/text_styles.dart';
 import '../../services/camera_service.dart';
 import '../../services/recording_manager.dart';
+import '../../services/hand_presence/hand_presence_controller.dart';
+import '../../services/hand_presence/hand_presence_detector_service.dart';
+import '../../services/hand_presence/hand_audio_player.dart';
 import '../../models/recording.dart';
 import '../../fixtures/data.dart';
+import '../../widgets/hand_presence_border.dart';
 
 class RecordScreen extends StatefulWidget {
   final String taskId;
@@ -23,6 +30,12 @@ class RecordScreen extends StatefulWidget {
 class _RecordScreenState extends State<RecordScreen> {
   final CameraService _cameraService = CameraService();
   final RecordingManager _recordingManager = RecordingManager();
+  final HandPresenceController _handPresence = HandPresenceController();
+  late final HandPresenceDetectorService _handDetector =
+      HandPresenceDetectorService(controller: _handPresence);
+  late final HandAudioPlayer _handAudio = HandAudioPlayer(
+    transitions: _handPresence.transitions,
+  );
   bool _isInitialized = false;
   bool _expanded = false;
   String? _sessionId;
@@ -48,12 +61,17 @@ class _RecordScreenState extends State<RecordScreen> {
     _accelSub = accelerometerEventStream(
       samplingPeriod: const Duration(milliseconds: 200),
     ).listen(_onAccel);
+    _handAudio.initialize();
+    _handDetector.start();
   }
 
   @override
   void dispose() {
     _accelSub?.cancel();
     _ticker?.cancel();
+    _handDetector.dispose();
+    _handAudio.dispose();
+    _handPresence.dispose();
     _cameraService.dispose();
     super.dispose();
   }
@@ -87,7 +105,26 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() => _hudTurns += delta * 0.25);
   }
 
+  void _applySettings(HandPresenceSettingsController settings) {
+    _handAudio.tonesEnabled = settings.tonesEnabled;
+    _handAudio.voiceEnabled = settings.voiceEnabled;
+  }
+
+  void _onTransitionForHaptic(HandPresenceTransition t, bool vibrateOnNone) {
+    if (vibrateOnNone && t.to == HandPresenceState.none) {
+      HapticFeedback.mediumImpact();
+    }
+  }
+
   Future<void> _bootstrap() async {
+    final settings =
+        Provider.of<HandPresenceSettingsController>(context, listen: false);
+    _applySettings(settings);
+    settings.addListener(() => _applySettings(settings));
+    _handPresence.transitions.listen((t) {
+      _onTransitionForHaptic(t, settings.vibrateOnNone);
+    });
+
     final status = await Permission.camera.request();
     if (!status.isGranted) {
       setState(() => _errorMessage = 'Camera permission required');
@@ -369,6 +406,48 @@ class _RecordScreenState extends State<RecordScreen> {
                 ),
               ),
             ),
+          ),
+          // TEMP debug overlay — top-left corner shows detector pipeline stats.
+          // Ticks > 0: native MediaPipe is emitting events.
+          // maxH > 0: MediaPipe found at least one hand.
+          // state: current smoothed presence state.
+          Positioned(
+            top: 60,
+            left: 16,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_handPresence, _handDetector]),
+              builder: (_, __) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                color: Colors.black.withValues(alpha: 0.6),
+                child: Text(
+                  'ticks=${_handDetector.ticksReceived} '
+                  'rawH=${_handDetector.maxRawHandCount} '
+                  'okH=${_handDetector.maxHandsSeen}\n'
+                  'maxS=${_handDetector.maxScoreSeen.toStringAsFixed(2)} '
+                  'modelLoaded=${_handDetector.lastModelLoaded}\n'
+                  'state=${_handPresence.state.name}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Consumer<HandPresenceSettingsController>(
+            builder: (_, settings, __) {
+              if (!settings.borderEnabled) {
+                return const SizedBox.shrink();
+              }
+              return Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _handPresence,
+                  builder: (_, __) =>
+                      HandPresenceBorder(state: _handPresence.state),
+                ),
+              );
+            },
           ),
           Positioned(
             top: 56,

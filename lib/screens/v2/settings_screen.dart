@@ -6,6 +6,7 @@ import '../../theme/text_styles.dart';
 import '../../widgets/forms.dart';
 import '../../widgets/nav.dart';
 import '../../state/auth_controller.dart';
+import '../../state/hand_presence_settings_controller.dart';
 import '../../state/theme_controller.dart';
 import '../../fixtures/data.dart';
 
@@ -29,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final p = fixtureProfile;
     final themeCtl = context.watch<ThemeController>();
     final auth = context.watch<AuthController>();
+    final hpSettings = context.watch<HandPresenceSettingsController>();
     final profile = auth.session?.profile;
 
     return Scaffold(
@@ -57,6 +59,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _SettingsRow(
                     label: 'Background uploads',
                     trailing: DCToggle(value: _backgroundUpload, onChanged: (v) => setState(() => _backgroundUpload = v)),
+                    isLast: true,
+                  ),
+                ]),
+                _Section(title: 'RECORDING FEEDBACK', children: [
+                  _SettingsRow(
+                    label: 'Hand-presence cues',
+                    trailing: DCToggle(
+                      value: hpSettings.masterEnabled,
+                      onChanged: (v) => hpSettings.setMaster(v),
+                    ),
+                  ),
+                  _SettingsRow(
+                    label: 'Audio tones',
+                    trailing: DCToggle(
+                      value: hpSettings.rawTones,
+                      onChanged: (v) => hpSettings.setTones(v),
+                    ),
+                  ),
+                  _SettingsRow(
+                    label: 'Spoken cues',
+                    trailing: DCToggle(
+                      value: hpSettings.rawVoice,
+                      onChanged: (v) => hpSettings.setVoice(v),
+                    ),
+                  ),
+                  _SettingsRow(
+                    label: 'Border indicator',
+                    trailing: DCToggle(
+                      value: hpSettings.rawBorder,
+                      onChanged: (v) => hpSettings.setBorder(v),
+                    ),
+                  ),
+                  _SettingsRow(
+                    label: 'Vibrate on no hands',
+                    trailing: DCToggle(
+                      value: hpSettings.rawVibrateOnNone,
+                      onChanged: (v) => hpSettings.setVibrateOnNone(v),
+                    ),
                     isLast: true,
                   ),
                 ]),

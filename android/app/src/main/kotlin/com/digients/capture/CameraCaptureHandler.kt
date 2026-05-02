@@ -60,6 +60,11 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
     private var context: Context? = null
     private var activity: android.app.Activity? = null
 
+    // Hand-presence detector (V2 addendum). Set by MainActivity at engine
+    // configuration time. We piggyback on the existing ARCore frame loop:
+    // every Nth captureCallback we fetch the YUV image and hand it off.
+    var handDetector: HandPresenceDetector? = null
+
     // Camera2 API components (also used in shared-camera mode with ARCore)
     private var cameraManager: CameraManager? = null
     private var cameraDevice: CameraDevice? = null
@@ -805,7 +810,6 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
 
         val captureCallback = object : CameraCaptureSession.CaptureCallback() {
             override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
-                if (!isRecording) return
                 val ar = arSession
                 if (ar != null && poseSource == "arcore") {
                     try {
@@ -814,12 +818,34 @@ class CameraCaptureHandler : FlutterPlugin, MethodChannel.MethodCallHandler, Act
                         // context drops on some OEM stacks.
                         arEglHelper?.makeCurrent()
                         val frame = ar.update()
-                        writePoseLine(frame, frameCounter)
+                        if (isRecording) {
+                            writePoseLine(frame, frameCounter)
+                        }
+                        // Feed the hand-presence detector regardless of recording
+                        // state — the border + audio cues help the user compose
+                        // before pressing record. The detector throttles itself.
+                        val detector = handDetector
+                        if (detector != null) {
+                            try {
+                                val image = frame.acquireCameraImage()
+                                val timestampMs =
+                                    (frame.timestamp + unixOffsetNs) / 1_000_000L
+                                // Ownership of `image` transfers — submitFrame
+                                // calls image.close() in all paths.
+                                detector.submitFrame(image, timestampMs)
+                            } catch (_: com.google.ar.core.exceptions.NotYetAvailableException) {
+                                // Frame not ready yet; just skip this tick.
+                            } catch (t: Throwable) {
+                                Log.w(TAG, "hand detector frame submit failed", t)
+                            }
+                        }
                     } catch (t: Throwable) {
                         Log.e(TAG, "ARCore session.update failed for frame $frameCounter", t)
                     }
                 }
-                frameCounter++
+                if (isRecording) {
+                    frameCounter++
+                }
             }
         }
 

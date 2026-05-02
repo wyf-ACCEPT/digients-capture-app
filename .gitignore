@@ -46,3 +46,6 @@ app.*.map.json
 
 # Claude (private session context)
 .claude/
+
+# Audio generation workspace (local conda env + scripts; only generated WAVs are committed)
+/tools/audio_gen/
