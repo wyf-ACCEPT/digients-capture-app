@@ -146,12 +146,15 @@ class _RecordScreenState extends State<RecordScreen> {
     final capH = (result['captureHeight'] as int?) ?? 1080;
     final capFps = (result['captureFps'] as num?)?.toDouble() ?? 30.0;
 
+    final task = findTask(widget.taskId);
     final recording = Recording(
       sessionId: _sessionId!,
       capturedAt: capturedAt,
       directoryPath: result['directoryPath'] ?? _outputDirectory ?? '',
       durationSeconds: durationSec,
       fileSizeMB: fileSize,
+      categoryId: task?.categoryId,
+      taskId: task?.id,
     );
     await _recordingManager.saveRecording(recording);
     await _recordingManager.saveMetadata(_sessionId!, _buildMetadata(
@@ -167,7 +170,7 @@ class _RecordScreenState extends State<RecordScreen> {
     ));
 
     if (!mounted) return;
-    final pts = findTask(widget.taskId)?.rewardPoints ?? 0;
+    final pts = task?.rewardPoints ?? 0;
     context.go('/success?points=$pts');
   }
 

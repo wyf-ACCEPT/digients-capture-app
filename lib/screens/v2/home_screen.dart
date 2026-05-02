@@ -225,18 +225,16 @@ class _CategoryTile extends StatelessWidget {
 
   IconData _iconFor(String id) {
     switch (id) {
-      case 'household':
+      case 'living-room':
+        return Icons.weekend_outlined;
+      case 'bedroom':
+        return Icons.bed_outlined;
+      case 'kitchen':
         return Icons.kitchen_outlined;
-      case 'industrial':
-        return Icons.precision_manufacturing_outlined;
-      case 'sports':
-        return Icons.sports_basketball_outlined;
-      case 'daily':
-        return Icons.coffee_outlined;
-      case 'cooking':
-        return Icons.local_dining_outlined;
-      case 'mobility':
-        return Icons.directions_car_outlined;
+      case 'bathroom':
+        return Icons.bathtub_outlined;
+      case 'convenience-store':
+        return Icons.storefront_outlined;
       default:
         return Icons.category_outlined;
     }
