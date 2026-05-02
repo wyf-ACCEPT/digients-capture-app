@@ -1,0 +1,27 @@
+lib/widgets/export_progress.dart
+  c389a85d51885e08 1-103
+lib/screens/v2/submission_detail_screen.dart
+  c389a85d51885e08 9,13,52-66
+lib/screens/v2/submissions_screen.dart
+  c389a85d51885e08 7,11,144-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "edf90df0b445940da53aa0710784c9ca28fc5c40",
+  "prompts": {
+    "c389a85d51885e08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48985218-687c-4ae1-b794-57ccfa8462c8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 135,
+      "total_deletions": 3,
+      "accepted_lines": 733,
+      "overriden_lines": 0
+    }
+  }
+}
