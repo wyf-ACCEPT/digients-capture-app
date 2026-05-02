@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "d6506b4f9057155ec060f2624d490aa451fcb89a",
+  "prompts": {
+    "c389a85d51885e08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48985218-687c-4ae1-b794-57ccfa8462c8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 20,
+      "accepted_lines": 599,
+      "overriden_lines": 0
+    }
+  }
+}
