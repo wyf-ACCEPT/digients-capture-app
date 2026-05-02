@@ -4,9 +4,11 @@ import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/chips.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
 import '../../fixtures/data.dart';
+import '../../widgets/export_progress.dart';
 
 class SubmissionsScreen extends StatefulWidget {
   const SubmissionsScreen({super.key});
@@ -139,7 +141,18 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
     try {
-      await _manager.shareRecording(r.sessionId, sharePositionOrigin: origin);
+      final archivePath = await withExportProgress<String?>(
+        context,
+        initialMessage: 'Compressing recording…',
+        work: (_) => _manager.exportRecording(r.sessionId),
+      );
+      if (archivePath == null || !mounted) return;
+      await Share.shareXFiles(
+        [XFile(archivePath)],
+        subject: 'Egocentric Video Recording',
+        text: 'Egocentric video recording data package',
+        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));

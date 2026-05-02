@@ -6,9 +6,11 @@ import '../../widgets/buttons.dart';
 import '../../widgets/cards.dart';
 import '../../widgets/chips.dart';
 import '../../widgets/nav.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
 import '../../fixtures/data.dart';
+import '../../widgets/export_progress.dart';
 
 class SubmissionDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -47,7 +49,21 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
     try {
-      await _manager.shareRecording(_recording!.sessionId, sharePositionOrigin: origin);
+      // Build the archive while the progress modal is up so the user has
+      // a clear "I'm working on it" signal even on long recordings; then
+      // hand off to the system share sheet only after compression is done.
+      final archivePath = await withExportProgress<String?>(
+        context,
+        initialMessage: 'Compressing recording…',
+        work: (_) => _manager.exportRecording(_recording!.sessionId),
+      );
+      if (archivePath == null || !mounted) return;
+      await Share.shareXFiles(
+        [XFile(archivePath)],
+        subject: 'Egocentric Video Recording',
+        text: 'Egocentric video recording data package',
+        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
