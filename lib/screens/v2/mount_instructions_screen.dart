@@ -24,10 +24,24 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
   Timer? _outTimer;
   Timer? _nextTimer;
 
+  // Countdown that runs alongside the 2 illustration steps. Total animation
+  // duration is ~6.16s (2 steps × ~3.08s each), so a 6-second countdown
+  // aligns naturally — the last "1" stays visible for ~1.2s before the
+  // transition into the record screen fires.
+  static const _countdownStart = 6;
+  int _secondsLeft = _countdownStart;
+  Timer? _secondTicker;
+
   @override
   void initState() {
     super.initState();
     _runStep();
+    _secondTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_secondsLeft > 1) {
+        setState(() => _secondsLeft -= 1);
+      }
+    });
   }
 
   void _runStep() {
@@ -62,6 +76,7 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
     _inTimer?.cancel();
     _outTimer?.cancel();
     _nextTimer?.cancel();
+    _secondTicker?.cancel();
     super.dispose();
   }
 
@@ -93,6 +108,44 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
           SafeArea(
             child: Stack(
               children: [
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF14C9A8).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFF14C9A8).withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF14C9A8),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'RECORDING IN ${_secondsLeft}s',
+                            style: DCText.mono(
+                              size: 11,
+                              weight: FontWeight.w600,
+                              color: const Color(0xFF14C9A8),
+                              letterSpacing: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Positioned(
                   top: 12,
                   right: 16,
