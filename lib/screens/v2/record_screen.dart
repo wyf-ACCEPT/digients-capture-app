@@ -488,26 +488,6 @@ class _RecordScreenState extends State<RecordScreen> {
             Positioned.fill(
               child: MountInstructionsOverlay(onComplete: _onMountComplete),
             ),
-          Positioned(
-            top: 16,
-            right: 16,
-            child: SafeArea(
-              child: AnimatedRotation(
-                turns: _hudTurns,
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutCubic,
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () async {
-                    if (_sessionId != null) {
-                      await _cameraService.stopRecording();
-                    }
-                    if (mounted) context.pop();
-                  },
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
