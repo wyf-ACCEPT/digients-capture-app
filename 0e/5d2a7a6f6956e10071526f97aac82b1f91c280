@@ -1,0 +1,27 @@
+lib/fixtures/data.dart
+  c389a85d51885e08 1,596-626
+lib/screens/v2/submission_detail_screen.dart
+  c389a85d51885e08 11,120
+lib/screens/v2/submissions_screen.dart
+  c389a85d51885e08 9,232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "0e5d2a7a6f6956e10071526f97aac82b1f91c280",
+  "prompts": {
+    "c389a85d51885e08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48985218-687c-4ae1-b794-57ccfa8462c8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 36,
+      "total_deletions": 2,
+      "accepted_lines": 635,
+      "overriden_lines": 0
+    }
+  }
+}
