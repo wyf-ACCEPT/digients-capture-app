@@ -193,26 +193,25 @@ class _CategoryTile extends StatelessWidget {
                 children: [
                   Text(
                     category.title,
-                    style: DCText.inter(size: 18, weight: FontWeight.w600, color: c.text, letterSpacing: -0.18),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: DCText.inter(size: 18, weight: FontWeight.w600, color: c.text, letterSpacing: -0.18, height: 1.15),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 60),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${category.taskCount} tasks',
+                        style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                      ),
+                      if (category.rewardPoints != null) ...[
+                        const SizedBox(height: 4),
                         Text(
-                          '${category.taskCount} tasks',
-                          style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                          'up to +${category.rewardPoints}',
+                          style: DCText.mono(size: 11, weight: FontWeight.w600, color: c.accent),
                         ),
-                        if (category.rewardPoints != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'up to +${category.rewardPoints}',
-                            style: DCText.mono(size: 11, weight: FontWeight.w600, color: c.accent),
-                          ),
-                        ],
                       ],
-                    ),
+                    ],
                   ),
                 ],
               ),
