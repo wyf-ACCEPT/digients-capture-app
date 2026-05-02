@@ -1,3 +1,4 @@
+import '../models/recording.dart';
 import '../models/task.dart';
 
 // Categories follow the 5 scenes from the data collection guide.
@@ -591,4 +592,35 @@ Category? findCategory(String id) {
     if (c.id == id) return c;
   }
   return null;
+}
+
+/// Human-readable title for a recording — mirrors the structure of the
+/// exported archive filename `<category>-<subSlug>-<sessionId>.tar.gz` so
+/// the user can correlate what they see in the Submissions list with the
+/// file they just shared. Falls back to the bare session id prefix for
+/// recordings that pre-date categoryId/taskId tracking.
+String recordingDisplayTitle(Recording r) {
+  final cat = r.categoryId != null ? findCategory(r.categoryId!) : null;
+
+  String? subSlug;
+  if (r.taskId != null && r.taskId!.isNotEmpty) {
+    final match = RegExp(r'^[a-z]{2}-').firstMatch(r.taskId!);
+    subSlug = match != null ? r.taskId!.substring(match.end) : r.taskId!;
+  }
+
+  if (cat != null && subSlug != null && subSlug.isNotEmpty) {
+    return '${cat.title} · ${_titleCase(subSlug)}';
+  }
+  if (cat != null) {
+    return '${cat.title} · ${r.sessionId.substring(0, 8)}';
+  }
+  return 'Recording ${r.sessionId.substring(0, 8)}';
+}
+
+String _titleCase(String slug) {
+  return slug
+      .split('-')
+      .where((w) => w.isNotEmpty)
+      .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
 }

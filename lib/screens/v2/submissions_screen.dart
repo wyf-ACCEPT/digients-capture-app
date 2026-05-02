@@ -6,6 +6,7 @@ import '../../widgets/buttons.dart';
 import '../../widgets/chips.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../fixtures/data.dart';
 
 class SubmissionsScreen extends StatefulWidget {
   const SubmissionsScreen({super.key});
@@ -228,7 +229,7 @@ class _RecordingRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Recording ${recording.sessionId.substring(0, 8)}',
+                    recordingDisplayTitle(recording),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: DCText.inter(size: 14, weight: FontWeight.w600, color: c.text, height: 1.3),
