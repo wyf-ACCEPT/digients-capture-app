@@ -1,0 +1,27 @@
+lib/widgets/mount_overlay.dart
+  c389a85d51885e08 1-599
+lib/screens/v2/record_screen.dart
+  c389a85d51885e08 14,29-32,113-121,389-402,405-412,417,442-472,477-483,487-489
+lib/screens/v2/task_detail_screen.dart
+  c389a85d51885e08 167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "461d7625f26c63823daace5a2ace1727be84e0bb",
+  "prompts": {
+    "c389a85d51885e08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48985218-687c-4ae1-b794-57ccfa8462c8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 679,
+      "total_deletions": 69,
+      "accepted_lines": 679,
+      "overriden_lines": 0
+    }
+  }
+}
