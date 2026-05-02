@@ -6,7 +6,6 @@ import 'screens/v2/shell_scaffold.dart';
 import 'screens/v2/home_screen.dart';
 import 'screens/v2/pool_screen.dart';
 import 'screens/v2/task_detail_screen.dart';
-import 'screens/v2/mount_instructions_screen.dart';
 import 'screens/v2/record_screen.dart';
 import 'screens/v2/success_screen.dart';
 import 'screens/v2/submissions_screen.dart';
@@ -54,13 +53,6 @@ GoRouter buildRouter(AuthController auth) {
       GoRoute(
         path: '/task/:taskId',
         builder: (_, state) => TaskDetailScreen(taskId: state.pathParameters['taskId']!),
-      ),
-      GoRoute(
-        path: '/mount/:taskId',
-        pageBuilder: (_, state) => MaterialPage(
-          fullscreenDialog: true,
-          child: MountInstructionsScreen(taskId: state.pathParameters['taskId']!),
-        ),
       ),
       GoRoute(
         path: '/record/:taskId',

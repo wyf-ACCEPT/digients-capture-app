@@ -8,6 +8,7 @@ import '../../widgets/chips.dart';
 import '../../widgets/nav.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../fixtures/data.dart';
 
 class SubmissionDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -116,7 +117,7 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                 const DCStatusBadge(status: SubmissionStatus.ondevice),
                 const SizedBox(height: 14),
                 Text(
-                  'Recording ${r.sessionId.substring(0, 8)}',
+                  recordingDisplayTitle(r),
                   style: DCText.inter(size: 22, weight: FontWeight.w700, color: c.text, letterSpacing: -0.44),
                 ),
                 const SizedBox(height: 18),

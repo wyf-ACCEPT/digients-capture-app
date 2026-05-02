@@ -133,8 +133,45 @@ class RecordingManager {
     }
   }
 
-  Future<String?> exportRecording(String sessionId) async {
+  // Build the export-facing slug for a recording. Used as the outer archive
+  // basename so the file the user shares encodes both scene and sub-task.
+  // Task IDs follow the convention `<2-letter-prefix>-<action-slug>` (e.g.
+  // `br-fold-clothes-multi`); we strip the prefix so the category is not
+  // double-encoded. Falls back gracefully when fields are missing on
+  // recordings persisted before this scheme.
+  String _exportSlug(String sessionId, String? categoryId, String? taskId) {
+    String? subSlug;
+    if (taskId != null && taskId.isNotEmpty) {
+      // Match exactly the 2-letter category abbrev + dash (lr-, br-, kt-,
+      // bt-, cs-). Tasks that don't follow this convention pass through
+      // unchanged.
+      final match = RegExp(r'^[a-z]{2}-').firstMatch(taskId);
+      subSlug = match != null ? taskId.substring(match.end) : taskId;
+    }
+    final hasCategory = categoryId != null && categoryId.isNotEmpty;
+    final hasSub = subSlug != null && subSlug.isNotEmpty;
+    if (hasCategory && hasSub) return '$categoryId-$subSlug-$sessionId';
+    if (hasCategory) return '$categoryId-$sessionId';
+    return sessionId;
+  }
+
+  Future<String?> exportRecording(String sessionId, {String? categoryId, String? taskId}) async {
     try {
+      // If caller didn't pass categoryId / taskId, look them up from the
+      // persisted recordings list. This keeps export call sites simple.
+      String? resolvedCategoryId = categoryId;
+      String? resolvedTaskId = taskId;
+      if (resolvedCategoryId == null || resolvedTaskId == null) {
+        final List<Recording> all = await loadRecordings();
+        for (final r in all) {
+          if (r.sessionId == sessionId) {
+            resolvedCategoryId ??= r.categoryId;
+            resolvedTaskId ??= r.taskId;
+            break;
+          }
+        }
+      }
+
       final Directory recordingsDir = await _getRecordingsDirectory();
       final Directory recordingDir = Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
 
@@ -143,11 +180,16 @@ class RecordingManager {
         return null;
       }
 
+      final String slug = _exportSlug(sessionId, resolvedCategoryId, resolvedTaskId);
+
       // Create temporary file for the tar.gz
       final Directory tempDir = await getTemporaryDirectory();
-      final String archivePath = path.join(tempDir.path, 'recording_$sessionId.tar.gz');
+      final String archivePath = path.join(tempDir.path, '$slug.tar.gz');
 
-      // Create the archive
+      // Only the outer archive name encodes the category — the inner layout
+      // (video.mp4 / metadata.json / frames.jsonl) stays unchanged so the
+      // ego-pose-post-process pipeline and validator (which both hard-code
+      // "video.mp4") keep working.
       final Archive archive = Archive();
 
       await for (final FileSystemEntity entity in recordingDir.list(recursive: true)) {
@@ -183,18 +225,22 @@ class RecordingManager {
     }
   }
 
-  Future<void> shareRecording(String sessionId, {Rect? sharePositionOrigin}) async {
+  Future<void> shareRecording(String sessionId, {Rect? sharePositionOrigin, String? categoryId, String? taskId}) async {
     try {
-      final String? archivePath = await exportRecording(sessionId);
+      final String? archivePath = await exportRecording(sessionId, categoryId: categoryId, taskId: taskId);
 
       if (archivePath == null) {
         throw Exception('Failed to export recording');
       }
 
+      // Strip both ".gz" and ".tar" so the share subject reads `<slug>` not
+      // `<slug>.tar`.
+      final String archiveBase = path.basename(archivePath).replaceAll(RegExp(r'\.tar\.gz$'), '');
+
       final XFile file = XFile(archivePath);
       await Share.shareXFiles(
         [file],
-        subject: 'Egocentric Video Recording - $sessionId',
+        subject: 'Egocentric Video Recording - $archiveBase',
         text: 'Egocentric video recording data package',
         sharePositionOrigin: sharePositionOrigin ?? const Rect.fromLTWH(0, 0, 1, 1),
       );

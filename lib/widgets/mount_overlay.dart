@@ -1,19 +1,27 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../../theme/text_styles.dart';
+import '../theme/text_styles.dart';
 
-class MountInstructionsScreen extends StatefulWidget {
-  final String taskId;
-  const MountInstructionsScreen({super.key, required this.taskId});
+/// Onboarding overlay shown over the live camera preview before recording
+/// starts. Replaces the standalone mount instructions screen so the user
+/// can already see (dimmed) what the camera sees while reading the
+/// orient-and-mount cues, and a 6-second countdown removes ambiguity
+/// about when recording will actually begin.
+///
+/// Calls [onComplete] when the second illustration finishes (or the user
+/// taps SKIP). The owner is then expected to start recording.
+class MountInstructionsOverlay extends StatefulWidget {
+  final VoidCallback onComplete;
+  const MountInstructionsOverlay({super.key, required this.onComplete});
 
   @override
-  State<MountInstructionsScreen> createState() => _MountInstructionsScreenState();
+  State<MountInstructionsOverlay> createState() =>
+      _MountInstructionsOverlayState();
 }
 
-class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
-  // Each step lasts 3000ms total: 350ms fade-in, 2200ms hold, 450ms fade-out.
+class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
+  // Each step lasts ~3 s total: 350 ms fade-in, 2200 ms hold, 450 ms fade-out.
   static const _fadeIn = Duration(milliseconds: 350);
   static const _hold = Duration(milliseconds: 2200);
   static const _fadeOut = Duration(milliseconds: 450);
@@ -24,10 +32,21 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
   Timer? _outTimer;
   Timer? _nextTimer;
 
+  // 6-second countdown to align with the 2-step animation (~6.16 s total).
+  static const _countdownStart = 6;
+  int _secondsLeft = _countdownStart;
+  Timer? _secondTicker;
+
   @override
   void initState() {
     super.initState();
     _runStep();
+    _secondTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_secondsLeft > 1) {
+        setState(() => _secondsLeft -= 1);
+      }
+    });
   }
 
   void _runStep() {
@@ -51,7 +70,7 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
           setState(() => _step += 1);
           _runStep();
         } else {
-          _goToRecord();
+          widget.onComplete();
         }
       },
     );
@@ -62,11 +81,8 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
     _inTimer?.cancel();
     _outTimer?.cancel();
     _nextTimer?.cancel();
+    _secondTicker?.cancel();
     super.dispose();
-  }
-
-  void _goToRecord() {
-    context.pushReplacement('/record/${widget.taskId}');
   }
 
   @override
@@ -75,66 +91,109 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
         ? 'Place your phone horizontally with arrow pointing upward'
         : 'Mount on headband for data collection';
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0, -0.1),
-                  radius: 1.2,
-                  colors: [Color(0xFF1C1C20), Color(0xFF08080A)],
-                ),
-              ),
-            ),
+    return Stack(
+      children: [
+        // Semi-transparent scrim over the live preview. ~55 % black keeps the
+        // preview visible enough for the user to spot framing problems
+        // (something blocking the lens, the strap dangling) while keeping
+        // illustrations and caption readable.
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Container(color: Colors.black.withValues(alpha: 0.55)),
           ),
-          SafeArea(
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 12,
-                  right: 16,
-                  child: GestureDetector(
-                    onTap: _goToRecord,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                      ),
-                      child: Text(
-                        'SKIP',
-                        style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
-                      ),
+        ),
+        SafeArea(
+          child: Stack(
+            children: [
+              Positioned(
+                top: 12,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF14C9A8).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFF14C9A8).withValues(alpha: 0.5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF14C9A8),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'RECORDING IN ${_secondsLeft}s',
+                          style: DCText.mono(
+                            size: 11,
+                            weight: FontWeight.w600,
+                            color: const Color(0xFF14C9A8),
+                            letterSpacing: 1.4,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                Center(
-                  child: AnimatedSlide(
+              ),
+              Positioned(
+                top: 12,
+                right: 16,
+                child: GestureDetector(
+                  onTap: widget.onComplete,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                    ),
+                    child: Text(
+                      'SKIP',
+                      style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
+                    ),
+                  ),
+                ),
+              ),
+              Center(
+                child: AnimatedSlide(
+                  duration: _fadeIn,
+                  curve: Curves.easeOut,
+                  offset: _visible ? Offset.zero : const Offset(0, 0.04),
+                  child: AnimatedOpacity(
                     duration: _fadeIn,
                     curve: Curves.easeOut,
-                    offset: _visible ? Offset.zero : const Offset(0, 0.04),
-                    child: AnimatedOpacity(
-                      duration: _fadeIn,
-                      curve: Curves.easeOut,
-                      opacity: _visible ? 1.0 : 0.0,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              height: 220,
-                              width: 280,
-                              child: _step == 0
-                                  ? const _PhoneArrowIllustration()
-                                  : const _HeadbandIllustration(),
+                    opacity: _visible ? 1.0 : 0.0,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 220,
+                            width: 280,
+                            child: _step == 0
+                                ? const _PhoneArrowIllustration()
+                                : const _HeadbandIllustration(),
+                          ),
+                          const SizedBox(height: 36),
+                          // Subtle scrim under the caption so it stays
+                          // legible even when the preview behind happens
+                          // to be bright (e.g. pointed at a window).
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            const SizedBox(height: 36),
-                            Text(
+                            child: Text(
                               caption,
                               textAlign: TextAlign.center,
                               style: DCText.inter(
@@ -145,38 +204,38 @@ class _MountInstructionsScreenState extends State<MountInstructionsScreen> {
                                 letterSpacing: -0.44,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                Positioned(
-                  bottom: 36,
-                  left: 0,
-                  right: 0,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(2, (i) {
-                      final active = i == _step;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        height: 5,
-                        width: active ? 18 : 5,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: active ? 0.95 : 0.2),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      );
-                    }),
-                  ),
+              ),
+              Positioned(
+                bottom: 36,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(2, (i) {
+                    final active = i == _step;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      height: 5,
+                      width: active ? 18 : 5,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: active ? 0.95 : 0.25),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    );
+                  }),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

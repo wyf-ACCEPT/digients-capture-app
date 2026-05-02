@@ -193,26 +193,25 @@ class _CategoryTile extends StatelessWidget {
                 children: [
                   Text(
                     category.title,
-                    style: DCText.inter(size: 18, weight: FontWeight.w600, color: c.text, letterSpacing: -0.18),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: DCText.inter(size: 18, weight: FontWeight.w600, color: c.text, letterSpacing: -0.18, height: 1.15),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 60),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${category.taskCount} tasks',
+                        style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                      ),
+                      if (category.rewardPoints != null) ...[
+                        const SizedBox(height: 4),
                         Text(
-                          '${category.taskCount} tasks',
-                          style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                          'up to +${category.rewardPoints}',
+                          style: DCText.mono(size: 11, weight: FontWeight.w600, color: c.accent),
                         ),
-                        if (category.rewardPoints != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'up to +${category.rewardPoints}',
-                            style: DCText.mono(size: 11, weight: FontWeight.w600, color: c.accent),
-                          ),
-                        ],
                       ],
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -225,18 +224,16 @@ class _CategoryTile extends StatelessWidget {
 
   IconData _iconFor(String id) {
     switch (id) {
-      case 'household':
+      case 'living-room':
+        return Icons.weekend_outlined;
+      case 'bedroom':
+        return Icons.bed_outlined;
+      case 'kitchen':
         return Icons.kitchen_outlined;
-      case 'industrial':
-        return Icons.precision_manufacturing_outlined;
-      case 'sports':
-        return Icons.sports_basketball_outlined;
-      case 'daily':
-        return Icons.coffee_outlined;
-      case 'cooking':
-        return Icons.local_dining_outlined;
-      case 'mobility':
-        return Icons.directions_car_outlined;
+      case 'bathroom':
+        return Icons.bathtub_outlined;
+      case 'convenience-store':
+        return Icons.storefront_outlined;
       default:
         return Icons.category_outlined;
     }

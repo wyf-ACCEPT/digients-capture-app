@@ -11,6 +11,7 @@ import '../../services/camera_service.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
 import '../../fixtures/data.dart';
+import '../../widgets/mount_overlay.dart';
 
 class RecordScreen extends StatefulWidget {
   final String taskId;
@@ -25,6 +26,10 @@ class _RecordScreenState extends State<RecordScreen> {
   final RecordingManager _recordingManager = RecordingManager();
   bool _isInitialized = false;
   bool _expanded = false;
+  // Drives the mount-instructions overlay shown over the live camera
+  // preview. Stays true until the overlay's 6-second countdown finishes
+  // (or the user taps SKIP), then we start recording.
+  bool _showMountOverlay = true;
   String? _sessionId;
   DateTime? _startTime;
   String? _outputDirectory;
@@ -105,7 +110,15 @@ class _RecordScreenState extends State<RecordScreen> {
       _cameraInfo = cam;
       _deviceInfo = dev;
     });
-    await _start();
+    // Recording is kicked off by the mount-instructions overlay's
+    // onComplete callback (_onMountComplete), not here, so the user
+    // first sees the orientation/headmount cues over the live preview.
+  }
+
+  void _onMountComplete() {
+    if (!mounted) return;
+    setState(() => _showMountOverlay = false);
+    _start();
   }
 
   Future<void> _start() async {
@@ -146,12 +159,15 @@ class _RecordScreenState extends State<RecordScreen> {
     final capH = (result['captureHeight'] as int?) ?? 1080;
     final capFps = (result['captureFps'] as num?)?.toDouble() ?? 30.0;
 
+    final task = findTask(widget.taskId);
     final recording = Recording(
       sessionId: _sessionId!,
       capturedAt: capturedAt,
       directoryPath: result['directoryPath'] ?? _outputDirectory ?? '',
       durationSeconds: durationSec,
       fileSizeMB: fileSize,
+      categoryId: task?.categoryId,
+      taskId: task?.id,
     );
     await _recordingManager.saveRecording(recording);
     await _recordingManager.saveMetadata(_sessionId!, _buildMetadata(
@@ -167,7 +183,7 @@ class _RecordScreenState extends State<RecordScreen> {
     ));
 
     if (!mounted) return;
-    final pts = findTask(widget.taskId)?.rewardPoints ?? 0;
+    final pts = task?.rewardPoints ?? 0;
     context.go('/success?points=$pts');
   }
 
@@ -370,34 +386,35 @@ class _RecordScreenState extends State<RecordScreen> {
               ),
             ),
           ),
-          Positioned(
-            top: 56,
-            left: 0,
-            right: 0,
-            child: Center(
-              // In landscape the pill rotates 90° around its own center, then
-              // shifts along the device's long axis (vertical in device frame)
-              // so it lands beside the Dynamic Island instead of on top of it.
-              // Sign of the slide is chosen so the pill ends up "below" the
-              // Dynamic Island in the user's landscape view, regardless of
-              // whether the device was rotated CW or CCW.
-              child: AnimatedSlide(
-                offset: _pillSlideOffset(_hudTurns),
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutCubic,
-                child: AnimatedRotation(
-                  turns: _hudTurns,
+          if (!_showMountOverlay)
+            Positioned(
+              top: 56,
+              left: 0,
+              right: 0,
+              child: Center(
+                // In landscape the pill rotates 90° around its own center, then
+                // shifts along the device's long axis (vertical in device frame)
+                // so it lands beside the Dynamic Island instead of on top of it.
+                // Sign of the slide is chosen so the pill ends up "below" the
+                // Dynamic Island in the user's landscape view, regardless of
+                // whether the device was rotated CW or CCW.
+                child: AnimatedSlide(
+                  offset: _pillSlideOffset(_hudTurns),
                   duration: const Duration(milliseconds: 350),
                   curve: Curves.easeOutCubic,
-                  child: GestureDetector(
-                    onTap: () => setState(() => _expanded = !_expanded),
-                    child: _RecordingPill(elapsed: _format(_elapsed)),
+                  child: AnimatedRotation(
+                    turns: _hudTurns,
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: _RecordingPill(elapsed: _format(_elapsed)),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (_expanded)
+          if (!_showMountOverlay && _expanded)
             Positioned(
               top: 110,
               left: 20,
@@ -422,70 +439,55 @@ class _RecordScreenState extends State<RecordScreen> {
                 child: Text(_errorMessage!, style: DCText.inter(size: 14, weight: FontWeight.w500, color: const Color(0xFFFF453A))),
               ),
             ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 60,
-            child: Center(
-              child: AnimatedRotation(
-                turns: _hudTurns,
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutCubic,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: _stop,
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.transparent,
-                          border: Border.all(color: Colors.white, width: 4),
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF14C9A8),
-                              borderRadius: BorderRadius.circular(6),
+          if (!_showMountOverlay)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 60,
+              child: Center(
+                child: AnimatedRotation(
+                  turns: _hudTurns,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutCubic,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: _stop,
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.transparent,
+                            border: Border.all(color: Colors.white, width: 4),
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF14C9A8),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'TAP TO STOP',
-                      style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Text(
+                        'TAP TO STOP',
+                        style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          Positioned(
-            top: 16,
-            right: 16,
-            child: SafeArea(
-              child: AnimatedRotation(
-                turns: _hudTurns,
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutCubic,
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () async {
-                    if (_sessionId != null) {
-                      await _cameraService.stopRecording();
-                    }
-                    if (mounted) context.pop();
-                  },
-                ),
-              ),
+          if (_isInitialized && _showMountOverlay && _errorMessage == null)
+            Positioned.fill(
+              child: MountInstructionsOverlay(onComplete: _onMountComplete),
             ),
-          ),
         ],
       ),
     );
