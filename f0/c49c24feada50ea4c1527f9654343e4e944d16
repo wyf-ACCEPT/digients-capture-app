@@ -1,0 +1,23 @@
+lib/services/recording_manager.dart
+  c389a85d51885e08 4,12-63,245-253
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "f0c49c24feada50ea4c1527f9654343e4e944d16",
+  "prompts": {
+    "c389a85d51885e08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48985218-687c-4ae1-b794-57ccfa8462c8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 62,
+      "total_deletions": 30,
+      "accepted_lines": 661,
+      "overriden_lines": 0
+    }
+  }
+}
