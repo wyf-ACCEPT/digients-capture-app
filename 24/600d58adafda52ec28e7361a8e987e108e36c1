@@ -1,0 +1,23 @@
+.github/workflows/build-android-apk.yml
+  4bd17ea410f0a706 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "24600d58adafda52ec28e7361a8e987e108e36c1",
+  "prompts": {
+    "4bd17ea410f0a706": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a234848b-08f8-4b78-a813-ca42568f878b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 62,
+      "total_deletions": 0,
+      "accepted_lines": 62,
+      "overriden_lines": 0
+    }
+  }
+}
