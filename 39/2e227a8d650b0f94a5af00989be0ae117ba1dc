@@ -1,0 +1,23 @@
+android/settings.gradle
+  4bd17ea410f0a706 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "392e227a8d650b0f94a5af00989be0ae117ba1dc",
+  "prompts": {
+    "4bd17ea410f0a706": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a234848b-08f8-4b78-a813-ca42568f878b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
