@@ -14,15 +14,18 @@ import 'package:path_provider/path_provider.dart';
 class HandPresenceSettingsController extends ChangeNotifier {
   static const _filename = 'hand_presence_prefs.json';
 
+  // Voice is the primary hand-presence cue (the user wears the phone on
+  // their head and can't read the screen). Tones default OFF so we don't
+  // double up; users who prefer beeps can toggle them on in Settings.
   bool _master = true;
-  bool _tones = true;
-  bool _voice = false;
+  bool _tones = false;
+  bool _voice = true;
   bool _border = true;
   bool _vibrateOnNone = false;
 
   bool get masterEnabled => _master;
   bool get tonesEnabled => _master && _tones;
-  bool get voiceEnabled => _master && _tones && _voice;
+  bool get voiceEnabled => _master && _voice;
   bool get borderEnabled => _master && _border;
   bool get vibrateOnNone => _master && _vibrateOnNone;
 

@@ -78,7 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   _SettingsRow(
-                    label: 'Spoken cues',
+                    label: 'Voice cues',
                     trailing: DCToggle(
                       value: hpSettings.rawVoice,
                       onChanged: (v) => hpSettings.setVoice(v),

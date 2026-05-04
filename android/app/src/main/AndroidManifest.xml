@@ -19,7 +19,7 @@
     <application
         android:label="Digients Capture"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
 
         <!-- ARCore optional: app runs everywhere; fall back to imu_raw when ARCore
              isn't installed or the device isn't ARCore-supported. -->

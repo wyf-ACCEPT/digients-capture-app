@@ -5,26 +5,35 @@ import 'package:just_audio/just_audio.dart';
 
 import 'hand_presence_state.dart';
 
-/// Plays hand-presence audio cues on every committed state transition.
+/// Plays hand-presence audio cues:
 ///
-/// Uses one preloaded `AudioPlayer` per cue so playback is non-blocking and
-/// has no model-load latency. The audio session is configured as ambient with
-/// mix-with-others so we never duck the user's music or fight the silent
-/// switch (§4.4 of the addendum).
+///   • a sci-fi recording-start chirp the moment capture begins (the user is
+///     wearing the phone on their head and can't see the screen);
+///   • a one-shot composite voice announcement at the first frame of
+///     recording so the user knows what's in view before they start moving;
+///   • per-hand voice cues every time a single hand enters or exits the view
+///     during recording ("Left hand enters the view" etc.);
+///   • optional sub-second tones bound to composite-state transitions
+///     (kept available for users who want a beep on top of the voice).
 ///
-/// Voice phrases are preloaded too but only played when [voiceEnabled] is
-/// true; the default path is tones-only.
+/// One preloaded `AudioPlayer` per cue so playback is non-blocking and has
+/// no model-load latency. Audio session is ambient + mix-with-others so we
+/// never duck the user's music or fight the silent switch.
 class HandAudioPlayer {
   HandAudioPlayer({
     Stream<HandPresenceTransition>? transitions,
-    this.voiceEnabled = false,
-    this.tonesEnabled = true,
+    Stream<HandSideTransition>? sideTransitions,
+    this.voiceEnabled = true,
+    this.tonesEnabled = false,
+    this.recordingStartEnabled = true,
   }) {
     if (transitions != null) bind(transitions);
+    if (sideTransitions != null) bindSides(sideTransitions);
   }
 
   bool voiceEnabled;
   bool tonesEnabled;
+  bool recordingStartEnabled;
 
   final Map<HandPresenceState, AudioPlayer> _tonePlayers = {
     HandPresenceState.both: AudioPlayer(),
@@ -33,14 +42,26 @@ class HandAudioPlayer {
     HandPresenceState.none: AudioPlayer(),
   };
 
-  final Map<HandPresenceState, AudioPlayer> _voicePlayers = {
+  // Composite voice (used for the first-frame announcement only).
+  final Map<HandPresenceState, AudioPlayer> _stateVoicePlayers = {
     HandPresenceState.both: AudioPlayer(),
     HandPresenceState.leftOnly: AudioPlayer(),
     HandPresenceState.rightOnly: AudioPlayer(),
     HandPresenceState.none: AudioPlayer(),
   };
 
+  // Per-hand transition voice (left/right × enter/exit), used while recording.
+  final Map<String, AudioPlayer> _sideVoicePlayers = {
+    'left_enter': AudioPlayer(),
+    'left_exit': AudioPlayer(),
+    'right_enter': AudioPlayer(),
+    'right_exit': AudioPlayer(),
+  };
+
+  final AudioPlayer _recordingStartPlayer = AudioPlayer();
+
   StreamSubscription<HandPresenceTransition>? _sub;
+  StreamSubscription<HandSideTransition>? _sideSub;
   bool _initialized = false;
 
   Future<void> initialize() async {
@@ -62,14 +83,64 @@ class HandAudioPlayer {
     await Future.wait([
       for (final entry in _tonePlayers.entries)
         entry.value.setAsset(_toneAssetFor(entry.key)),
-      for (final entry in _voicePlayers.entries)
-        entry.value.setAsset(_voiceAssetFor(entry.key)),
+      for (final entry in _stateVoicePlayers.entries)
+        entry.value.setAsset(_stateVoiceAssetFor(entry.key)),
+      for (final entry in _sideVoicePlayers.entries)
+        entry.value.setAsset('assets/audio/hand_state_voice/${entry.key}.wav'),
+      _recordingStartPlayer.setAsset('assets/audio/session/recording_start.wav'),
     ]);
   }
 
   void bind(Stream<HandPresenceTransition> transitions) {
     _sub?.cancel();
     _sub = transitions.listen(_onTransition);
+  }
+
+  void bindSides(Stream<HandSideTransition> sideTransitions) {
+    _sideSub?.cancel();
+    _sideSub = sideTransitions.listen(_onSideTransition);
+  }
+
+  /// Play the sci-fi recording-start chirp. Returns a future that completes
+  /// when playback ends so callers can sequence a follow-up cue (e.g. the
+  /// first-frame state announcement).
+  Future<void> playRecordingStart() async {
+    if (!_initialized) return;
+    if (!recordingStartEnabled) return;
+    await _recordingStartPlayer.seek(Duration.zero);
+    final completer = Completer<void>();
+    StreamSubscription<ProcessingState>? sub;
+    sub = _recordingStartPlayer.processingStateStream.listen((s) {
+      if (s == ProcessingState.completed) {
+        sub?.cancel();
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+    unawaited(_recordingStartPlayer.play());
+    return completer.future;
+  }
+
+  /// Speak the composite hand-presence state without requiring a transition.
+  /// Used at the first frame of recording so the user knows whether their
+  /// hands are in frame before they start moving. Silent if voice is disabled.
+  Future<void> playStateAnnouncement(HandPresenceState state) async {
+    if (!_initialized) return;
+    if (!voiceEnabled) return;
+    final player = _stateVoicePlayers[state];
+    if (player == null) return;
+    await _stopAllVoice();
+    await player.seek(Duration.zero);
+    unawaited(player.play());
+  }
+
+  Future<void> _stopAllVoice() async {
+    // Last-state-wins per §4.3 — drop in-flight voice across both banks.
+    for (final p in _stateVoicePlayers.values) {
+      if (p.playing) await p.stop();
+    }
+    for (final p in _sideVoicePlayers.values) {
+      if (p.playing) await p.stop();
+    }
   }
 
   Future<void> _onTransition(HandPresenceTransition t) async {
@@ -81,23 +152,23 @@ class HandAudioPlayer {
         unawaited(tonePlayer.play());
       }
     }
-    if (voiceEnabled) {
-      final voicePlayer = _voicePlayers[t.to];
-      if (voicePlayer != null) {
-        // Drop in-flight voice (last-state-wins per §4.3).
-        for (final p in _voicePlayers.values) {
-          if (p.playing) await p.stop();
-        }
-        await voicePlayer.seek(Duration.zero);
-        unawaited(voicePlayer.play());
-      }
-    }
+  }
+
+  Future<void> _onSideTransition(HandSideTransition t) async {
+    if (!_initialized) return;
+    if (!voiceEnabled) return;
+    final key = '${t.side.name}_${t.entered ? 'enter' : 'exit'}';
+    final player = _sideVoicePlayers[key];
+    if (player == null) return;
+    await _stopAllVoice();
+    await player.seek(Duration.zero);
+    unawaited(player.play());
   }
 
   String _toneAssetFor(HandPresenceState s) =>
       'assets/audio/hand_state/${_baseName(s)}.wav';
 
-  String _voiceAssetFor(HandPresenceState s) =>
+  String _stateVoiceAssetFor(HandPresenceState s) =>
       'assets/audio/hand_state_voice/${_baseName(s)}.wav';
 
   String _baseName(HandPresenceState s) => switch (s) {
@@ -109,10 +180,14 @@ class HandAudioPlayer {
 
   Future<void> dispose() async {
     await _sub?.cancel();
+    await _sideSub?.cancel();
     _sub = null;
+    _sideSub = null;
     await Future.wait([
       for (final p in _tonePlayers.values) p.dispose(),
-      for (final p in _voicePlayers.values) p.dispose(),
+      for (final p in _stateVoicePlayers.values) p.dispose(),
+      for (final p in _sideVoicePlayers.values) p.dispose(),
+      _recordingStartPlayer.dispose(),
     ]);
   }
 }

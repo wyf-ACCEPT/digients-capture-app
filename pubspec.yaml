@@ -75,6 +75,16 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^4.0.0
 
+  # Generates iOS / Android launcher icons from a single source image.
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "icon.png"
+  min_sdk_android: 26
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -89,6 +99,7 @@ flutter:
   assets:
     - assets/audio/hand_state/
     - assets/audio/hand_state_voice/
+    - assets/audio/session/
     - assets/models/hand_landmarker.task
 
   # An image asset can refer to one or more resolution-specific "variants", see

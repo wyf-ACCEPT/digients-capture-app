@@ -56,6 +56,24 @@ class HandPresenceController extends ChangeNotifier {
       StreamController<HandPresenceTransition>.broadcast();
   Stream<HandPresenceTransition> get transitions => _transitions.stream;
 
+  /// Per-hand enter/exit events, emitted after warmup whenever a single
+  /// hand's presence flag flips. Drives finer-grained voice cues
+  /// ("Left hand enters the view", etc.) while the composite [transitions]
+  /// stream still drives tones, haptics, and the colored border.
+  final StreamController<HandSideTransition> _sideTransitions =
+      StreamController<HandSideTransition>.broadcast();
+  Stream<HandSideTransition> get sideTransitions => _sideTransitions.stream;
+
+  /// Resolves once the smoothing window has filled (i.e. warmup completes)
+  /// with the first raw composite state. Used by the recording screen to
+  /// announce the initial hand presence even when it stays at NONE — the
+  /// transition stream alone doesn't fire in that case.
+  ///
+  /// Recreated on [reset] so a backgrounded-and-resumed session re-announces.
+  Completer<HandPresenceState> _firstStateReady =
+      Completer<HandPresenceState>();
+  Future<HandPresenceState> get firstStateReady => _firstStateReady.future;
+
   /// Reset windows and warm-up. Used on backgrounding, camera reconfiguration,
   /// or when the detector restarts (§6.6).
   void reset() {
@@ -65,6 +83,11 @@ class HandPresenceController extends ChangeNotifier {
     _rightPresent = false;
     _pendingState = null;
     _tickCount = 0;
+    // Abandon the prior completer (if not yet completed, its future will
+    // never resolve — fine, the screen disposes alongside this controller).
+    // A fresh completer here means any post-reset listener gets the next
+    // first-ready state.
+    _firstStateReady = Completer<HandPresenceState>();
     if (_committedState != HandPresenceState.none) {
       _committedState = HandPresenceState.none;
       notifyListeners();
@@ -105,12 +128,37 @@ class HandPresenceController extends ChangeNotifier {
     _push(_leftWindow, leftDetected ? 1 : 0);
     _push(_rightWindow, rightDetected ? 1 : 0);
 
+    final wasLeftPresent = _leftPresent;
+    final wasRightPresent = _rightPresent;
     _leftPresent = _updatePresence(_leftPresent, _leftWindow);
     _rightPresent = _updatePresence(_rightPresent, _rightWindow);
 
     final raw = _composeState(_leftPresent, _rightPresent);
 
     if (_tickCount < warmupTicks) return;
+
+    if (_tickCount == warmupTicks && !_firstStateReady.isCompleted) {
+      _firstStateReady.complete(raw);
+    }
+
+    // Per-hand events fire only after warmup so the initial composite-state
+    // announcement isn't clobbered by enter cues from the warmup ramp-up.
+    if (_tickCount > warmupTicks) {
+      if (_leftPresent != wasLeftPresent) {
+        _sideTransitions.add(HandSideTransition(
+          side: HandSide.left,
+          entered: _leftPresent,
+          timestampMs: timestampMs,
+        ));
+      }
+      if (_rightPresent != wasRightPresent) {
+        _sideTransitions.add(HandSideTransition(
+          side: HandSide.right,
+          entered: _rightPresent,
+          timestampMs: timestampMs,
+        ));
+      }
+    }
 
     _evaluateTransition(raw, timestampMs);
   }
@@ -179,6 +227,7 @@ class HandPresenceController extends ChangeNotifier {
   @override
   void dispose() {
     _transitions.close();
+    _sideTransitions.close();
     super.dispose();
   }
 }

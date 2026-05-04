@@ -35,6 +35,7 @@ class _RecordScreenState extends State<RecordScreen> {
       HandPresenceDetectorService(controller: _handPresence);
   late final HandAudioPlayer _handAudio = HandAudioPlayer(
     transitions: _handPresence.transitions,
+    sideTransitions: _handPresence.sideTransitions,
   );
   bool _isInitialized = false;
   bool _expanded = false;
@@ -162,6 +163,27 @@ class _RecordScreenState extends State<RecordScreen> {
       if (!mounted || _startTime == null) return;
       setState(() => _elapsed = DateTime.now().difference(_startTime!));
     });
+    unawaited(_announceCaptureStart());
+  }
+
+  /// The phone is mounted on the user's head when recording starts, so they
+  /// can't see the screen change. We play a sci-fi chirp the moment capture
+  /// begins, then — once the detector's smoothing window has filled — speak
+  /// the current hand-presence state so the user can adjust without looking.
+  Future<void> _announceCaptureStart() async {
+    try {
+      await _handAudio.playRecordingStart();
+    } catch (_) {
+      // Audio is supplementary; never block recording on a playback failure.
+    }
+    if (!mounted) return;
+    try {
+      final firstState = await _handPresence.firstStateReady;
+      if (!mounted) return;
+      await _handAudio.playStateAnnouncement(firstState);
+    } catch (_) {
+      // Controller may be reset (e.g. backgrounded) before first state lands.
+    }
   }
 
   Future<void> _stop() async {
