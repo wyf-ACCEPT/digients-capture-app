@@ -13,7 +13,21 @@ import '../theme/text_styles.dart';
 /// taps SKIP). The owner is then expected to start recording.
 class MountInstructionsOverlay extends StatefulWidget {
   final VoidCallback onComplete;
-  const MountInstructionsOverlay({super.key, required this.onComplete});
+
+  /// Quarter-turn count, in the same convention used by the rest of the
+  /// record screen's HUD: portrait = 0, landscape CW = -0.25, etc.
+  /// Drives an [AnimatedRotation] around the centered illustration +
+  /// caption so they stay readable when the user has the phone in
+  /// landscape (e.g. mid-mount). The SKIP and countdown banner are
+  /// deliberately not rotated — they're only relevant while the user is
+  /// still holding the phone before donning the headband.
+  final double turns;
+
+  const MountInstructionsOverlay({
+    super.key,
+    required this.onComplete,
+    this.turns = 0.0,
+  });
 
   @override
   State<MountInstructionsOverlay> createState() =>
@@ -166,15 +180,19 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                 ),
               ),
               Center(
-                child: AnimatedSlide(
-                  duration: _fadeIn,
-                  curve: Curves.easeOut,
-                  offset: _visible ? Offset.zero : const Offset(0, 0.04),
-                  child: AnimatedOpacity(
+                child: AnimatedRotation(
+                  turns: widget.turns,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedSlide(
                     duration: _fadeIn,
                     curve: Curves.easeOut,
-                    opacity: _visible ? 1.0 : 0.0,
-                    child: Padding(
+                    offset: _visible ? Offset.zero : const Offset(0, 0.04),
+                    child: AnimatedOpacity(
+                      duration: _fadeIn,
+                      curve: Curves.easeOut,
+                      opacity: _visible ? 1.0 : 0.0,
+                      child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -213,26 +231,35 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                     ),
                   ),
                 ),
+                ),
               ),
               Positioned(
                 bottom: 36,
                 left: 0,
                 right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(2, (i) {
-                    final active = i == _step;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      height: 5,
-                      width: active ? 18 : 5,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: active ? 0.95 : 0.25),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    );
-                  }),
+                child: Center(
+                  child: AnimatedRotation(
+                    turns: widget.turns,
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(2, (i) {
+                        final active = i == _step;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          height: 5,
+                          width: active ? 18 : 5,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: active ? 0.95 : 0.25),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
                 ),
               ),
             ],

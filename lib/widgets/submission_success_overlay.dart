@@ -5,8 +5,14 @@ import '../theme/text_styles.dart';
 /// Lightweight overlay shown after a vol-button stop saves a submission.
 /// Replaces the dedicated `/success` route on the vol-btn-ctrl flow so the
 /// user can keep capturing back-to-back takes without leaving the record
-/// screen. Auto-dismisses after [autoDismiss], and any tap on the backdrop
+/// screen. Auto-dismisses after a short hold, and any tap on the backdrop
 /// also dismisses early.
+///
+/// The backdrop deliberately does **not** rotate with the device — only
+/// the inner card does. Rotating a screen-sized container leaves visible
+/// strips of the camera preview at the corners in landscape, since a
+/// portrait-shaped rectangle rotated 90° doesn't tile a portrait window.
+/// The card is centered so rotating it in place keeps it readable.
 ///
 /// Owners are responsible for triggering the success chime and any
 /// follow-up state transitions — this widget is purely visual.
@@ -15,11 +21,15 @@ class SubmissionSuccessOverlay extends StatelessWidget {
   final int takeNumber;
   final VoidCallback onDismiss;
 
+  /// Quarter-turn count, matching the record screen's HUD rotation.
+  final double turns;
+
   const SubmissionSuccessOverlay({
     super.key,
     required this.points,
     required this.takeNumber,
     required this.onDismiss,
+    this.turns = 0.0,
   });
 
   @override
@@ -32,9 +42,14 @@ class SubmissionSuccessOverlay extends StatelessWidget {
         child: Container(
           color: Colors.black.withValues(alpha: 0.55),
           alignment: Alignment.center,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320),
-            child: _Card(points: points, takeNumber: takeNumber),
+          child: AnimatedRotation(
+            turns: turns,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: _Card(points: points, takeNumber: takeNumber),
+            ),
           ),
         ),
       ),

@@ -525,6 +525,17 @@ class _RecordScreenState extends State<RecordScreen> {
     return '$m:$s';
   }
 
+  /// Wrap any overlay so it auto-rotates with the device. Each wrapped
+  /// element rotates around its own center (so its position on screen
+  /// is preserved) — same pattern the recording pill / stop button /
+  /// close button already use.
+  Widget _rotated(Widget child) => AnimatedRotation(
+        turns: _hudTurns,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        child: child,
+      );
+
   // Slide offset for the recording pill, in units of the pill's own size.
   // After the pill rotates 90° around its center, it would extend upward into
   // the Dynamic Island's footprint. We push it ~1.5 pill-heights along the
@@ -575,22 +586,24 @@ class _RecordScreenState extends State<RecordScreen> {
             Positioned(
               top: 60,
               left: 16,
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_handPresence, _handDetector]),
-                builder: (_, __) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  color: Colors.black.withValues(alpha: 0.6),
-                  child: Text(
-                    'ticks=${_handDetector.ticksReceived} '
-                    'rawH=${_handDetector.maxRawHandCount} '
-                    'okH=${_handDetector.maxHandsSeen}\n'
-                    'maxS=${_handDetector.maxScoreSeen.toStringAsFixed(2)} '
-                    'modelLoaded=${_handDetector.lastModelLoaded}\n'
-                    'state=${_handPresence.state.name}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontFamily: 'monospace',
+              child: _rotated(
+                AnimatedBuilder(
+                  animation: Listenable.merge([_handPresence, _handDetector]),
+                  builder: (_, __) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    color: Colors.black.withValues(alpha: 0.6),
+                    child: Text(
+                      'ticks=${_handDetector.ticksReceived} '
+                      'rawH=${_handDetector.maxRawHandCount} '
+                      'okH=${_handDetector.maxHandsSeen}\n'
+                      'maxS=${_handDetector.maxScoreSeen.toStringAsFixed(2)} '
+                      'modelLoaded=${_handDetector.lastModelLoaded}\n'
+                      'state=${_handPresence.state.name}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
                     ),
                   ),
                 ),
@@ -647,9 +660,11 @@ class _RecordScreenState extends State<RecordScreen> {
               top: 110,
               left: 20,
               right: 20,
-              child: _ExpandedHud(
-                taskTitle: findTask(widget.taskId)?.title ?? '',
-                poseSource: (_cameraInfo?['poseSource'] as String?) ?? 'NONE',
+              child: _rotated(
+                _ExpandedHud(
+                  taskTitle: findTask(widget.taskId)?.title ?? '',
+                  poseSource: (_cameraInfo?['poseSource'] as String?) ?? 'NONE',
+                ),
               ),
             ),
           if (_errorMessage != null)
@@ -657,14 +672,16 @@ class _RecordScreenState extends State<RecordScreen> {
               left: 20,
               right: 20,
               top: 200,
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A0F0F),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFF453A)),
+              child: _rotated(
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A0F0F),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFF453A)),
+                  ),
+                  child: Text(_errorMessage!, style: DCText.inter(size: 14, weight: FontWeight.w500, color: const Color(0xFFFF453A))),
                 ),
-                child: Text(_errorMessage!, style: DCText.inter(size: 14, weight: FontWeight.w500, color: const Color(0xFFFF453A))),
               ),
             ),
           // On-screen primary button — phase-aware fallback for users who
@@ -726,10 +743,13 @@ class _RecordScreenState extends State<RecordScreen> {
             ),
           if (_isInitialized && _showMountOverlay && _errorMessage == null)
             Positioned.fill(
-              child: MountInstructionsOverlay(onComplete: _onMountComplete),
+              child: MountInstructionsOverlay(
+                onComplete: _onMountComplete,
+                turns: _hudTurns,
+              ),
             ),
           if (_phase == _Phase.armed && _errorMessage == null)
-            const Positioned.fill(child: _ArmedPrompt()),
+            Positioned.fill(child: _rotated(const _ArmedPrompt())),
           // Top-right close button — always available so the user can leave
           // the screen, since the vol-button flow has no other terminal
           // state. Stops capture cleanly first if recording.
@@ -754,6 +774,7 @@ class _RecordScreenState extends State<RecordScreen> {
                 points: _lastSubmissionPoints,
                 takeNumber: _takeNumber,
                 onDismiss: _onSuccessPopupTap,
+                turns: _hudTurns,
               ),
             ),
         ],
