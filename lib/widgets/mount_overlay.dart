@@ -130,7 +130,7 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'RECORDING IN ${_secondsLeft}s',
+                          'INSTRUCTIONS END IN ${_secondsLeft}s',
                           style: DCText.mono(
                             size: 11,
                             weight: FontWeight.w600,
@@ -143,9 +143,12 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                   ),
                 ),
               ),
+              // SKIP sits in the upper-LEFT so it doesn't overlap the
+              // record screen's top-right close (X) button, which is
+              // visible behind this overlay.
               Positioned(
                 top: 12,
-                right: 16,
+                left: 16,
                 child: GestureDetector(
                   onTap: widget.onComplete,
                   child: Container(

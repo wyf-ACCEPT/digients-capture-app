@@ -73,6 +73,10 @@ class HandAudioPlayer {
   Timer? _coalesceTimer;
 
   final AudioPlayer _recordingStartPlayer = AudioPlayer();
+  // Session-flow cues used by the vol-button control flow.
+  final AudioPlayer _recordingStopPlayer = AudioPlayer();
+  final AudioPlayer _submissionSuccessPlayer = AudioPlayer();
+  final AudioPlayer _armedPromptPlayer = AudioPlayer();
 
   StreamSubscription<HandPresenceTransition>? _sub;
   StreamSubscription<HandSideTransition>? _sideSub;
@@ -102,6 +106,10 @@ class HandAudioPlayer {
       for (final entry in _sideVoicePlayers.entries)
         entry.value.setAsset('assets/audio/hand_state_voice/${entry.key}.wav'),
       _recordingStartPlayer.setAsset('assets/audio/session/recording_start.wav'),
+      _recordingStopPlayer.setAsset('assets/audio/session/recording_stop.wav'),
+      _submissionSuccessPlayer
+          .setAsset('assets/audio/session/submission_success.wav'),
+      _armedPromptPlayer.setAsset('assets/audio/session_voice/armed_prompt.wav'),
     ]);
   }
 
@@ -118,19 +126,53 @@ class HandAudioPlayer {
   /// Play the sci-fi recording-start chirp. Returns a future that completes
   /// when playback ends so callers can sequence a follow-up cue (e.g. the
   /// first-frame state announcement).
-  Future<void> playRecordingStart() async {
+  Future<void> playRecordingStart() => _playAndAwait(_recordingStartPlayer);
+
+  /// Play the descending sci-fi stop chirp. Returns a future that completes
+  /// when playback ends so the caller can chain the success-popup chime.
+  Future<void> playRecordingStop() => _playAndAwait(_recordingStopPlayer);
+
+  /// Play the affirmative chord chime that pairs with the submission popup.
+  Future<void> playSubmissionSuccess() =>
+      _playAndAwait(_submissionSuccessPlayer);
+
+  /// Speak "Press volume button to start recording" — the ARMED-state cue.
+  /// Silent if voice is disabled in settings.
+  Future<void> playArmedPrompt() async {
     if (!_initialized) return;
-    if (!recordingStartEnabled) return;
-    await _recordingStartPlayer.seek(Duration.zero);
+    if (!voiceEnabled) return;
+    // ARMED prompt and per-hand voice both live in the same "voice" lane —
+    // make sure neither stomps the other. The detector hasn't started yet
+    // when we arm, so in practice no per-hand voice should be in flight.
+    await _stopAllVoice();
+    await _armedPromptPlayer.stop();
+    await _armedPromptPlayer.seek(Duration.zero);
+    unawaited(_armedPromptPlayer.play());
+  }
+
+  /// Cancel an in-flight ARMED prompt (e.g. when the user presses a vol
+  /// button before the prompt finishes — we don't want it talking over the
+  /// recording-start chirp).
+  Future<void> stopArmedPrompt() async {
+    if (!_initialized) return;
+    if (_armedPromptPlayer.playing) {
+      await _armedPromptPlayer.stop();
+    }
+  }
+
+  Future<void> _playAndAwait(AudioPlayer player) async {
+    if (!_initialized) return;
+    if (player == _recordingStartPlayer && !recordingStartEnabled) return;
+    await player.seek(Duration.zero);
     final completer = Completer<void>();
     StreamSubscription<ProcessingState>? sub;
-    sub = _recordingStartPlayer.processingStateStream.listen((s) {
+    sub = player.processingStateStream.listen((s) {
       if (s == ProcessingState.completed) {
         sub?.cancel();
         if (!completer.isCompleted) completer.complete();
       }
     });
-    unawaited(_recordingStartPlayer.play());
+    unawaited(player.play());
     return completer.future;
   }
 
@@ -148,7 +190,11 @@ class HandAudioPlayer {
   }
 
   Future<void> _stopAllVoice() async {
-    // Last-state-wins per §4.3 — drop in-flight voice across both banks.
+    // Last-state-wins per §4.3 — drop in-flight voice across all three
+    // banks (composite, per-hand, and the armed-state prompt). Without
+    // including the armed prompt here, a state announcement fired right
+    // after a fast vol-button press could overlap the tail of the prompt.
+    if (_armedPromptPlayer.playing) await _armedPromptPlayer.stop();
     for (final p in _stateVoicePlayers.values) {
       if (p.playing) await p.stop();
     }
@@ -242,6 +288,9 @@ class HandAudioPlayer {
       for (final p in _stateVoicePlayers.values) p.dispose(),
       for (final p in _sideVoicePlayers.values) p.dispose(),
       _recordingStartPlayer.dispose(),
+      _recordingStopPlayer.dispose(),
+      _submissionSuccessPlayer.dispose(),
+      _armedPromptPlayer.dispose(),
     ]);
   }
 }

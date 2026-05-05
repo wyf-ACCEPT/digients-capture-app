@@ -68,6 +68,12 @@ dependencies:
   # head-mounted; the user can't tap to keep it awake).
   wakelock_plus: ^1.2.8
 
+  # Volume-button control flow (feat/vol-btn-ctrl). Used for hands-free
+  # arm/start/stop while the phone is head-mounted; we KVO the system
+  # volume and treat any change as a button press, locking volume to a
+  # mid-range value so presses always register.
+  flutter_volume_controller: ^1.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -104,6 +110,7 @@ flutter:
     - assets/audio/hand_state/
     - assets/audio/hand_state_voice/
     - assets/audio/session/
+    - assets/audio/session_voice/
     - assets/models/hand_landmarker.task
 
   # An image asset can refer to one or more resolution-specific "variants", see
