@@ -11,6 +11,7 @@ import '../../state/hand_presence_settings_controller.dart';
 import '../../services/hand_presence/hand_presence_state.dart';
 import '../../theme/text_styles.dart';
 import '../../services/camera_service.dart';
+import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../services/hand_presence/hand_presence_controller.dart';
 import '../../services/hand_presence/hand_presence_detector_service.dart';
@@ -244,6 +245,13 @@ class _RecordScreenState extends State<RecordScreen> {
       setState(() => _errorMessage = 'Failed to start recording');
       return;
     }
+    // Pause the background compressor — we don't want a worker isolate
+    // contending with the encoder for CPU during a take. It resumes in
+    // _stop() once metadata is saved and the new recording is queued.
+    if (mounted) {
+      // ignore: use_build_context_synchronously
+      Provider.of<CompressionQueue>(context, listen: false).pause();
+    }
     // Each take gets a clean smoothing window + warmup; otherwise stale
     // state from the previous take could fire spurious "exit" cues.
     _handPresence.reset();
@@ -300,6 +308,9 @@ class _RecordScreenState extends State<RecordScreen> {
     if (!mounted) return;
     if (result == null || _sessionId == null) {
       // Nothing was actually recorded — drop straight back to armed.
+      // Resume the compressor since we paused it on _start(); without
+      // this, an aborted take would leave the queue indefinitely paused.
+      Provider.of<CompressionQueue>(context, listen: false).resume();
       _enterArmed();
       return;
     }
@@ -338,6 +349,7 @@ class _RecordScreenState extends State<RecordScreen> {
 
     if (!mounted) return;
     final pts = task?.rewardPoints ?? 0;
+    final completedSessionId = _sessionId!;
     setState(() {
       _phase = _Phase.submitted;
       _takeNumber += 1;
@@ -347,6 +359,12 @@ class _RecordScreenState extends State<RecordScreen> {
       _startTime = null;
       _elapsed = Duration.zero;
     });
+    // Hand the just-finished take off to the background compressor and
+    // resume the queue. The user keeps recording back-to-back takes; the
+    // queue serializes them so we never run two builds at once.
+    final queue = Provider.of<CompressionQueue>(context, listen: false);
+    queue.enqueue(completedSessionId);
+    queue.resume();
     unawaited(_handAudio.playSubmissionSuccess());
 
     // Auto-dismiss the popup and rearm after a short hold. Press-vol or tap
@@ -803,6 +821,11 @@ class _RecordScreenState extends State<RecordScreen> {
       try {
         await _cameraService.stopRecording();
       } catch (_) {}
+    }
+    // The queue may have been paused if a recording was in flight; make
+    // sure the background compressor is unblocked before we leave.
+    if (mounted) {
+      Provider.of<CompressionQueue>(context, listen: false).resume();
     }
     if (!mounted) return;
     Navigator.of(context).pop();

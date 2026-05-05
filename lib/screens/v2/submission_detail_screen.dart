@@ -6,7 +6,9 @@ import '../../widgets/buttons.dart';
 import '../../widgets/cards.dart';
 import '../../widgets/chips.dart';
 import '../../widgets/nav.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
 import '../../fixtures/data.dart';
@@ -48,16 +50,24 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
     if (_recording == null) return;
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final queue = context.read<CompressionQueue>();
+    final sid = _recording!.sessionId;
     try {
-      // Build the archive while the progress modal is up so the user has
-      // a clear "I'm working on it" signal even on long recordings; then
-      // hand off to the system share sheet only after compression is done.
-      final archivePath = await withExportProgress<String?>(
-        context,
-        initialMessage: 'Compressing recording…',
-        work: (_) => _manager.exportRecording(_recording!.sessionId),
-      );
+      // Common case after we ship: the archive was built right after the
+      // recording stopped, so this returns instantly. Slow path covers
+      // legacy recordings + ones whose compression hadn't finished yet
+      // when the user tapped Share — the modal then sits up while the
+      // queue's worker isolate finishes the build.
+      String? archivePath = queue.isReady(sid)
+          ? await _manager.exportRecording(sid)
+          : await withExportProgress<String?>(
+              context,
+              initialMessage: 'Compressing recording…',
+              work: (_) => queue.waitForReady(sid),
+            );
       if (archivePath == null || !mounted) return;
+      // The archive on disk already has the slug-based filename, so no
+      // XFile.name override is needed.
       await Share.shareXFiles(
         [XFile(archivePath)],
         subject: 'Egocentric Video Recording',

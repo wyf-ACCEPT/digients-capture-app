@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/chips.dart';
 import '../../widgets/export_progress.dart';
+import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
 import '../../fixtures/data.dart';
@@ -273,12 +275,15 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   Future<void> _share(Recording r) async {
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final queue = context.read<CompressionQueue>();
     try {
-      final archivePath = await withExportProgress<String?>(
-        context,
-        initialMessage: 'Compressing recording…',
-        work: (_) => _manager.exportRecording(r.sessionId),
-      );
+      final archivePath = queue.isReady(r.sessionId)
+          ? await _manager.exportRecording(r.sessionId)
+          : await withExportProgress<String?>(
+              context,
+              initialMessage: 'Compressing recording…',
+              work: (_) => queue.waitForReady(r.sessionId),
+            );
       if (archivePath == null || !mounted) return;
       await Share.shareXFiles(
         [XFile(archivePath)],
@@ -294,28 +299,41 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
 
   Future<void> _bulkShare() async {
     if (_selectedIds.isEmpty) return;
-    // Snapshot the selection at click-time so updates while we're packing
-    // don't affect the in-flight batch.
     final selected = _recordings
         .where((r) => _selectedIds.contains(r.sessionId))
         .toList();
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final queue = context.read<CompressionQueue>();
 
     try {
-      final paths = await withExportProgress<List<String>>(
-        context,
-        initialMessage: 'Compressing 1 of ${selected.length}…',
-        work: (progress) async {
-          final results = <String>[];
-          for (int i = 0; i < selected.length; i++) {
-            progress.update('Compressing ${i + 1} of ${selected.length}…');
-            final p = await _manager.exportRecording(selected[i].sessionId);
-            if (p != null) results.add(p);
-          }
-          return results;
-        },
-      );
+      // Skip the modal entirely when every selected take is already
+      // compressed — a fast tap-and-share rhythm shouldn't flash a
+      // pointless spinner.
+      final allReady =
+          selected.every((r) => queue.isReady(r.sessionId));
+      final List<String> paths;
+      if (allReady) {
+        paths = <String>[];
+        for (final r in selected) {
+          final p = await _manager.exportRecording(r.sessionId);
+          if (p != null) paths.add(p);
+        }
+      } else {
+        paths = await withExportProgress<List<String>>(
+          context,
+          initialMessage: 'Compressing 1 of ${selected.length}…',
+          work: (progress) async {
+            final results = <String>[];
+            for (int i = 0; i < selected.length; i++) {
+              progress.update('Compressing ${i + 1} of ${selected.length}…');
+              final p = await queue.waitForReady(selected[i].sessionId);
+              if (p != null) results.add(p);
+            }
+            return results;
+          },
+        );
+      }
       if (paths.isEmpty || !mounted) return;
       await Share.shareXFiles(
         paths.map((p) => XFile(p)).toList(),
@@ -505,7 +523,59 @@ class _RecordingRow extends StatelessWidget {
                     style: DCText.mono(size: 10, weight: FontWeight.w500, color: c.textFaint),
                   ),
                   const SizedBox(height: 6),
-                  const DCStatusBadge(status: SubmissionStatus.ondevice),
+                  Consumer<CompressionQueue>(
+                    builder: (_, queue, __) {
+                      // Surface compression progress on the same row that
+                      // hosts the share button. ondevice status is still
+                      // the canonical "where this take lives" badge —
+                      // shown as soon as the archive is ready or not at
+                      // all if the queue keeps moving.
+                      switch (queue.stateOf(recording.sessionId)) {
+                        case CompressionState.ready:
+                          return const DCStatusBadge(status: SubmissionStatus.ondevice);
+                        case CompressionState.failed:
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const DCStatusBadge(status: SubmissionStatus.ondevice),
+                              const SizedBox(width: 6),
+                              Text('compress failed',
+                                  style: DCText.mono(
+                                      size: 9,
+                                      weight: FontWeight.w500,
+                                      color: c.danger,
+                                      letterSpacing: 1.2)),
+                            ],
+                          );
+                        case CompressionState.compressing:
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 10,
+                                height: 10,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 1.5, color: c.accent),
+                              ),
+                              const SizedBox(width: 6),
+                              Text('compressing',
+                                  style: DCText.mono(
+                                      size: 9,
+                                      weight: FontWeight.w500,
+                                      color: c.textDim,
+                                      letterSpacing: 1.2)),
+                            ],
+                          );
+                        case CompressionState.pending:
+                          return Text('queued for compression',
+                              style: DCText.mono(
+                                  size: 9,
+                                  weight: FontWeight.w500,
+                                  color: c.textFaint,
+                                  letterSpacing: 1.2));
+                      }
+                    },
+                  ),
                 ],
               ),
             ),
