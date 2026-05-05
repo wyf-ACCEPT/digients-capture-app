@@ -64,6 +64,10 @@ dependencies:
   just_audio: ^0.9.42
   audio_session: ^0.1.21
 
+  # Keep the screen on while the record screen is mounted (the phone is
+  # head-mounted; the user can't tap to keep it awake).
+  wakelock_plus: ^1.2.8
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

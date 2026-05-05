@@ -50,13 +50,27 @@ class HandAudioPlayer {
     HandPresenceState.none: AudioPlayer(),
   };
 
-  // Per-hand transition voice (left/right × enter/exit), used while recording.
+  // Per-hand transition voice (left/right × enter/exit) plus the coalesced
+  // both-hand cues, used while recording.
   final Map<String, AudioPlayer> _sideVoicePlayers = {
     'left_enter': AudioPlayer(),
     'left_exit': AudioPlayer(),
     'right_enter': AudioPlayer(),
     'right_exit': AudioPlayer(),
+    'both_enter': AudioPlayer(),
+    'both_exit': AudioPlayer(),
   };
+
+  // When the two hands enter or exit within ~200 ms of each other we play a
+  // single "Both hands enter/exit the view" cue instead of stomping the
+  // first per-hand cue with the second one. We hold each side transition for
+  // this long; if its mirror arrives we coalesce, otherwise the timer fires
+  // and the side-specific cue plays. The detector runs at 10 fps (one tick
+  // every ~100 ms), so 200 ms catches "same-tick" and "adjacent-tick" pairs
+  // without making the user wait too long for the cue.
+  static const Duration _sideCoalesceWindow = Duration(milliseconds: 200);
+  HandSideTransition? _pendingSide;
+  Timer? _coalesceTimer;
 
   final AudioPlayer _recordingStartPlayer = AudioPlayer();
 
@@ -157,7 +171,44 @@ class HandAudioPlayer {
   Future<void> _onSideTransition(HandSideTransition t) async {
     if (!_initialized) return;
     if (!voiceEnabled) return;
+
+    final pending = _pendingSide;
+    if (pending != null) {
+      // Two side events queued within the coalesce window.
+      if (pending.side != t.side && pending.entered == t.entered) {
+        // Same direction, opposite hand — speak the unified "both" cue and
+        // drop the pending single-side cue.
+        _coalesceTimer?.cancel();
+        _coalesceTimer = null;
+        _pendingSide = null;
+        await _playSideKey(t.entered ? 'both_enter' : 'both_exit');
+        return;
+      }
+      // Different direction (or same hand, defensive) — flush the pending
+      // cue immediately and re-arm with the new event so it isn't lost.
+      _coalesceTimer?.cancel();
+      _coalesceTimer = null;
+      _pendingSide = null;
+      await _playSingleSide(pending);
+    }
+
+    _pendingSide = t;
+    _coalesceTimer = Timer(_sideCoalesceWindow, () {
+      final flush = _pendingSide;
+      if (flush == null) return;
+      _pendingSide = null;
+      _coalesceTimer = null;
+      // Fire-and-forget — Timer can't await.
+      unawaited(_playSingleSide(flush));
+    });
+  }
+
+  Future<void> _playSingleSide(HandSideTransition t) async {
     final key = '${t.side.name}_${t.entered ? 'enter' : 'exit'}';
+    await _playSideKey(key);
+  }
+
+  Future<void> _playSideKey(String key) async {
     final player = _sideVoicePlayers[key];
     if (player == null) return;
     await _stopAllVoice();
@@ -183,6 +234,9 @@ class HandAudioPlayer {
     await _sideSub?.cancel();
     _sub = null;
     _sideSub = null;
+    _coalesceTimer?.cancel();
+    _coalesceTimer = null;
+    _pendingSide = null;
     await Future.wait([
       for (final p in _tonePlayers.values) p.dispose(),
       for (final p in _stateVoicePlayers.values) p.dispose(),

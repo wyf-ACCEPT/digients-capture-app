@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../state/hand_presence_settings_controller.dart';
 import '../../services/hand_presence/hand_presence_state.dart';
 import '../../theme/text_styles.dart';
@@ -58,6 +59,10 @@ class _RecordScreenState extends State<RecordScreen> {
   @override
   void initState() {
     super.initState();
+    // The phone is head-mounted while recording — disable auto-lock for the
+    // lifetime of this screen. Released in dispose() so other screens behave
+    // normally.
+    WakelockPlus.enable();
     _bootstrap();
     _accelSub = accelerometerEventStream(
       samplingPeriod: const Duration(milliseconds: 200),
@@ -74,6 +79,7 @@ class _RecordScreenState extends State<RecordScreen> {
     _handAudio.dispose();
     _handPresence.dispose();
     _cameraService.dispose();
+    WakelockPlus.disable();
     super.dispose();
   }
 
