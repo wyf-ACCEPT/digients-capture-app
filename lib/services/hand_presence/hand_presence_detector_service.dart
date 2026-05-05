@@ -49,6 +49,15 @@ class HandPresenceDetectorService extends ChangeNotifier {
     );
   }
 
+  /// Cancel the event subscription so no further ticks reach the
+  /// controller. Used between takes on the vol-btn-ctrl flow so per-hand
+  /// voice cues don't fire while the popup is up or the screen is armed.
+  /// Re-callable: pair with [start] to resume.
+  Future<void> stop() async {
+    await _sub?.cancel();
+    _sub = null;
+  }
+
   Future<void> setTargetFps(double fps) async {
     try {
       await _control.invokeMethod<void>('setTargetFps', fps);

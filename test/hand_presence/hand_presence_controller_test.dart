@@ -293,6 +293,113 @@ void main() {
     });
   });
 
+  group('spatial handedness gate', () {
+    test('a "left" detection on the right half of the image is dropped',
+        () async {
+      final c = HandPresenceController();
+      var t = 0;
+      // Stream "left hand" detections that are spatially on the right
+      // (cx well above the 0.5 + margin gate). These mimic MediaPipe
+      // misclassifying a right hand during exit motion.
+      for (var i = 0; i < 8; i++) {
+        c.onDetectorTick(
+          hands: const [
+            HandDetection(
+              isLeftHand: true,
+              score: 0.9,
+              bboxCenterX: 0.85,
+              bboxCenterY: 0.5,
+            ),
+          ],
+          timestampMs: t,
+        );
+        await Future<void>.delayed(Duration.zero);
+        t += 100;
+      }
+      // The phantom left should never make it through the gate, so the
+      // composite state stays at NONE.
+      expect(c.state, HandPresenceState.none);
+      c.dispose();
+    });
+
+    test(
+        'mid-frame "left" mislabel during a right-only motion is suppressed',
+        () async {
+      // Reproduces the user-reported failure: right hand sits at cx=0.55
+      // (within the spatial gate's overlap zone), MediaPipe briefly flips
+      // its label to "left" for several ticks at the same bbox. Without
+      // the bbox-proximity guard, leftPresent flips true and we'd fire a
+      // phantom "Left hand exits the view" cue when the hand finally
+      // leaves frame.
+      final c = HandPresenceController();
+      var t = 0;
+      // Stable right-hand presence at cx=0.55.
+      for (var i = 0; i < 6; i++) {
+        c.onDetectorTick(
+          hands: const [
+            HandDetection(
+              isLeftHand: false,
+              score: 0.9,
+              bboxCenterX: 0.55,
+              bboxCenterY: 0.5,
+            ),
+          ],
+          timestampMs: t,
+        );
+        await Future<void>.delayed(Duration.zero);
+        t += 100;
+      }
+      expect(c.state, HandPresenceState.rightOnly);
+
+      // MediaPipe mislabels the same hand as "left" for 5 consecutive ticks.
+      for (var i = 0; i < 5; i++) {
+        c.onDetectorTick(
+          hands: const [
+            HandDetection(
+              isLeftHand: true,
+              score: 0.9,
+              bboxCenterX: 0.55,
+              bboxCenterY: 0.5,
+            ),
+          ],
+          timestampMs: t,
+        );
+        await Future<void>.delayed(Duration.zero);
+        t += 100;
+      }
+      // The phantom "left" detections were suppressed, so no per-hand
+      // transition for left fired. Composite state may have drifted to
+      // NONE because rightDetected was also false during those ticks
+      // (we dropped the only detection per tick) — that's fine; the key
+      // assertion is that we never registered a phantom left as present.
+      expect(c.state == HandPresenceState.rightOnly ||
+          c.state == HandPresenceState.none, true);
+      c.dispose();
+    });
+
+    test('a true left detection on the left half still registers', () async {
+      final c = HandPresenceController();
+      var t = 0;
+      for (var i = 0; i < 8; i++) {
+        c.onDetectorTick(
+          hands: const [
+            HandDetection(
+              isLeftHand: true,
+              score: 0.9,
+              bboxCenterX: 0.25,
+              bboxCenterY: 0.5,
+            ),
+          ],
+          timestampMs: t,
+        );
+        await Future<void>.delayed(Duration.zero);
+        t += 100;
+      }
+      expect(c.state, HandPresenceState.leftOnly);
+      c.dispose();
+    });
+  });
+
   group('duplicate-handedness handling (§8 two-left-hands)', () {
     test('two left-hand detections per tick still register as LEFT_ONLY',
         () async {

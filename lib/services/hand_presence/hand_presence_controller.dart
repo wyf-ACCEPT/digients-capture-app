@@ -26,6 +26,9 @@ class HandPresenceController extends ChangeNotifier {
     this.warmupTicks = 3,
     this.minScore = 0.6,
     this.maxOutsideMargin = 0.05,
+    this.spatialHandednessMargin = 0.15,
+    this.oppositeHandMislabelProximity = 0.18,
+    this.oppositeHandMislabelRecency = 2,
   })  : assert(windowSize > 0),
         assert(enterThreshold > exitThreshold),
         assert(enterThreshold <= windowSize);
@@ -37,11 +40,52 @@ class HandPresenceController extends ChangeNotifier {
   final double minScore;
   final double maxOutsideMargin;
 
+  /// MediaPipe occasionally flips its handedness label during fast motion
+  /// or partial occlusion — e.g. a real right hand exiting frame may be
+  /// briefly classified as left, which then drives a phantom "Left hand
+  /// enters / exits the view" cue.
+  ///
+  /// On the rear-facing head-mounted camera this app uses, the user's
+  /// anatomical left hand sits on the left half of the image and the
+  /// right hand on the right. We discard detections whose handedness
+  /// label contradicts the bbox center's spatial position by more than
+  /// this margin: a "left" detection with cx > 0.5 + margin (or "right"
+  /// with cx < 0.5 - margin) is dropped rather than registered as the
+  /// other hand. Set very high (≥ 0.5) to disable.
+  final double spatialHandednessMargin;
+
+  /// A second guard against handedness mislabels that the spatial gate
+  /// can't catch — when a right hand occupies the central overlap zone
+  /// (cx ∈ [0.35, 0.65]) and gets briefly labeled "left" with the same
+  /// bbox, the spatial gate lets it through. This bbox-proximity check
+  /// drops such a detection when the *opposite* hand was active at a
+  /// nearly-identical bbox in the past few ticks.
+  ///
+  /// [oppositeHandMislabelProximity] is the max bbox-center delta (image-
+  /// normalized) for "same hand". A typical hand bbox spans ~0.2 of the
+  /// frame, so 0.18 is roughly "within one hand-width".
+  /// [oppositeHandMislabelRecency] is the max gap (in detector ticks) for
+  /// the opposite hand to be considered "just seen". 2 ticks ≈ 200 ms at
+  /// the default 10 fps — long enough to bridge a single dropped frame
+  /// without authorizing arbitrarily-old positions.
+  final double oppositeHandMislabelProximity;
+  final int oppositeHandMislabelRecency;
+
   final ListQueue<int> _leftWindow = ListQueue<int>();
   final ListQueue<int> _rightWindow = ListQueue<int>();
 
   bool _leftPresent = false;
   bool _rightPresent = false;
+
+  // Last bbox center for each handedness, used by the opposite-hand
+  // mislabel guard. Initialized to a tick value far enough in the past
+  // that the recency check always returns false on the first invocation.
+  double? _lastLeftCx;
+  double? _lastLeftCy;
+  int _lastLeftSeenTick = -1 << 20;
+  double? _lastRightCx;
+  double? _lastRightCy;
+  int _lastRightSeenTick = -1 << 20;
 
   HandPresenceState _committedState = HandPresenceState.none;
   HandPresenceState get state => _committedState;
@@ -83,6 +127,12 @@ class HandPresenceController extends ChangeNotifier {
     _rightPresent = false;
     _pendingState = null;
     _tickCount = 0;
+    _lastLeftCx = null;
+    _lastLeftCy = null;
+    _lastLeftSeenTick = -1 << 20;
+    _lastRightCx = null;
+    _lastRightCy = null;
+    _lastRightSeenTick = -1 << 20;
     // Abandon the prior completer (if not yet completed, its future will
     // never resolve — fine, the screen disposes alongside this controller).
     // A fresh completer here means any post-reset listener gets the next
@@ -104,25 +154,68 @@ class HandPresenceController extends ChangeNotifier {
     bool leftDetected = false;
     bool rightDetected = false;
 
-    // Track which handedness has the highest-confidence in-frame detection,
-    // in case MediaPipe returns two of the same handedness (§8: two-left-hands
-    // case). We keep the canonical one and drop duplicates.
-    double bestLeftScore = -1;
-    double bestRightScore = -1;
+    // First pass: split detections by handedness after the score / out-of-frame
+    // / spatial-half filters. We need to know whether *both* sides are present
+    // before the proximity-mislabel filter runs — that filter must only apply
+    // when one side is exclusively present this tick (otherwise legitimate
+    // both-hands-at-similar-positions captures get suppressed).
+    final leftCandidates = <HandDetection>[];
+    final rightCandidates = <HandDetection>[];
     for (final hand in hands) {
       if (hand.score < minScore) continue;
       if (_isCenterOutside(hand.bboxCenterX, hand.bboxCenterY)) continue;
-      if (hand.isLeftHand) {
-        if (hand.score > bestLeftScore) {
-          bestLeftScore = hand.score;
-          leftDetected = true;
-        }
-      } else {
-        if (hand.score > bestRightScore) {
-          bestRightScore = hand.score;
-          rightDetected = true;
-        }
+      if (_handednessContradictsPosition(hand.isLeftHand, hand.bboxCenterX)) {
+        continue;
       }
+      if (hand.isLeftHand) {
+        leftCandidates.add(hand);
+      } else {
+        rightCandidates.add(hand);
+      }
+    }
+
+    // Apply the proximity-mislabel filter only when one side is alone this
+    // tick. With both sides represented we trust the labels — they can't both
+    // be the same hand.
+    if (leftCandidates.isNotEmpty && rightCandidates.isEmpty) {
+      leftCandidates.removeWhere(_isLikelyOppositeHandMislabel);
+    } else if (rightCandidates.isNotEmpty && leftCandidates.isEmpty) {
+      rightCandidates.removeWhere(_isLikelyOppositeHandMislabel);
+    }
+
+    // Pick the highest-scoring detection per side (handles MediaPipe returning
+    // duplicate handedness — §8: two-left-hands).
+    double bestLeftScore = -1;
+    double bestRightScore = -1;
+    double? bestLeftCx, bestLeftCy;
+    double? bestRightCx, bestRightCy;
+    for (final hand in leftCandidates) {
+      if (hand.score > bestLeftScore) {
+        bestLeftScore = hand.score;
+        bestLeftCx = hand.bboxCenterX;
+        bestLeftCy = hand.bboxCenterY;
+        leftDetected = true;
+      }
+    }
+    for (final hand in rightCandidates) {
+      if (hand.score > bestRightScore) {
+        bestRightScore = hand.score;
+        bestRightCx = hand.bboxCenterX;
+        bestRightCy = hand.bboxCenterY;
+        rightDetected = true;
+      }
+    }
+
+    // Stash positions for the next tick's opposite-hand mislabel guard.
+    if (leftDetected) {
+      _lastLeftCx = bestLeftCx;
+      _lastLeftCy = bestLeftCy;
+      _lastLeftSeenTick = _tickCount;
+    }
+    if (rightDetected) {
+      _lastRightCx = bestRightCx;
+      _lastRightCy = bestRightCy;
+      _lastRightSeenTick = _tickCount;
     }
 
     _push(_leftWindow, leftDetected ? 1 : 0);
@@ -168,6 +261,41 @@ class HandPresenceController extends ChangeNotifier {
         cx > 1.0 + maxOutsideMargin ||
         cy < -maxOutsideMargin ||
         cy > 1.0 + maxOutsideMargin;
+  }
+
+  bool _handednessContradictsPosition(bool isLeftHand, double cx) {
+    if (isLeftHand) {
+      return cx > 0.5 + spatialHandednessMargin;
+    }
+    return cx < 0.5 - spatialHandednessMargin;
+  }
+
+  /// Returns true if a detection labeled as one handedness sits at a bbox
+  /// center close to where the *opposite* handedness was just seen, AND
+  /// this side's hand hasn't been seen for a few ticks. That's the
+  /// signature of MediaPipe flipping its handedness label on the same
+  /// hand mid-motion (the spatial-half gate alone misses cases where the
+  /// hand is in the central overlap zone). When a hand of this label was
+  /// seen recently — i.e. both hands are concurrently active or briefly
+  /// clasped — we trust the new detection and don't apply the guard.
+  bool _isLikelyOppositeHandMislabel(HandDetection hand) {
+    final lastSelfTick =
+        hand.isLeftHand ? _lastLeftSeenTick : _lastRightSeenTick;
+    if (_tickCount - lastSelfTick <= oppositeHandMislabelRecency) {
+      return false;
+    }
+    final lastOppositeTick =
+        hand.isLeftHand ? _lastRightSeenTick : _lastLeftSeenTick;
+    if (_tickCount - lastOppositeTick > oppositeHandMislabelRecency) {
+      return false;
+    }
+    final oppCx = hand.isLeftHand ? _lastRightCx : _lastLeftCx;
+    final oppCy = hand.isLeftHand ? _lastRightCy : _lastLeftCy;
+    if (oppCx == null || oppCy == null) return false;
+    final dx = (hand.bboxCenterX - oppCx).abs();
+    final dy = (hand.bboxCenterY - oppCy).abs();
+    return dx < oppositeHandMislabelProximity &&
+        dy < oppositeHandMislabelProximity;
   }
 
   void _push(ListQueue<int> q, int value) {
