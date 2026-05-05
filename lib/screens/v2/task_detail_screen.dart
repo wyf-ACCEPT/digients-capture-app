@@ -164,7 +164,7 @@ class TaskDetailScreen extends StatelessWidget {
               DCButton(
                 label: 'Record',
                 leadingIcon: Icons.fiber_manual_record,
-                onPressed: () => context.push('/mount/${task.id}'),
+                onPressed: () => context.push('/record/${task.id}'),
               ),
             ],
           ),

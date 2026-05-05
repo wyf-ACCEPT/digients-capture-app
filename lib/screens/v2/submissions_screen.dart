@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/chips.dart';
+import '../../widgets/export_progress.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../fixtures/data.dart';
 
 class SubmissionsScreen extends StatefulWidget {
   const SubmissionsScreen({super.key});
@@ -20,6 +23,12 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   final _manager = RecordingManager();
   List<Recording> _recordings = [];
   bool _loading = true;
+
+  // Selection mode state. Entered via long-press on a row or via the
+  // "Select" icon in the header; exited via the "Done" button or after a
+  // successful bulk export.
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = <String>{};
 
   @override
   void initState() {
@@ -38,6 +47,43 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
     });
   }
 
+  void _enterSelection({String? initialId}) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.clear();
+      if (initialId != null) _selectedIds.add(initialId);
+    });
+  }
+
+  void _exitSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelected(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _toggleSelectAll() {
+    setState(() {
+      if (_selectedIds.length == _recordings.length) {
+        _selectedIds.clear();
+      } else {
+        _selectedIds
+          ..clear()
+          ..addAll(_recordings.map((r) => r.sessionId));
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
@@ -46,99 +92,238 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
 
     return SafeArea(
       bottom: false,
-      child: Column(
+      child: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Submissions',
-                        style: DCText.inter(size: 28, weight: FontWeight.w700, color: c.text, letterSpacing: -0.56),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_recordings.length} total · $totalGb GB on device',
-                        style: DCText.mono(size: 12, weight: FontWeight.w500, color: c.textDim),
-                      ),
-                    ],
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                child: _selectionMode
+                    ? _buildSelectionHeader(c)
+                    : _buildDefaultHeader(c, totalGb),
+              ),
+              if (!_selectionMode)
+                SizedBox(
+                  height: 48,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    scrollDirection: Axis.horizontal,
+                    itemBuilder: (_, i) => DCChip(
+                      label: _filters[i],
+                      active: _filter == _filters[i],
+                      onTap: () => setState(() => _filter = _filters[i]),
+                    ),
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemCount: _filters.length,
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.refresh, color: c.text, size: 22),
-                  onPressed: _load,
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 48,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              scrollDirection: Axis.horizontal,
-              itemBuilder: (_, i) => DCChip(
-                label: _filters[i],
-                active: _filter == _filters[i],
-                onTap: () => setState(() => _filter = _filters[i]),
-              ),
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemCount: _filters.length,
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? Center(child: CircularProgressIndicator(color: c.accent))
-                : _recordings.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(40),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('NO ITEMS', style: DCText.eyebrow(color: c.textDim, size: 11)),
-                              const SizedBox(height: 8),
-                              Text('Tap a category from Home to start recording.',
-                                  textAlign: TextAlign.center,
-                                  style: DCText.inter(size: 13, weight: FontWeight.w500, color: c.textFaint)),
-                            ],
-                          ),
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _load,
-                        color: c.accent,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                          itemCount: _recordings.length,
-                          itemBuilder: (_, i) {
-                            final r = _recordings[i];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _RecordingRow(
-                                recording: r,
-                                onShare: () => _share(r, i),
-                                onDelete: () => _delete(r),
-                                onTap: () => context.push('/submissions/${r.sessionId}'),
+              Expanded(
+                child: _loading
+                    ? Center(child: CircularProgressIndicator(color: c.accent))
+                    : _recordings.isEmpty
+                        ? _buildEmpty(c)
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            color: c.accent,
+                            child: ListView.builder(
+                              padding: EdgeInsets.fromLTRB(
+                                16, 4, 16, _selectionMode ? 110 : 24,
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                              itemCount: _recordings.length,
+                              itemBuilder: (_, i) {
+                                final r = _recordings[i];
+                                final selected = _selectedIds.contains(r.sessionId);
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _RecordingRow(
+                                    recording: r,
+                                    selectionMode: _selectionMode,
+                                    selected: selected,
+                                    onShare: () => _share(r),
+                                    onDelete: () => _delete(r),
+                                    onTap: () {
+                                      if (_selectionMode) {
+                                        _toggleSelected(r.sessionId);
+                                      } else {
+                                        context.push('/submissions/${r.sessionId}');
+                                      }
+                                    },
+                                    onLongPress: () {
+                                      if (!_selectionMode) {
+                                        _enterSelection(initialId: r.sessionId);
+                                      }
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+              ),
+            ],
           ),
+          if (_selectionMode)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _SelectionActionBar(
+                count: _selectedIds.length,
+                onExport: _bulkShare,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Future<void> _share(Recording r, int index) async {
+  Widget _buildDefaultHeader(DCColors c, String totalGb) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Submissions',
+                style: DCText.inter(size: 28, weight: FontWeight.w700, color: c.text, letterSpacing: -0.56),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_recordings.length} total · $totalGb GB on device',
+                style: DCText.mono(size: 12, weight: FontWeight.w500, color: c.textDim),
+              ),
+            ],
+          ),
+        ),
+        if (_recordings.isNotEmpty)
+          IconButton(
+            icon: Icon(Icons.checklist_rounded, color: c.text, size: 22),
+            tooltip: 'Select multiple',
+            onPressed: () => _enterSelection(),
+          ),
+        IconButton(
+          icon: Icon(Icons.refresh, color: c.text, size: 22),
+          onPressed: _load,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionHeader(DCColors c) {
+    final allSelected =
+        _recordings.isNotEmpty && _selectedIds.length == _recordings.length;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _selectedIds.isEmpty
+                    ? 'Select recordings'
+                    : '${_selectedIds.length} selected',
+                style: DCText.inter(size: 24, weight: FontWeight.w700, color: c.text, letterSpacing: -0.48),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Tap to toggle · long-press a row to start',
+                style: DCText.mono(size: 12, weight: FontWeight.w500, color: c.textDim),
+              ),
+            ],
+          ),
+        ),
+        TextButton(
+          onPressed: _toggleSelectAll,
+          child: Text(
+            allSelected ? 'Clear' : 'Select all',
+            style: DCText.mono(size: 12, weight: FontWeight.w600, color: c.accent, letterSpacing: 1.2),
+          ),
+        ),
+        TextButton(
+          onPressed: _exitSelection,
+          child: Text(
+            'Done',
+            style: DCText.mono(size: 12, weight: FontWeight.w600, color: c.text, letterSpacing: 1.2),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmpty(DCColors c) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('NO ITEMS', style: DCText.eyebrow(color: c.textDim, size: 11)),
+            const SizedBox(height: 8),
+            Text(
+              'Tap a category from Home to start recording.',
+              textAlign: TextAlign.center,
+              style: DCText.inter(size: 13, weight: FontWeight.w500, color: c.textFaint),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _share(Recording r) async {
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
     try {
-      await _manager.shareRecording(r.sessionId, sharePositionOrigin: origin);
+      final archivePath = await withExportProgress<String?>(
+        context,
+        initialMessage: 'Compressing recording…',
+        work: (_) => _manager.exportRecording(r.sessionId),
+      );
+      if (archivePath == null || !mounted) return;
+      await Share.shareXFiles(
+        [XFile(archivePath)],
+        subject: 'Egocentric Video Recording',
+        text: 'Egocentric video recording data package',
+        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
+  }
+
+  Future<void> _bulkShare() async {
+    if (_selectedIds.isEmpty) return;
+    // Snapshot the selection at click-time so updates while we're packing
+    // don't affect the in-flight batch.
+    final selected = _recordings
+        .where((r) => _selectedIds.contains(r.sessionId))
+        .toList();
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+
+    try {
+      final paths = await withExportProgress<List<String>>(
+        context,
+        initialMessage: 'Compressing 1 of ${selected.length}…',
+        work: (progress) async {
+          final results = <String>[];
+          for (int i = 0; i < selected.length; i++) {
+            progress.update('Compressing ${i + 1} of ${selected.length}…');
+            final p = await _manager.exportRecording(selected[i].sessionId);
+            if (p != null) results.add(p);
+          }
+          return results;
+        },
+      );
+      if (paths.isEmpty || !mounted) return;
+      await Share.shareXFiles(
+        paths.map((p) => XFile(p)).toList(),
+        subject: 'Egocentric Video Recordings (${paths.length})',
+        text: 'Egocentric video recording data packages',
+        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
+      );
+      if (mounted) _exitSelection();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
@@ -166,17 +351,74 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   }
 }
 
+class _SelectionActionBar extends StatelessWidget {
+  final int count;
+  final VoidCallback onExport;
+
+  const _SelectionActionBar({required this.count, required this.onExport});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.dc;
+    final disabled = count == 0;
+    return Container(
+      decoration: BoxDecoration(
+        color: c.bg.withValues(alpha: 0.94),
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          child: Opacity(
+            opacity: disabled ? 0.4 : 1.0,
+            child: GestureDetector(
+              onTap: disabled ? null : onExport,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: c.accent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.upload, color: Colors.black, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      count == 0
+                          ? 'EXPORT SELECTED'
+                          : 'EXPORT $count RECORDING${count > 1 ? 'S' : ''}',
+                      style: DCText.mono(size: 13, weight: FontWeight.w700, color: Colors.black, letterSpacing: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RecordingRow extends StatelessWidget {
   final Recording recording;
+  final bool selectionMode;
+  final bool selected;
   final VoidCallback onShare;
   final VoidCallback onDelete;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   const _RecordingRow({
     required this.recording,
+    required this.selectionMode,
+    required this.selected,
     required this.onShare,
     required this.onDelete,
     required this.onTap,
+    required this.onLongPress,
   });
 
   @override
@@ -185,12 +427,18 @@ class _RecordingRow extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
+      onLongPress: onLongPress,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: c.surface,
+          color: selected ? c.accentTint : c.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border),
+          border: Border.all(
+            color: selected ? c.accent : c.border,
+            width: selected ? 1.5 : 1,
+          ),
         ),
         child: Row(
           children: [
@@ -217,6 +465,24 @@ class _RecordingRow extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (selectionMode)
+                      Positioned(
+                        top: 4,
+                        left: 4,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 140),
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: selected ? c.accent : Colors.black.withValues(alpha: 0.55),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+                          ),
+                          child: selected
+                              ? const Icon(Icons.check, size: 14, color: Colors.black)
+                              : null,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -228,7 +494,7 @@ class _RecordingRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Recording ${recording.sessionId.substring(0, 8)}',
+                    recordingDisplayTitle(recording),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: DCText.inter(size: 14, weight: FontWeight.w600, color: c.text, height: 1.3),
@@ -243,26 +509,28 @@ class _RecordingRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Column(
-              children: [
-                DCIconButton(
-                  icon: Icons.upload,
-                  color: c.accent,
-                  bg: c.accentTint,
-                  onPressed: onShare,
-                  semanticLabel: 'Export',
-                ),
-                const SizedBox(height: 6),
-                DCIconButton(
-                  icon: Icons.delete_outline,
-                  color: c.danger,
-                  bg: c.danger.withValues(alpha: 0.12),
-                  onPressed: onDelete,
-                  semanticLabel: 'Delete',
-                ),
-              ],
-            ),
+            if (!selectionMode) ...[
+              const SizedBox(width: 8),
+              Column(
+                children: [
+                  DCIconButton(
+                    icon: Icons.upload,
+                    color: c.accent,
+                    bg: c.accentTint,
+                    onPressed: onShare,
+                    semanticLabel: 'Export',
+                  ),
+                  const SizedBox(height: 6),
+                  DCIconButton(
+                    icon: Icons.delete_outline,
+                    color: c.danger,
+                    bg: c.danger.withValues(alpha: 0.12),
+                    onPressed: onDelete,
+                    semanticLabel: 'Delete',
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

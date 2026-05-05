@@ -6,6 +6,12 @@ class Recording {
   final String directoryPath;
   final int? durationSeconds;
   final int? fileSizeMB;
+  // Category slug (e.g. "kitchen", "living-room") of the task this clip
+  // captured. Used to compose the export filename
+  // `<categoryId>-<sessionId>.tar.gz`. Nullable for backward compatibility
+  // with recordings persisted before this field was added.
+  final String? categoryId;
+  final String? taskId;
 
   const Recording({
     required this.sessionId,
@@ -13,6 +19,8 @@ class Recording {
     required this.directoryPath,
     this.durationSeconds,
     this.fileSizeMB,
+    this.categoryId,
+    this.taskId,
   });
 
   Map<String, dynamic> toJson() {
@@ -22,6 +30,8 @@ class Recording {
       'directoryPath': directoryPath,
       'durationSeconds': durationSeconds,
       'fileSizeMB': fileSizeMB,
+      if (categoryId != null) 'categoryId': categoryId,
+      if (taskId != null) 'taskId': taskId,
     };
   }
 
@@ -32,6 +42,8 @@ class Recording {
       directoryPath: json['directoryPath'] as String,
       durationSeconds: json['durationSeconds'] as int?,
       fileSizeMB: json['fileSizeMB'] as int?,
+      categoryId: json['categoryId'] as String?,
+      taskId: json['taskId'] as String?,
     );
   }
 }
