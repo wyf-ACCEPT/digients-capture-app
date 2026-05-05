@@ -1,18 +1,24 @@
 package com.digients.capture
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import android.media.Image
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.framework.image.MPImage
-import com.google.mediapipe.framework.image.MediaImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
-import io.flutter.embedding.engine.loader.FlutterLoader
+import io.flutter.FlutterInjector
 import io.flutter.plugin.common.EventChannel
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -50,12 +56,13 @@ class HandPresenceDetector(private val context: Context) : EventChannel.StreamHa
     fun loadModel() {
         executor.submit {
             try {
-                // Resolve the bundled flutter asset key. FlutterLoader maps
-                // logical asset paths ("assets/models/hand_landmarker.task")
-                // to the on-disk path inside the APK assets directory.
-                val key = FlutterLoader().getLookupKeyForAsset(
-                    "assets/models/hand_landmarker.task"
-                )
+                // Resolve the bundled flutter asset key. Use the singleton
+                // FlutterLoader from FlutterInjector — instantiating a new
+                // FlutterLoader() leaves it uninitialized (NPE on
+                // flutterAssetsDir). The injector returns the loader the
+                // engine started up with.
+                val key = FlutterInjector.instance().flutterLoader()
+                    .getLookupKeyForAsset("assets/models/hand_landmarker.task")
                 val baseOptions = BaseOptions.builder()
                     .setModelAssetPath(key)
                     .build()
@@ -104,7 +111,17 @@ class HandPresenceDetector(private val context: Context) : EventChannel.StreamHa
 
         executor.submit {
             try {
-                val mpImage: MPImage = MediaImageBuilder(image).build()
+                // MediaPipe's IMAGE-mode HandLandmarker requires an RGBA
+                // bitmap; raw YUV_420_888 from Camera2 ImageReader fails
+                // with "Android media image must use RGBA_8888 config".
+                // Convert here on the inference thread (not the camera
+                // thread) so we don't slow down frame delivery.
+                val bitmap = yuvImageToBitmap(image)
+                if (bitmap == null) {
+                    emitError(timestampMs)
+                    return@submit
+                }
+                val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
                 val result = landmarker?.detect(mpImage)
                 if (result != null) emitResult(result, timestampMs)
             } catch (t: Throwable) {
@@ -114,6 +131,78 @@ class HandPresenceDetector(private val context: Context) : EventChannel.StreamHa
                 try { image.close() } catch (_: Throwable) {}
                 inFlight.set(false)
             }
+        }
+    }
+
+    /// Convert a Camera2 YUV_420_888 [Image] into an ARGB_8888 [Bitmap]
+    /// via NV21 → JPEG → Bitmap. Heavy compared to a RenderScript
+    /// intrinsic, but RenderScript is deprecated and the JPEG path works
+    /// uniformly across vendors. At 10 fps × 640×480 the conversion
+    /// runs comfortably within budget on the v1.1 reference device.
+    ///
+    /// Returns null on any failure (caller emits a detector_failure event).
+    private fun yuvImageToBitmap(image: Image): Bitmap? {
+        return try {
+            val width = image.width
+            val height = image.height
+            val yPlane = image.planes[0]
+            val uPlane = image.planes[1]
+            val vPlane = image.planes[2]
+
+            val ySize = width * height
+            val uvSize = ySize / 2
+            val nv21 = ByteArray(ySize + uvSize)
+
+            // Copy Y plane respecting row stride.
+            val yRowStride = yPlane.rowStride
+            val yPixelStride = yPlane.pixelStride
+            val yBuf = yPlane.buffer
+            if (yPixelStride == 1 && yRowStride == width) {
+                yBuf.get(nv21, 0, ySize)
+            } else {
+                var dst = 0
+                val rowBuf = ByteArray(yRowStride)
+                for (row in 0 until height) {
+                    yBuf.position(row * yRowStride)
+                    yBuf.get(rowBuf, 0, minOf(yRowStride, yBuf.remaining() + (yBuf.position() - yBuf.position())))
+                    var col = 0
+                    var src = 0
+                    while (col < width) {
+                        nv21[dst + col] = rowBuf[src]
+                        src += yPixelStride
+                        col++
+                    }
+                    dst += width
+                }
+            }
+
+            // Interleave V then U into NV21 layout (VUVUVU…).
+            val vRowStride = vPlane.rowStride
+            val vPixelStride = vPlane.pixelStride
+            val uRowStride = uPlane.rowStride
+            val uPixelStride = uPlane.pixelStride
+            val vBuf = vPlane.buffer
+            val uBuf = uPlane.buffer
+            val chromaWidth = width / 2
+            val chromaHeight = height / 2
+            var dst = ySize
+            for (row in 0 until chromaHeight) {
+                for (col in 0 until chromaWidth) {
+                    val vIdx = row * vRowStride + col * vPixelStride
+                    val uIdx = row * uRowStride + col * uPixelStride
+                    nv21[dst++] = vBuf.get(vIdx)
+                    nv21[dst++] = uBuf.get(uIdx)
+                }
+            }
+
+            val yuvImage = YuvImage(nv21, ImageFormat.NV21, width, height, null)
+            val baos = ByteArrayOutputStream(ySize)
+            yuvImage.compressToJpeg(Rect(0, 0, width, height), 80, baos)
+            val bytes = baos.toByteArray()
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        } catch (t: Throwable) {
+            Log.w(TAG, "yuvImageToBitmap failed", t)
+            null
         }
     }
 

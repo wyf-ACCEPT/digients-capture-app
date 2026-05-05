@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/services.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 
 /// Listens for hardware volume-button presses on iOS / Android and emits
@@ -60,6 +62,16 @@ class VolumeButtonService {
   final Duration deadband;
 
   StreamSubscription<double>? _sub;
+  // Android-only: the Activity intercepts Vol+/Vol- KeyEvents and
+  // forwards a string ("up" / "down") per press over this EventChannel.
+  // flutter_volume_controller alone doesn't catch every device's button
+  // routing reliably (depends on which audio stream the OS adjusts on
+  // Vol±), so we treat the native KeyEvent stream as primary on Android
+  // and the volume-listener as secondary.
+  static const EventChannel _androidKeyChannel =
+      EventChannel('digients_app/vol_button');
+  StreamSubscription<dynamic>? _androidKeySub;
+
   final StreamController<void> _presses = StreamController<void>.broadcast();
   Stream<void> get onPress => _presses.stream;
 
@@ -88,6 +100,12 @@ class VolumeButtonService {
       _onVolumeChanged,
       emitOnStart: false,
     );
+    if (Platform.isAndroid) {
+      _androidKeySub = _androidKeyChannel.receiveBroadcastStream().listen(
+        _onAndroidKeyEvent,
+        onError: (_) {},
+      );
+    }
   }
 
   /// Stop listening and restore the user's prior volume.
@@ -96,6 +114,8 @@ class VolumeButtonService {
     _active = false;
     await _sub?.cancel();
     _sub = null;
+    await _androidKeySub?.cancel();
+    _androidKeySub = null;
     if (_restoreVolume != null) {
       try {
         await FlutterVolumeController.setVolume(_restoreVolume!);
@@ -136,6 +156,18 @@ class VolumeButtonService {
     _lastPressAt = now;
     _presses.add(null);
     _setLocked();
+  }
+
+  /// Android: native KeyEvent intercept. Each forwarded event corresponds
+  /// to one physical Vol± press (the Activity dedupes ACTION_UP / repeats
+  /// before forwarding), so no debouncing is needed here beyond the same
+  /// 200 ms deadband used for the iOS path.
+  void _onAndroidKeyEvent(dynamic event) {
+    if (!_active) return;
+    final now = DateTime.now();
+    if (now.difference(_lastPressAt) < deadband) return;
+    _lastPressAt = now;
+    _presses.add(null);
   }
 
   void _suppress(Duration window) {

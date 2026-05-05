@@ -1,5 +1,6 @@
 package com.digients.capture
 
+import android.view.KeyEvent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -13,6 +14,14 @@ class MainActivity : FlutterActivity() {
     private var handDetector: HandPresenceDetector? = null
     private var handEventChannel: EventChannel? = null
     private var handControlChannel: MethodChannel? = null
+
+    // Volume-button presses are forwarded to Flutter via this channel
+    // (Android-only). flutter_volume_controller's settings-observer path
+    // doesn't catch every stream the OS routes vol+/vol- through on every
+    // device — intercepting the actual KeyEvents in dispatchKeyEvent is
+    // the reliable fallback.
+    private var volButtonChannel: EventChannel? = null
+    private var volButtonSink: EventChannel.EventSink? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -52,6 +61,50 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+
+        // Volume-button event channel. The Dart side enables it from the
+        // armed/recording phases of the record screen and ignores events
+        // outside those phases.
+        volButtonChannel = EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "digients_app/vol_button",
+        ).also { ch ->
+            ch.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    volButtonSink = events
+                }
+                override fun onCancel(arguments: Any?) { volButtonSink = null }
+            })
+        }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Intercept Vol+/Vol- so the system's media-volume HUD doesn't
+        // pop up while the user is wearing the phone. Forward a single
+        // event per ACTION_DOWN to Flutter, suppress repeats, and consume
+        // the event so Android doesn't also adjust volume.
+        if (event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount == 0 &&
+            (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+                event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            val sink = volButtonSink
+            if (sink != null) {
+                sink.success(if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
+                return true
+            }
+        }
+        // Suppress the system handling for ACTION_UP too while the channel
+        // is active, otherwise Android still beeps + ticks volume on
+        // release. When no listener is attached we let the OS handle the
+        // event normally.
+        if (volButtonSink != null &&
+            (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+                event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onDestroy() {
@@ -59,6 +112,8 @@ class MainActivity : FlutterActivity() {
         handDetector = null
         handEventChannel = null
         handControlChannel = null
+        volButtonChannel = null
+        volButtonSink = null
         super.onDestroy()
     }
 }

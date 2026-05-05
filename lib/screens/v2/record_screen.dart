@@ -308,8 +308,6 @@ class _RecordScreenState extends State<RecordScreen> {
     final fileSize = await _recordingManager.calculateRecordingSize(_sessionId!);
     final durationSec = (result['durationSeconds'] as int?) ?? _elapsed.inSeconds;
     final frameCount = (result['frameCount'] as int?) ?? 0;
-    final actualPoseSource = (result['poseSource'] as String?) ??
-        (_cameraInfo?['poseSource'] as String?);
     final measuredMotionRateHz = (result['motionRateHzMeasured'] as num?)?.toDouble();
     // Pull actual encoded dimensions from native; iOS may pick 1920×1440 etc.
     final capW = (result['captureWidth'] as int?) ?? 1920;
@@ -332,7 +330,6 @@ class _RecordScreenState extends State<RecordScreen> {
       capturedAt: capturedAt,
       durationSeconds: durationSec,
       frameCount: frameCount,
-      poseSourceOverride: actualPoseSource,
       measuredMotionRateHz: measuredMotionRateHz,
       videoWidth: capW,
       videoHeight: capH,
@@ -374,7 +371,6 @@ class _RecordScreenState extends State<RecordScreen> {
     required DateTime capturedAt,
     required int durationSeconds,
     required int frameCount,
-    String? poseSourceOverride,
     double? measuredMotionRateHz,
     int videoWidth = 1920,
     int videoHeight = 1080,
@@ -386,102 +382,110 @@ class _RecordScreenState extends State<RecordScreen> {
     final os = (dev['os'] as String?) ?? (Platform.isAndroid ? 'android' : 'ios');
     final isAndroid = os == 'android';
 
-    // Intrinsics
-    final IntrinsicsInfo intrinsics;
-    final intrinsicsSourceFromNative = cam['intrinsicsSource'] as String?;
-    if (isAndroid) {
-      final matrix = (cam['intrinsicMatrix'] as List?)
-          ?.map((row) => (row as List).cast<num>().map((n) => n.toDouble()).toList())
-          .toList();
-      final source = (cam['intrinsicSource'] as String?) ?? 'none';
-      final hwLevelFull = (cam['hardwareLevelFull'] as bool?) ?? false;
-      final coeffs = (cam['distortionCoeffs'] as List?)
-          ?.cast<num>()
-          .map((n) => n.toDouble())
-          .toList();
-      final reliable = source == 'static' && hwLevelFull && !stab;
-      final notes = switch (source) {
-        'static' => 'Static intrinsics from Camera2 LENS_INTRINSIC_CALIBRATION.',
-        'estimated_fallback' => 'Static intrinsics derived from focal length and sensor size.',
-        _ => 'No intrinsics available from Camera2 characteristics.',
-      };
-      intrinsics = IntrinsicsInfo(
-        source: source,
-        staticMatrix: matrix,
-        distortionModel: coeffs != null && coeffs.isNotEmpty ? 'opencv5' : null,
-        distortionCoeffs: coeffs,
-        reliable: reliable,
-        notes: notes,
-      );
-    } else {
-      // iOS: per-frame intrinsics from ARFrame.camera.intrinsics, written natively.
-      intrinsics = IntrinsicsInfo(
-        source: intrinsicsSourceFromNative ?? 'per_frame',
-        perFrameFile: 'frames.jsonl',
-        reliable: !stab,
-        notes: 'Per-frame intrinsics from ARFrame.camera.intrinsics.',
-      );
-    }
-
-    // Pose
-    final poseSource = poseSourceOverride ?? (cam['poseSource'] as String?) ?? 'none';
-    final poseInfo = PoseInfo(
-      source: poseSource,
-      frameOrigin: cam['poseFrameOrigin'] as String?,
-      coordinateConvention: cam['poseCoordinateConvention'] as String?,
-      transformKind: cam['poseTransformKind'] as String?,
-      rateHz: (cam['poseRateHz'] as num?)?.toDouble(),
-      trackingStateField: poseSource == 'arkit' || poseSource == 'arcore'
-          ? 'tracking_state'
-          : null,
-      notes: switch (poseSource) {
-        'arkit' => 'ARWorldTrackingConfiguration, autoFocusEnabled=false, planeDetection=none.',
-        'arcore' => 'ARCore Shared Camera mode. Default config.',
-        'imu_raw' => 'No system VIO available; offline VIO consumes motion.jsonl.',
-        _ => 'No pose source available.',
-      },
+    // Intrinsics — v1.2 only accepts source="static". The native side computes
+    // a single 3×3 K from the active camera-format calibration data; the
+    // distortion model must be "brown_conrady" or "kannala_brandt" or null.
+    final matrix = (cam['intrinsicMatrix'] as List?)
+        ?.map((row) =>
+            (row as List).cast<num>().map((n) => n.toDouble()).toList())
+        .toList();
+    final coeffs = (cam['distortionCoeffs'] as List?)
+        ?.cast<num>()
+        .map((n) => n.toDouble())
+        .toList();
+    final distortionModel = cam['distortionModel'] as String?;
+    final intrinsicsReliable =
+        matrix != null && !stab; // schema requires bool; default to false-only when no K
+    final intrinsicsNotes = (cam['intrinsicsNotes'] as String?) ??
+        (isAndroid
+            ? 'Static intrinsics from Camera2 LENS_INTRINSIC_CALIBRATION, rescaled to video resolution by a single uniform scalar.'
+            : 'Static intrinsics from AVCaptureDevice activeFormat at locked focus.');
+    final intrinsics = IntrinsicsInfo(
+      source: 'static',
+      staticMatrix: matrix,
+      distortionModel: distortionModel,
+      distortionCoeffs: coeffs,
+      reliable: intrinsicsReliable,
+      notes: intrinsicsNotes,
     );
 
-    // Motion. Always recorded if we have a usable IMU; the device almost always
-    // does. Native side reports actual measured rate at stop time on Android.
+    // Motion — v1.2 requires recorded=true. We assume the IMU writer is
+    // running; if for some reason it isn't, the bundle will fail the
+    // pipeline's validator and we'll see it server-side rather than
+    // silently shipping a degraded capture.
     final advertisedMotionRate = (cam['motionRateHz'] as num?)?.toDouble();
-    final motionRecorded = advertisedMotionRate != null && advertisedMotionRate > 0;
     final motionInfo = MotionInfo(
-      recorded: motionRecorded,
+      recorded: true,
       rateHz: measuredMotionRateHz != null && measuredMotionRateHz > 0
           ? measuredMotionRateHz
           : advertisedMotionRate,
-      gyroUnits: motionRecorded ? (cam['motionGyroUnits'] as String?) ?? 'rad/s' : null,
-      accelUnits: motionRecorded ? (cam['motionAccelUnits'] as String?) ?? 'm/s^2' : null,
-      accelIncludesGravity: motionRecorded
-          ? (cam['motionAccelIncludesGravity'] as bool?) ?? (isAndroid ? true : false)
-          : null,
-      frame: motionRecorded ? (cam['motionFrame'] as String?) ?? 'device_body' : null,
-      notes: motionRecorded
-          ? (isAndroid
-              ? 'Android Sensor TYPE_GYROSCOPE + TYPE_ACCELEROMETER at SENSOR_DELAY_FASTEST.'
-              : 'iOS CMMotionManager.deviceMotion at 100 Hz.')
-          : null,
+      gyroUnits: (cam['motionGyroUnits'] as String?) ?? 'rad/s',
+      accelUnits: (cam['motionAccelUnits'] as String?) ?? 'm/s^2',
+      accelIncludesGravity:
+          (cam['motionAccelIncludesGravity'] as bool?) ?? (isAndroid ? true : false),
+      frame: (cam['motionFrame'] as String?) ?? 'device_body',
+      notes: isAndroid
+          ? 'Android Sensor TYPE_GYROSCOPE + TYPE_ACCELEROMETER at SENSOR_DELAY_FASTEST, ordered queue, one row per gyro event.'
+          : 'iOS CMMotionManager.deviceMotion at 100 Hz.',
+      // Each must be > 0 if present per the schema; surface only when native
+      // hands a positive value (e.g. from a per-model datasheet table).
+      noiseDensityGyro:
+          _positiveOrNull((cam['imuNoiseDensityGyro'] as num?)?.toDouble()),
+      noiseDensityAccel:
+          _positiveOrNull((cam['imuNoiseDensityAccel'] as num?)?.toDouble()),
+      randomWalkGyro:
+          _positiveOrNull((cam['imuRandomWalkGyro'] as num?)?.toDouble()),
+      randomWalkAccel:
+          _positiveOrNull((cam['imuRandomWalkAccel'] as num?)?.toDouble()),
     );
 
+    // Extrinsics — only emit when the native side actually provides a 4×4.
+    // Android Camera2 hands us LENS_POSE_TRANSLATION + LENS_POSE_ROTATION
+    // → "platform_api". iOS doesn't expose this; falls back to omitting the
+    // block entirely so the offline VIO solves for it.
+    ExtrinsicsInfo? extrinsics;
+    final tCamImuRaw = cam['tCamImu'] as List?;
+    final extrinsicsSource = cam['extrinsicsSource'] as String?;
+    if (tCamImuRaw != null && extrinsicsSource != null) {
+      final tCamImu = tCamImuRaw
+          .map((row) =>
+              (row as List).cast<num>().map((n) => n.toDouble()).toList())
+          .toList();
+      extrinsics = ExtrinsicsInfo(
+        tCamImu: tCamImu,
+        source: extrinsicsSource,
+        timeOffsetSec: (cam['extrinsicsTimeOffsetSec'] as num?)?.toDouble(),
+        rotationStddevDeg:
+            (cam['extrinsicsRotationStddevDeg'] as num?)?.toDouble(),
+        translationStddevM:
+            (cam['extrinsicsTranslationStddevM'] as num?)?.toDouble(),
+        notes: cam['extrinsicsNotes'] as String?,
+      );
+    }
+
+    final rollingShutter = (cam['rollingShutterSkewNs'] as num?)?.toInt();
+    final deviceClockId = cam['deviceClockId'] as String?;
+
     return RecordingMetadata(
-      schemaVersion: '1.1',
+      schemaVersion: '1.2',
       sessionId: sessionId,
       capturedAtUtc: capturedAt,
       sessionClockOrigin: 'unix_epoch',
-      appVersion: '2.1.0',
+      appVersion: '2.2.0',
       device: DeviceInfo(
         os: os,
         osVersion: (dev['osVersion'] as String?) ?? '',
-        manufacturer: (dev['manufacturer'] as String?) ?? (isAndroid ? '' : 'Apple'),
+        manufacturer:
+            (dev['manufacturer'] as String?) ?? (isAndroid ? '' : 'Apple'),
         model: (dev['model'] as String?) ?? '',
         modelIdentifier: (dev['modelIdentifier'] as String?) ?? '',
-        hasArkit: dev['hasArkit'] as bool?,
-        hasArcore: dev['hasArcore'] as bool?,
       ),
       camera: CameraInfo(
         lensId: (cam['lensId'] as String?) ?? '',
-        lensType: (cam['lensType'] as String?) ?? 'unknown',
+        // Per spec §3 the lens_type is *derived* from the chosen FOV. Native
+        // computes it (>=100° → "ultrawide", else "wide") and we just pass
+        // through; the schema rejects "telephoto" / "unknown".
+        lensType: (cam['lensType'] as String?) ?? 'wide',
         physicalFocalLengthMm: (cam['physicalFocalLengthMm'] as num?)?.toDouble(),
         sensorPhysicalSizeMm: (cam['sensorPhysicalSizeMm'] as List?)
             ?.cast<num>()
@@ -493,7 +497,11 @@ class _RecordScreenState extends State<RecordScreen> {
             .toList(),
         horizontalFovDeg: (cam['horizontalFovDeg'] as num?)?.toDouble(),
         videoStabilizationEnabled: stab,
-        opticalStabilizationEnabled: (cam['opticalStabilizationEnabled'] as bool?) ?? false,
+        opticalStabilizationEnabled:
+            (cam['opticalStabilizationEnabled'] as bool?) ?? false,
+        rollingShutterSkewNs: (rollingShutter != null && rollingShutter >= 0)
+            ? rollingShutter
+            : null,
       ),
       video: VideoInfo(
         codec: 'hevc',
@@ -509,15 +517,20 @@ class _RecordScreenState extends State<RecordScreen> {
         hasAudioTrack: false,
       ),
       intrinsics: intrinsics,
-      pose: poseInfo,
+      // Pose block intentionally omitted under v1.2 (spec §4.2 + §10).
       motion: motionInfo,
+      extrinsics: extrinsics,
+      deviceClockId: deviceClockId,
       capturePlatform: CapturePlatformInfo(
         flutterVersion: '3.41.7',
         nativeSdkVersion: isAndroid ? 'android' : 'ios',
-        capturePipelineVersion: '2.1.0',
+        capturePipelineVersion: '2.2.0',
       ),
     );
   }
+
+  static double? _positiveOrNull(double? v) =>
+      (v != null && v > 0) ? v : null;
 
   String _format(Duration d) {
     final m = d.inMinutes.toString().padLeft(2, '0');
@@ -663,7 +676,7 @@ class _RecordScreenState extends State<RecordScreen> {
               child: _rotated(
                 _ExpandedHud(
                   taskTitle: findTask(widget.taskId)?.title ?? '',
-                  poseSource: (_cameraInfo?['poseSource'] as String?) ?? 'NONE',
+                  lensType: (_cameraInfo?['lensType'] as String?) ?? 'wide',
                 ),
               ),
             ),
@@ -917,24 +930,21 @@ class _RecordingPillState extends State<_RecordingPill> with SingleTickerProvide
 
 class _ExpandedHud extends StatelessWidget {
   final String taskTitle;
-  final String poseSource;
-  const _ExpandedHud({required this.taskTitle, required this.poseSource});
+  final String lensType;
+  const _ExpandedHud({required this.taskTitle, required this.lensType});
 
   @override
   Widget build(BuildContext context) {
-    final poseLabel = switch (poseSource) {
-      'arkit' => 'ARKIT',
-      'arcore' => 'ARCORE',
-      'imu_raw' => 'IMU',
-      _ => 'NONE',
-    };
+    // Display the chosen lens type uppercased ("ULTRAWIDE" / "WIDE"). Per
+    // v1.2 spec §3 these are the only two values the schema accepts.
+    final lensLabel = lensType.toUpperCase();
     final stats = [
       const ['FPS', '30'],
       const ['CODEC', 'HEVC'],
-      const ['LENS', 'Ultrawide'],
+      ['LENS', lensLabel],
       const ['BITRATE', '15 Mb/s'],
       const ['STAB', 'OFF'],
-      ['POSE', poseLabel],
+      const ['SCHEMA', '1.2'],
     ];
     return Container(
       padding: const EdgeInsets.all(14),
@@ -966,7 +976,7 @@ class _ExpandedHud extends StatelessWidget {
                     style: DCText.mono(
                       size: 13,
                       weight: FontWeight.w600,
-                      color: (s[0] == 'POSE' && s[1] != 'NONE')
+                      color: (s[0] == 'LENS' && s[1] == 'ULTRAWIDE')
                           ? const Color(0xFF14C9A8)
                           : Colors.white,
                     ),
