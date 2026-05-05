@@ -10,6 +10,11 @@ import simd
 class CameraCaptureHandler: NSObject, FlutterPlugin {
     private var channel: FlutterMethodChannel
 
+    // Hand-presence detector (V2 addendum). Set by AppDelegate after load. We
+    // tap ARSession.didUpdate at the same place we feed the encoder; the
+    // detector throttles to its own cadence and runs on its own queue.
+    weak var handDetector: HandPresenceDetector?
+
     // ARKit owns the camera (per RECORDING_DATA_STRUCTURE_V1.1.md). The ARSession
     // is exposed so CameraPreviewView can attach an ARSCNView to it.
     let arSession = ARSession()
@@ -440,6 +445,14 @@ extension CameraCaptureHandler: ARSessionDelegate {
         if recordingStartTimestamp == nil {
             cachedHorizontalFOVDeg = liveHorizontalFOVDegrees(from: frame.camera.intrinsics,
                                                               imageWidth: Double(frame.camera.imageResolution.width))
+        }
+
+        // Feed the hand-presence detector regardless of recording state — the
+        // border + audio cues are useful while the user is composing the shot.
+        // The detector throttles internally and runs on its own queue.
+        if let detector = handDetector {
+            let timestampMs = Int64((frame.timestamp + unixEpochOffset) * 1000)
+            detector.submitFrame(frame.capturedImage, timestampMs: timestampMs)
         }
 
         guard isRecording, let writer = assetWriter, let input = assetWriterInput, let adaptor = pixelBufferAdaptor else { return }

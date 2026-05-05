@@ -47,4 +47,9 @@ dependencies {
     // Declared "optional" in the manifest, so devices without ARCore install simply
     // fall back to the imu_raw tier per RECORDING_DATA_STRUCTURE_V1.1.md §4.
     implementation 'com.google.ar:core:1.46.0'
+
+    // MediaPipe Tasks Vision — on-device HandLandmarker for the V2 hand-presence
+    // feedback layer. Inference runs at 10 fps on a dedicated thread and never
+    // touches the recording pipeline.
+    implementation 'com.google.mediapipe:tasks-vision:0.10.18'
 }

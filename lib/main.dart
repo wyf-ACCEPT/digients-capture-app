@@ -5,6 +5,7 @@ import 'router.dart';
 import 'services/auth_service.dart';
 import 'services/token_storage.dart';
 import 'state/auth_controller.dart';
+import 'state/hand_presence_settings_controller.dart';
 import 'state/theme_controller.dart';
 import 'theme/app_theme.dart';
 import 'theme/tokens.dart';
@@ -14,6 +15,9 @@ void main() async {
 
   final themeController = ThemeController();
   await themeController.load();
+
+  final handPresenceSettings = HandPresenceSettingsController();
+  await handPresenceSettings.load();
 
   final authController = AuthController(
     service: MockAuthService(),
@@ -26,17 +30,20 @@ void main() async {
   runApp(DigientsApp(
     themeController: themeController,
     authController: authController,
+    handPresenceSettings: handPresenceSettings,
   ));
 }
 
 class DigientsApp extends StatelessWidget {
   final ThemeController themeController;
   final AuthController authController;
+  final HandPresenceSettingsController handPresenceSettings;
 
   const DigientsApp({
     super.key,
     required this.themeController,
     required this.authController,
+    required this.handPresenceSettings,
   });
 
   @override
@@ -45,6 +52,8 @@ class DigientsApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider<ThemeController>.value(value: themeController),
         ChangeNotifierProvider<AuthController>.value(value: authController),
+        ChangeNotifierProvider<HandPresenceSettingsController>.value(
+            value: handPresenceSettings),
       ],
       child: Consumer<ThemeController>(
         builder: (context, ctl, _) {

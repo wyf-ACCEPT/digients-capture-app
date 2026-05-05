@@ -5,12 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import '../../state/hand_presence_settings_controller.dart';
+import '../../services/hand_presence/hand_presence_state.dart';
 import '../../theme/text_styles.dart';
 import '../../services/camera_service.dart';
 import '../../services/recording_manager.dart';
+import '../../services/hand_presence/hand_presence_controller.dart';
+import '../../services/hand_presence/hand_presence_detector_service.dart';
+import '../../services/hand_presence/hand_audio_player.dart';
 import '../../models/recording.dart';
 import '../../fixtures/data.dart';
+import '../../widgets/hand_presence_border.dart';
 import '../../widgets/mount_overlay.dart';
 
 class RecordScreen extends StatefulWidget {
@@ -24,6 +32,13 @@ class RecordScreen extends StatefulWidget {
 class _RecordScreenState extends State<RecordScreen> {
   final CameraService _cameraService = CameraService();
   final RecordingManager _recordingManager = RecordingManager();
+  final HandPresenceController _handPresence = HandPresenceController();
+  late final HandPresenceDetectorService _handDetector =
+      HandPresenceDetectorService(controller: _handPresence);
+  late final HandAudioPlayer _handAudio = HandAudioPlayer(
+    transitions: _handPresence.transitions,
+    sideTransitions: _handPresence.sideTransitions,
+  );
   bool _isInitialized = false;
   bool _expanded = false;
   // Drives the mount-instructions overlay shown over the live camera
@@ -49,17 +64,29 @@ class _RecordScreenState extends State<RecordScreen> {
   @override
   void initState() {
     super.initState();
+    // The phone is head-mounted while recording — disable auto-lock for the
+    // lifetime of this screen. Released in dispose() so other screens behave
+    // normally.
+    WakelockPlus.enable();
     _bootstrap();
     _accelSub = accelerometerEventStream(
       samplingPeriod: const Duration(milliseconds: 200),
     ).listen(_onAccel);
+    _handAudio.initialize();
+    // Detector is started in _start() — not here — so per-hand voice cues
+    // don't fire during the mount-instructions overlay (~6 s before
+    // recording actually begins).
   }
 
   @override
   void dispose() {
     _accelSub?.cancel();
     _ticker?.cancel();
+    _handDetector.dispose();
+    _handAudio.dispose();
+    _handPresence.dispose();
     _cameraService.dispose();
+    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -92,7 +119,25 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() => _hudTurns += delta * 0.25);
   }
 
+  void _applySettings(HandPresenceSettingsController settings) {
+    _handAudio.voiceEnabled = settings.voiceCuesEnabled;
+  }
+
+  void _onTransitionForHaptic(HandPresenceTransition t, bool vibrateOnNone) {
+    if (vibrateOnNone && t.to == HandPresenceState.none) {
+      HapticFeedback.mediumImpact();
+    }
+  }
+
   Future<void> _bootstrap() async {
+    final settings =
+        Provider.of<HandPresenceSettingsController>(context, listen: false);
+    _applySettings(settings);
+    settings.addListener(() => _applySettings(settings));
+    _handPresence.transitions.listen((t) {
+      _onTransitionForHaptic(t, settings.vibrateOnNoneEnabled);
+    });
+
     final status = await Permission.camera.request();
     if (!status.isGranted) {
       setState(() => _errorMessage = 'Camera permission required');
@@ -129,6 +174,9 @@ class _RecordScreenState extends State<RecordScreen> {
       setState(() => _errorMessage = 'Failed to start recording');
       return;
     }
+    // Start the hand detector now so MediaPipe events (and the voice cues
+    // they drive) are tied to the recording session, not the prep phase.
+    _handDetector.start();
     setState(() {
       _sessionId = sessionId;
       _outputDirectory = dir;
@@ -138,6 +186,27 @@ class _RecordScreenState extends State<RecordScreen> {
       if (!mounted || _startTime == null) return;
       setState(() => _elapsed = DateTime.now().difference(_startTime!));
     });
+    unawaited(_announceCaptureStart());
+  }
+
+  /// The phone is mounted on the user's head when recording starts, so they
+  /// can't see the screen change. We play a sci-fi chirp the moment capture
+  /// begins, then — once the detector's smoothing window has filled — speak
+  /// the current hand-presence state so the user can adjust without looking.
+  Future<void> _announceCaptureStart() async {
+    try {
+      await _handAudio.playRecordingStart();
+    } catch (_) {
+      // Audio is supplementary; never block recording on a playback failure.
+    }
+    if (!mounted) return;
+    try {
+      final firstState = await _handPresence.firstStateReady;
+      if (!mounted) return;
+      await _handAudio.playStateAnnouncement(firstState);
+    } catch (_) {
+      // Controller may be reset (e.g. backgrounded) before first state lands.
+    }
   }
 
   Future<void> _stop() async {
@@ -386,6 +455,53 @@ class _RecordScreenState extends State<RecordScreen> {
               ),
             ),
           ),
+          // TEMP debug overlay — top-left corner shows detector pipeline stats.
+          // Hidden during the mount overlay so it doesn't compete with the
+          // orient-and-mount instructions.
+          if (!_showMountOverlay)
+            Positioned(
+              top: 60,
+              left: 16,
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_handPresence, _handDetector]),
+                builder: (_, __) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  color: Colors.black.withValues(alpha: 0.6),
+                  child: Text(
+                    'ticks=${_handDetector.ticksReceived} '
+                    'rawH=${_handDetector.maxRawHandCount} '
+                    'okH=${_handDetector.maxHandsSeen}\n'
+                    'maxS=${_handDetector.maxScoreSeen.toStringAsFixed(2)} '
+                    'modelLoaded=${_handDetector.lastModelLoaded}\n'
+                    'state=${_handPresence.state.name}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          // Colored border tracking the composite hand-presence state.
+          // Suppressed during the mount overlay (the detector hasn't started
+          // yet at that point so the border would just sit at the alarming
+          // NONE/red color while the user is putting on the headband).
+          if (!_showMountOverlay)
+            Consumer<HandPresenceSettingsController>(
+              builder: (_, settings, __) {
+                if (!settings.borderEnabled) {
+                  return const SizedBox.shrink();
+                }
+                return Positioned.fill(
+                  child: AnimatedBuilder(
+                    animation: _handPresence,
+                    builder: (_, __) =>
+                        HandPresenceBorder(state: _handPresence.state),
+                  ),
+                );
+              },
+            ),
           if (!_showMountOverlay)
             Positioned(
               top: 56,
