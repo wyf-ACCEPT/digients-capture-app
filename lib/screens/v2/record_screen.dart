@@ -113,8 +113,7 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   void _applySettings(HandPresenceSettingsController settings) {
-    _handAudio.tonesEnabled = settings.tonesEnabled;
-    _handAudio.voiceEnabled = settings.voiceEnabled;
+    _handAudio.voiceEnabled = settings.voiceCuesEnabled;
   }
 
   void _onTransitionForHaptic(HandPresenceTransition t, bool vibrateOnNone) {
@@ -129,7 +128,7 @@ class _RecordScreenState extends State<RecordScreen> {
     _applySettings(settings);
     settings.addListener(() => _applySettings(settings));
     _handPresence.transitions.listen((t) {
-      _onTransitionForHaptic(t, settings.vibrateOnNone);
+      _onTransitionForHaptic(t, settings.vibrateOnNoneEnabled);
     });
 
     final status = await Permission.camera.request();

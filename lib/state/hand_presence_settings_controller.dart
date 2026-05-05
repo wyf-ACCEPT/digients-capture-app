@@ -5,36 +5,26 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// User-facing toggles for the hand-presence feedback layer (§7 of
-/// MOBILE_APP_SPECS_V2_HAND_PRESENCE_FEEDBACK.md).
+/// User-facing toggles for hand-presence feedback. Three independent
+/// switches:
+///   • voiceCues — speak the composite first-frame state and the per-hand
+///     "enters/exits the view" cues during recording.
+///   • border — show the colored border around the camera preview that
+///     tracks the composite hand-presence state.
+///   • vibrateOnNone — fire a single medium haptic when state enters NONE.
 ///
-/// Persistence is a single JSON file alongside `prefs.json` (matches the
-/// existing ThemeController pattern). Defaults match the spec: master ON,
-/// tones ON, voice OFF, border ON, vibrate-on-NONE OFF.
+/// The recording-start chirp (sci-fi cue at the moment capture begins) is
+/// always on — it's a recording-state signal, not a hand-presence one.
 class HandPresenceSettingsController extends ChangeNotifier {
   static const _filename = 'hand_presence_prefs.json';
 
-  // Voice is the primary hand-presence cue (the user wears the phone on
-  // their head and can't read the screen). Tones default OFF so we don't
-  // double up; users who prefer beeps can toggle them on in Settings.
-  bool _master = true;
-  bool _tones = false;
-  bool _voice = true;
+  bool _voiceCues = true;
   bool _border = true;
   bool _vibrateOnNone = false;
 
-  bool get masterEnabled => _master;
-  bool get tonesEnabled => _master && _tones;
-  bool get voiceEnabled => _master && _voice;
-  bool get borderEnabled => _master && _border;
-  bool get vibrateOnNone => _master && _vibrateOnNone;
-
-  // Raw values (without master gating) — used to render the toggles
-  // themselves so they reflect the stored preference.
-  bool get rawTones => _tones;
-  bool get rawVoice => _voice;
-  bool get rawBorder => _border;
-  bool get rawVibrateOnNone => _vibrateOnNone;
+  bool get voiceCuesEnabled => _voiceCues;
+  bool get borderEnabled => _border;
+  bool get vibrateOnNoneEnabled => _vibrateOnNone;
 
   Future<File> _file() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -46,11 +36,13 @@ class HandPresenceSettingsController extends ChangeNotifier {
       final f = await _file();
       if (!await f.exists()) return;
       final data = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
-      _master = data['master'] as bool? ?? _master;
-      _tones = data['tones'] as bool? ?? _tones;
-      _voice = data['voice'] as bool? ?? _voice;
-      _border = data['border'] as bool? ?? _border;
-      _vibrateOnNone = data['vibrateOnNone'] as bool? ?? _vibrateOnNone;
+      // Prefer the new key for voice; fall back to the old `voice` key so a
+      // prefs file written by a previous build still resolves correctly.
+      _voiceCues = (data['voice_cues'] as bool?) ??
+          (data['voice'] as bool?) ??
+          _voiceCues;
+      _border = (data['border'] as bool?) ?? _border;
+      _vibrateOnNone = (data['vibrateOnNone'] as bool?) ?? _vibrateOnNone;
       notifyListeners();
     } catch (_) {
       // Stick with defaults on parse failure.
@@ -61,44 +53,28 @@ class HandPresenceSettingsController extends ChangeNotifier {
     try {
       final f = await _file();
       await f.writeAsString(jsonEncode({
-        'master': _master,
-        'tones': _tones,
-        'voice': _voice,
+        'voice_cues': _voiceCues,
         'border': _border,
         'vibrateOnNone': _vibrateOnNone,
       }));
     } catch (_) {}
   }
 
-  Future<void> setMaster(bool v) async {
-    if (_master == v) return;
-    _master = v;
+  Future<void> setVoiceCuesEnabled(bool v) async {
+    if (_voiceCues == v) return;
+    _voiceCues = v;
     notifyListeners();
     await _save();
   }
 
-  Future<void> setTones(bool v) async {
-    if (_tones == v) return;
-    _tones = v;
-    notifyListeners();
-    await _save();
-  }
-
-  Future<void> setVoice(bool v) async {
-    if (_voice == v) return;
-    _voice = v;
-    notifyListeners();
-    await _save();
-  }
-
-  Future<void> setBorder(bool v) async {
+  Future<void> setBorderEnabled(bool v) async {
     if (_border == v) return;
     _border = v;
     notifyListeners();
     await _save();
   }
 
-  Future<void> setVibrateOnNone(bool v) async {
+  Future<void> setVibrateOnNoneEnabled(bool v) async {
     if (_vibrateOnNone == v) return;
     _vibrateOnNone = v;
     notifyListeners();

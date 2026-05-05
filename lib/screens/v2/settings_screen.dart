@@ -64,38 +64,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ]),
                 _Section(title: 'RECORDING FEEDBACK', children: [
                   _SettingsRow(
-                    label: 'Hand-presence cues',
+                    label: 'Hand-presence voice cues',
                     trailing: DCToggle(
-                      value: hpSettings.masterEnabled,
-                      onChanged: (v) => hpSettings.setMaster(v),
-                    ),
-                  ),
-                  _SettingsRow(
-                    label: 'Audio tones',
-                    trailing: DCToggle(
-                      value: hpSettings.rawTones,
-                      onChanged: (v) => hpSettings.setTones(v),
-                    ),
-                  ),
-                  _SettingsRow(
-                    label: 'Voice cues',
-                    trailing: DCToggle(
-                      value: hpSettings.rawVoice,
-                      onChanged: (v) => hpSettings.setVoice(v),
+                      value: hpSettings.voiceCuesEnabled,
+                      onChanged: (v) => hpSettings.setVoiceCuesEnabled(v),
                     ),
                   ),
                   _SettingsRow(
                     label: 'Border indicator',
                     trailing: DCToggle(
-                      value: hpSettings.rawBorder,
-                      onChanged: (v) => hpSettings.setBorder(v),
+                      value: hpSettings.borderEnabled,
+                      onChanged: (v) => hpSettings.setBorderEnabled(v),
                     ),
                   ),
                   _SettingsRow(
                     label: 'Vibrate on no hands',
                     trailing: DCToggle(
-                      value: hpSettings.rawVibrateOnNone,
-                      onChanged: (v) => hpSettings.setVibrateOnNone(v),
+                      value: hpSettings.vibrateOnNoneEnabled,
+                      onChanged: (v) => hpSettings.setVibrateOnNoneEnabled(v),
                     ),
                     isLast: true,
                   ),
