@@ -35,11 +35,15 @@ class RecordScreen extends StatefulWidget {
 ///
 /// `mounting`  — mount-instructions overlay is up; nothing else runs.
 /// `armed`     — camera live, waiting for a vol-button press to start.
+/// `starting`  — vol-button pressed; the pre-start voice cue is playing
+///               and a 3-second countdown follows. Recording hasn't
+///               actually started yet — gives the user time to position
+///               their hands. Vol button is ignored during this phase.
 /// `recording` — capture in progress; vol-button press will stop.
 /// `submitted` — capture stopped, success popup is up. The next vol-button
 ///               press dismisses the popup and rearms (or starts the next
 ///               take immediately, see [_onVolButtonPress]).
-enum _Phase { mounting, armed, recording, submitted }
+enum _Phase { mounting, armed, starting, recording, submitted }
 
 class _RecordScreenState extends State<RecordScreen> {
   final CameraService _cameraService = CameraService();
@@ -62,6 +66,15 @@ class _RecordScreenState extends State<RecordScreen> {
   // sees "Take 1", "Take 2"… for back-to-back captures of the same task.
   int _takeNumber = 0;
   int _lastSubmissionPoints = 0;
+
+  // Pre-start sequence state. The vol-button press transitions to
+  // _Phase.starting, plays the pre-start voice, then runs a 3-second
+  // visible countdown. Both the voice future and the countdown timer
+  // need to be cancelable on close-button / unmount so we don't kick off
+  // recording after the user has bailed.
+  static const Duration _preStartCountdown = Duration(seconds: 3);
+  Timer? _preStartCountdownTimer;
+  int? _startingSecondsRemaining;
 
   String? _sessionId;
   DateTime? _startTime;
@@ -105,6 +118,7 @@ class _RecordScreenState extends State<RecordScreen> {
     _accelSub?.cancel();
     _ticker?.cancel();
     _popupAutoDismissTimer?.cancel();
+    _preStartCountdownTimer?.cancel();
     _volSub?.cancel();
     _volumeButtons.dispose();
     _handDetector.dispose();
@@ -216,25 +230,74 @@ class _RecordScreenState extends State<RecordScreen> {
         return;
       case _Phase.armed:
         unawaited(_handAudio.stopArmedPrompt());
-        _start();
+        _runPreStartSequence();
+        return;
+      case _Phase.starting:
+        // The user already committed; ignore further vol presses until
+        // recording actually starts. Stop button is what cancels (via X).
         return;
       case _Phase.recording:
         _stop();
         return;
       case _Phase.submitted:
         // Pressing vol while the popup is up means the user wants to keep
-        // capturing — dismiss the popup and start the next take immediately
-        // so back-to-back rhythm isn't blocked by the auto-dismiss timer.
-        // Skip the armed prompt voice on this fast path; it would only
-        // overlap with the recording-start chirp / first-state cue that
-        // _start() schedules right after.
+        // capturing — dismiss the popup and run the same pre-start
+        // sequence so back-to-back takes get the same prepare-then-record
+        // rhythm as the first take.
         _popupAutoDismissTimer?.cancel();
         _popupAutoDismissTimer = null;
         unawaited(_handAudio.stopArmedPrompt());
-        setState(() => _phase = _Phase.armed);
-        _start();
+        _runPreStartSequence();
         return;
     }
+  }
+
+  /// Three-step prepare-then-record:
+  ///   1. flip phase → starting (HUD shows "place hands in view")
+  ///   2. play the pre-start voice cue, await playback
+  ///   3. visible 3-second countdown (3 → 2 → 1)
+  ///   4. _start() — fires the recording-start chirp and begins capture
+  ///
+  /// Cancelable via [_cancelPreStartSequence] (called from the X close
+  /// button and dispose). If the user has navigated away or the phase
+  /// changed by the time any await completes, the sequence aborts cleanly.
+  Future<void> _runPreStartSequence() async {
+    if (!mounted) return;
+    setState(() {
+      _phase = _Phase.starting;
+      _startingSecondsRemaining = null;
+    });
+    try {
+      await _handAudio.playPreStartPrompt();
+    } catch (_) {
+      // Voice playback is supplementary; carry on with the countdown.
+    }
+    if (!mounted || _phase != _Phase.starting) return;
+    setState(() => _startingSecondsRemaining = _preStartCountdown.inSeconds);
+    _preStartCountdownTimer?.cancel();
+    _preStartCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted || _phase != _Phase.starting) {
+        t.cancel();
+        _preStartCountdownTimer = null;
+        return;
+      }
+      final remaining = (_startingSecondsRemaining ?? 0) - 1;
+      if (remaining > 0) {
+        setState(() => _startingSecondsRemaining = remaining);
+        return;
+      }
+      t.cancel();
+      _preStartCountdownTimer = null;
+      setState(() => _startingSecondsRemaining = null);
+      _start();
+    });
+  }
+
+  void _cancelPreStartSequence() {
+    _preStartCountdownTimer?.cancel();
+    _preStartCountdownTimer = null;
+    _startingSecondsRemaining = null;
+    unawaited(_handAudio.stopPreStartPrompt());
   }
 
   Future<void> _start() async {
@@ -785,6 +848,14 @@ class _RecordScreenState extends State<RecordScreen> {
             ),
           if (_phase == _Phase.armed && _errorMessage == null)
             Positioned.fill(child: _rotated(const _ArmedPrompt())),
+          if (_phase == _Phase.starting && _errorMessage == null)
+            Positioned.fill(
+              child: _rotated(
+                _PreStartOverlay(
+                  secondsRemaining: _startingSecondsRemaining,
+                ),
+              ),
+            ),
           // Top-right close button — always available so the user can leave
           // the screen, since the vol-button flow has no other terminal
           // state. Stops capture cleanly first if recording.
@@ -826,6 +897,9 @@ class _RecordScreenState extends State<RecordScreen> {
         await _cameraService.stopRecording();
       } catch (_) {}
     }
+    // Cancel the pre-start voice + countdown if the user bails between
+    // press and start.
+    _cancelPreStartSequence();
     // The queue may have been paused if a recording was in flight; make
     // sure the background compressor is unblocked before we leave.
     if (mounted) {
@@ -833,6 +907,70 @@ class _RecordScreenState extends State<RecordScreen> {
     }
     if (!mounted) return;
     Navigator.of(context).pop();
+  }
+}
+
+/// Visible counterpart to the pre-start voice cue + 3-second countdown.
+/// While the voice is still playing, [secondsRemaining] is null and we
+/// show "PLACE HANDS IN VIEW". Once the countdown begins, we render the
+/// remaining seconds as a large digit. The voice cue itself runs
+/// independently from [HandAudioPlayer.playPreStartPrompt].
+class _PreStartOverlay extends StatelessWidget {
+  final int? secondsRemaining;
+  const _PreStartOverlay({required this.secondsRemaining});
+
+  @override
+  Widget build(BuildContext context) {
+    final showDigit = secondsRemaining != null;
+    return IgnorePointer(
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFF14C9A8).withValues(alpha: 0.55),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'PLACE HANDS IN VIEW',
+                style: DCText.mono(
+                  size: 11,
+                  weight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  letterSpacing: 1.6,
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (showDigit)
+                Text(
+                  '$secondsRemaining',
+                  style: DCText.mono(
+                    size: 64,
+                    weight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -1,
+                  ),
+                )
+              else
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: const Color(0xFF14C9A8),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
