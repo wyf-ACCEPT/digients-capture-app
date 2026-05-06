@@ -106,18 +106,29 @@ class CompressionQueue extends ChangeNotifier {
     return completer.future;
   }
 
-  /// Bootstrap: scan persisted recordings and enqueue any that don't have
-  /// an archive on disk. Call once at app launch so legacy recordings and
-  /// recordings whose previous compression was interrupted get caught up
-  /// in the background.
-  Future<void> enqueueAllMissing() async {
+  /// Bootstrap: walk persisted recordings and (a) generate any missing
+  /// first-frame thumbnails, (b) enqueue any missing archives. Thumbnail
+  /// generation is fast (~100 ms each) and runs serially on the main
+  /// isolate; archive builds run on the worker isolate via the queue.
+  /// Call once at app launch so legacy recordings and recordings whose
+  /// previous compression was interrupted get caught up in the background.
+  Future<void> bootstrap() async {
     final recordings = await _manager.loadRecordings();
     for (final r in recordings) {
+      // Thumbnail first — fast, and required for the cleanup-after-build
+      // step inside _processNext to delete raw originals.
+      if (_manager.thumbnailPathSync(r.sessionId) == null) {
+        await _manager.ensureThumbnail(r.sessionId);
+        notifyListeners();
+      }
       final existing = await _manager.findArchivePath(r.sessionId);
       if (existing != null) continue;
       enqueue(r.sessionId);
     }
   }
+
+  /// Backwards-compat alias — older callers used this name.
+  Future<void> enqueueAllMissing() => bootstrap();
 
   Future<void> _processNext() async {
     if (_paused) return;
@@ -129,7 +140,21 @@ class CompressionQueue extends ChangeNotifier {
     notifyListeners();
     String? result;
     try {
+      // Always make sure we've got a thumbnail before the archive build
+      // finishes, so the post-compression cleanup can safely delete the
+      // raw video. If the recording was made before this branch landed
+      // and didn't go through record_screen's pre-enqueue ensureThumbnail
+      // call, this catches it.
+      await _manager.ensureThumbnail(sid);
+      notifyListeners();
       result = await _manager.buildArchive(sid);
+      if (result != null) {
+        // Halve disk usage by removing the loose metadata + video + motion
+        // files; the archive contains them, and the thumbnail survives
+        // for UI. cleanupOriginalsAfterCompression refuses if either the
+        // archive or thumbnail is missing, so this is safe.
+        await _manager.cleanupOriginalsAfterCompression(sid);
+      }
     } catch (_) {
       result = null;
     }

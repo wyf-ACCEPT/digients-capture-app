@@ -359,6 +359,10 @@ class _RecordScreenState extends State<RecordScreen> {
       _startTime = null;
       _elapsed = Duration.zero;
     });
+    // Generate the first-frame thumbnail synchronously so the submissions
+    // list always has something to show — and so it lands on disk before
+    // the post-compression cleanup deletes video.mp4. ~100 ms.
+    unawaited(_recordingManager.ensureThumbnail(completedSessionId));
     // Hand the just-finished take off to the background compressor and
     // resume the queue. The user keeps recording back-to-back takes; the
     // queue serializes them so we never run two builds at once.

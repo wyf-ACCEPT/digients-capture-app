@@ -6,6 +6,7 @@ import '../../widgets/buttons.dart';
 import '../../widgets/cards.dart';
 import '../../widgets/chips.dart';
 import '../../widgets/nav.dart';
+import '../../widgets/recording_thumbnail.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../services/compression_queue.dart';
@@ -118,26 +119,34 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
-                DCImagePlaceholder(
+                SizedBox(
                   height: 210,
-                  caption: r.sessionId.substring(0, 8),
-                  overlays: [
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _formatDuration(r.durationSeconds),
-                          style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white),
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      RecordingThumbnail(
+                        recording: r,
+                        surface: c.surface2,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _formatDuration(r.durationSeconds),
+                            style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const DCStatusBadge(status: SubmissionStatus.ondevice),

@@ -9,6 +9,18 @@ PODS:
   - just_audio (0.0.1):
     - Flutter
     - FlutterMacOS
+  - libwebp (1.5.0):
+    - libwebp/demux (= 1.5.0)
+    - libwebp/mux (= 1.5.0)
+    - libwebp/sharpyuv (= 1.5.0)
+    - libwebp/webp (= 1.5.0)
+  - libwebp/demux (1.5.0):
+    - libwebp/webp
+  - libwebp/mux (1.5.0):
+    - libwebp/demux
+  - libwebp/sharpyuv (1.5.0)
+  - libwebp/webp (1.5.0):
+    - libwebp/sharpyuv
   - MediaPipeTasksCommon (0.10.35)
   - MediaPipeTasksVision (0.10.35):
     - MediaPipeTasksCommon (= 0.10.35)
@@ -23,6 +35,9 @@ PODS:
     - Flutter
   - share_plus (0.0.1):
     - Flutter
+  - video_thumbnail (0.0.1):
+    - Flutter
+    - libwebp
   - wakelock_plus (0.0.1):
     - Flutter
 
@@ -38,10 +53,12 @@ DEPENDENCIES:
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - sensors_plus (from `.symlinks/plugins/sensors_plus/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
+  - video_thumbnail (from `.symlinks/plugins/video_thumbnail/ios`)
   - wakelock_plus (from `.symlinks/plugins/wakelock_plus/ios`)
 
 SPEC REPOS:
   trunk:
+    - libwebp
     - MediaPipeTasksCommon
     - MediaPipeTasksVision
 
@@ -66,6 +83,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/sensors_plus/ios"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
+  video_thumbnail:
+    :path: ".symlinks/plugins/video_thumbnail/ios"
   wakelock_plus:
     :path: ".symlinks/plugins/wakelock_plus/ios"
 
@@ -75,6 +94,7 @@ SPEC CHECKSUMS:
   flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
   flutter_volume_controller: c2be490cb0487e8b88d0d9fc2b7e1c139a4ebccb
   just_audio: 4e391f57b79cad2b0674030a00453ca5ce817eed
+  libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   MediaPipeTasksCommon: ae27d88c4d185db114a1a768c504f8270dda79b5
   MediaPipeTasksVision: 1d6c3efa89830a131dbd0dc4fb80dea283fac521
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
@@ -82,6 +102,7 @@ SPEC CHECKSUMS:
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   sensors_plus: 6a11ed0c2e1d0bd0b20b4029d3bad27d96e0c65b
   share_plus: de6030e33b4e106470e09322d87cf2a4258d2d1d
+  video_thumbnail: b637e0ad5f588ca9945f6e2c927f73a69a661140
   wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
 
 PODFILE CHECKSUM: 0c6f25c1139a65d6b80aa7861e844badd77582ea

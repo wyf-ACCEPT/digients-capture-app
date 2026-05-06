@@ -7,6 +7,7 @@ import '../../theme/text_styles.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/chips.dart';
 import '../../widgets/export_progress.dart';
+import '../../widgets/recording_thumbnail.dart';
 import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
@@ -466,8 +467,9 @@ class _RecordingRow extends StatelessWidget {
                 width: 76,
                 height: 76,
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Container(color: c.surface2),
+                    RecordingThumbnail(recording: recording, surface: c.surface2),
                     Positioned(
                       bottom: 4,
                       right: 4,
@@ -618,3 +620,4 @@ class _RecordingRow extends StatelessWidget {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 }
+

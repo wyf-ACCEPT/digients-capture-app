@@ -74,6 +74,10 @@ dependencies:
   # mid-range value so presses always register.
   flutter_volume_controller: ^1.3.2
 
+  # First-frame thumbnail extraction for the submissions list. iOS:
+  # AVAssetImageGenerator. Android: MediaMetadataRetriever.getFrameAtTime.
+  video_thumbnail: ^0.5.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

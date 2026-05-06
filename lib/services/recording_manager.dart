@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:archive/archive_io.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import '../models/recording.dart';
 
 /// Top-level so it can run inside the isolate spawned by [compute]. Builds
@@ -248,7 +249,101 @@ class RecordingManager {
     return null;
   }
 
-  Directory? _cachedRecordingsDir;
+  // Static so it's shared across every fresh RecordingManager() instance.
+  // Many call sites (UI cards, services) construct a new instance on each
+  // use because the class is stateless apart from this cache; without
+  // `static` the *first* sync lookup from a freshly-built widget always
+  // returned null and the lazy thumbnail rebuild never landed.
+  static Directory? _cachedRecordingsDir;
+
+  // Thumbnail = first frame of video.mp4 saved alongside metadata. ~10–30 KB
+  // and survives the post-compression cleanup of the raw video, so the
+  // submissions list always has a preview to render.
+  static const String _thumbnailFilename = 'thumbnail.jpg';
+
+  Future<String> thumbnailPathFor(String sessionId) async {
+    final Directory recordingsDir = await _getRecordingsDirectory();
+    _cachedRecordingsDir = recordingsDir;
+    return path.join(
+      recordingsDir.path,
+      'recording_$sessionId',
+      _thumbnailFilename,
+    );
+  }
+
+  /// Synchronous existence check + path. Returns null when the thumbnail
+  /// hasn't been generated yet (or when path_provider hasn't been awaited
+  /// once at app start). Submissions list uses this in build() so cards
+  /// can decide between Image.file and a placeholder without an async hop.
+  String? thumbnailPathSync(String sessionId) {
+    final dir = _cachedRecordingsDir;
+    if (dir == null) return null;
+    final p = path.join(dir.path, 'recording_$sessionId', _thumbnailFilename);
+    return File(p).existsSync() ? p : null;
+  }
+
+  /// Extract the first frame of video.mp4 to a JPEG. Idempotent — returns
+  /// the existing path if a thumbnail is already on disk. Returns null if
+  /// the source video isn't available (e.g. compression cleanup ran first
+  /// in some edge case, or the recording was deleted).
+  Future<String?> ensureThumbnail(String sessionId) async {
+    final Directory recordingsDir = await _getRecordingsDirectory();
+    _cachedRecordingsDir = recordingsDir;
+    final recDir =
+        Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+    if (!await recDir.exists()) return null;
+    final thumbPath = path.join(recDir.path, _thumbnailFilename);
+    if (await File(thumbPath).exists()) return thumbPath;
+    final videoPath = path.join(recDir.path, 'video.mp4');
+    if (!await File(videoPath).exists()) return null;
+    try {
+      // 320 px wide max keeps the file small (~10–30 KB) and the platform
+      // call fast (~100 ms). The list cards downsample further; quality
+      // beyond this is wasted bytes.
+      final result = await VideoThumbnail.thumbnailFile(
+        video: videoPath,
+        thumbnailPath: thumbPath,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 320,
+        timeMs: 0,
+        quality: 75,
+      );
+      if (result == null) return null;
+      return result;
+    } catch (e) {
+      print('Error generating thumbnail for $sessionId: $e');
+      return null;
+    }
+  }
+
+  /// After a successful compression, remove the loose `metadata.json`,
+  /// `video.mp4`, and `motion.jsonl` so the recording dir holds only the
+  /// archive (sharable payload) and the thumbnail (UI preview). Halves
+  /// disk usage per recording.
+  ///
+  /// Defensive: only runs when both the archive AND a thumbnail are
+  /// confirmed on disk. If either is missing we keep the raw files so a
+  /// retry build can still find them.
+  Future<void> cleanupOriginalsAfterCompression(String sessionId) async {
+    try {
+      final archive = await findArchivePath(sessionId);
+      if (archive == null) return;
+      final thumb = await thumbnailPathFor(sessionId);
+      if (!await File(thumb).exists()) return;
+      final Directory recordingsDir = await _getRecordingsDirectory();
+      final recDir =
+          Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+      if (!await recDir.exists()) return;
+      for (final name in const ['metadata.json', 'video.mp4', 'motion.jsonl']) {
+        final f = File(path.join(recDir.path, name));
+        if (await f.exists()) {
+          try { await f.delete(); } catch (_) {}
+        }
+      }
+    } catch (e) {
+      print('Error cleaning up originals for $sessionId: $e');
+    }
+  }
 
   /// If any tar.gz already exists for this recording (e.g. one named
   /// `archive.tar.gz` from a pre-rename build, or one with a stale slug
