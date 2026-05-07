@@ -1,0 +1,19 @@
+CLAUDE.md
+  s_195e10f2fa5309::t_23fe45a09ae220 124-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "1e843031f009485cda4200af316d5d607c48a908",
+  "prompts": {},
+  "sessions": {
+    "s_195e10f2fa5309": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3eaa814e-7173-454a-a272-93134a08b987",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
