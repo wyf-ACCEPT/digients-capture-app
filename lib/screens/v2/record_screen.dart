@@ -7,6 +7,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import '../../l10n/l10n.dart';
+import '../../l10n/localized_fixtures.dart';
 import '../../state/hand_presence_settings_controller.dart';
 import '../../services/hand_presence/hand_presence_state.dart';
 import '../../theme/text_styles.dart';
@@ -169,6 +171,7 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   Future<void> _bootstrap() async {
+    final l10n = context.l10n;
     final settings =
         Provider.of<HandPresenceSettingsController>(context, listen: false);
     _applySettings(settings);
@@ -179,12 +182,12 @@ class _RecordScreenState extends State<RecordScreen> {
 
     final status = await Permission.camera.request();
     if (!status.isGranted) {
-      setState(() => _errorMessage = 'Camera permission required');
+      setState(() => _errorMessage = l10n.cameraPermissionRequired);
       return;
     }
     final ok = await _cameraService.initializeCamera();
     if (!ok) {
-      setState(() => _errorMessage = 'Failed to initialize camera');
+      setState(() => _errorMessage = l10n.failedToInitializeCamera);
       return;
     }
     final cam = await _cameraService.getCameraInfo();
@@ -301,11 +304,12 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   Future<void> _start() async {
+    final l10n = context.l10n;
     final sessionId = _recordingManager.generateSessionId();
     final dir = await _recordingManager.createRecordingDirectory(sessionId);
     final ok = await _cameraService.startRecording(sessionId, dir);
     if (!ok) {
-      setState(() => _errorMessage = 'Failed to start recording');
+      setState(() => _errorMessage = l10n.failedToStartRecording);
       return;
     }
     // Pause the background compressor — we don't want a worker isolate
@@ -379,10 +383,13 @@ class _RecordScreenState extends State<RecordScreen> {
     }
 
     final capturedAt = _startTime ?? DateTime.now();
-    final fileSize = await _recordingManager.calculateRecordingSize(_sessionId!);
-    final durationSec = (result['durationSeconds'] as int?) ?? _elapsed.inSeconds;
+    final fileSize =
+        await _recordingManager.calculateRecordingSize(_sessionId!);
+    final durationSec =
+        (result['durationSeconds'] as int?) ?? _elapsed.inSeconds;
     final frameCount = (result['frameCount'] as int?) ?? 0;
-    final measuredMotionRateHz = (result['motionRateHzMeasured'] as num?)?.toDouble();
+    final measuredMotionRateHz =
+        (result['motionRateHzMeasured'] as num?)?.toDouble();
     // Pull actual encoded dimensions from native; iOS may pick 1920×1440 etc.
     final capW = (result['captureWidth'] as int?) ?? 1920;
     final capH = (result['captureHeight'] as int?) ?? 1080;
@@ -399,16 +406,18 @@ class _RecordScreenState extends State<RecordScreen> {
       taskId: task?.id,
     );
     await _recordingManager.saveRecording(recording);
-    await _recordingManager.saveMetadata(_sessionId!, _buildMetadata(
-      sessionId: _sessionId!,
-      capturedAt: capturedAt,
-      durationSeconds: durationSec,
-      frameCount: frameCount,
-      measuredMotionRateHz: measuredMotionRateHz,
-      videoWidth: capW,
-      videoHeight: capH,
-      videoFps: capFps,
-    ));
+    await _recordingManager.saveMetadata(
+        _sessionId!,
+        _buildMetadata(
+          sessionId: _sessionId!,
+          capturedAt: capturedAt,
+          durationSeconds: durationSec,
+          frameCount: frameCount,
+          measuredMotionRateHz: measuredMotionRateHz,
+          videoWidth: capW,
+          videoHeight: capH,
+          videoFps: capFps,
+        ));
 
     if (!mounted) return;
     final pts = task?.rewardPoints ?? 0;
@@ -464,7 +473,8 @@ class _RecordScreenState extends State<RecordScreen> {
     final cam = _cameraInfo ?? <String, dynamic>{};
     final dev = _deviceInfo ?? <String, dynamic>{};
     final stab = (cam['videoStabilizationEnabled'] as bool?) ?? false;
-    final os = (dev['os'] as String?) ?? (Platform.isAndroid ? 'android' : 'ios');
+    final os =
+        (dev['os'] as String?) ?? (Platform.isAndroid ? 'android' : 'ios');
     final isAndroid = os == 'android';
 
     // Intrinsics — v1.2 only accepts source="static". The native side computes
@@ -507,7 +517,8 @@ class _RecordScreenState extends State<RecordScreen> {
       gyroUnits: (cam['motionGyroUnits'] as String?) ?? 'rad/s',
       accelUnits: (cam['motionAccelUnits'] as String?) ?? 'm/s^2',
       accelIncludesGravity:
-          (cam['motionAccelIncludesGravity'] as bool?) ?? (isAndroid ? true : false),
+          (cam['motionAccelIncludesGravity'] as bool?) ??
+              (isAndroid ? true : false),
       frame: (cam['motionFrame'] as String?) ?? 'device_body',
       notes: isAndroid
           ? 'Android Sensor TYPE_GYROSCOPE + TYPE_ACCELEROMETER at SENSOR_DELAY_FASTEST, ordered queue, one row per gyro event.'
@@ -571,7 +582,8 @@ class _RecordScreenState extends State<RecordScreen> {
         // computes it (>=100° → "ultrawide", else "wide") and we just pass
         // through; the schema rejects "telephoto" / "unknown".
         lensType: (cam['lensType'] as String?) ?? 'wide',
-        physicalFocalLengthMm: (cam['physicalFocalLengthMm'] as num?)?.toDouble(),
+        physicalFocalLengthMm:
+            (cam['physicalFocalLengthMm'] as num?)?.toDouble(),
         sensorPhysicalSizeMm: (cam['sensorPhysicalSizeMm'] as List?)
             ?.cast<num>()
             .map((n) => n.toDouble())
@@ -648,6 +660,7 @@ class _RecordScreenState extends State<RecordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -688,7 +701,8 @@ class _RecordScreenState extends State<RecordScreen> {
                 AnimatedBuilder(
                   animation: Listenable.merge([_handPresence, _handDetector]),
                   builder: (_, __) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     color: Colors.black.withValues(alpha: 0.6),
                     child: Text(
                       'ticks=${_handDetector.ticksReceived} '
@@ -760,7 +774,8 @@ class _RecordScreenState extends State<RecordScreen> {
               right: 20,
               child: _rotated(
                 _ExpandedHud(
-                  taskTitle: findTask(widget.taskId)?.title ?? '',
+                  taskTitle:
+                      findTask(widget.taskId)?.localizedTitle(l10n) ?? '',
                   lensType: (_cameraInfo?['lensType'] as String?) ?? 'wide',
                 ),
               ),
@@ -778,7 +793,11 @@ class _RecordScreenState extends State<RecordScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFFF453A)),
                   ),
-                  child: Text(_errorMessage!, style: DCText.inter(size: 14, weight: FontWeight.w500, color: const Color(0xFFFF453A))),
+                  child: Text(_errorMessage!,
+                      style: DCText.inter(
+                          size: 14,
+                          weight: FontWeight.w500,
+                          color: const Color(0xFFFF453A))),
                 ),
               ),
             ),
@@ -831,8 +850,12 @@ class _RecordScreenState extends State<RecordScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        _isRecording ? 'TAP TO STOP' : 'TAP TO START',
-                        style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
+                        _isRecording ? l10n.tapToStop : l10n.tapToStart,
+                        style: DCText.mono(
+                            size: 11,
+                            weight: FontWeight.w500,
+                            color: Colors.white70,
+                            letterSpacing: 1.4),
                       ),
                     ],
                   ),
@@ -992,7 +1015,8 @@ class _ArmedPromptState extends State<_ArmedPrompt>
   @override
   void initState() {
     super.initState();
-    _ctl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+    _ctl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
       ..repeat(reverse: true);
   }
 
@@ -1020,7 +1044,7 @@ class _ArmedPromptState extends State<_ArmedPrompt>
               ),
             ),
             child: Text(
-              'PRESS VOLUME BUTTON TO START',
+              context.l10n.pressVolumeButtonToStart,
               style: DCText.mono(
                 size: 12,
                 weight: FontWeight.w500,
@@ -1043,13 +1067,15 @@ class _RecordingPill extends StatefulWidget {
   State<_RecordingPill> createState() => _RecordingPillState();
 }
 
-class _RecordingPillState extends State<_RecordingPill> with SingleTickerProviderStateMixin {
+class _RecordingPillState extends State<_RecordingPill>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctl;
 
   @override
   void initState() {
     super.initState();
-    _ctl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+    _ctl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
       ..repeat(reverse: true);
   }
 
@@ -1077,7 +1103,8 @@ class _RecordingPillState extends State<_RecordingPill> with SingleTickerProvide
               width: 10,
               height: 10,
               decoration: BoxDecoration(
-                color: Color.lerp(const Color(0xFFFF453A), const Color(0xFF7A0000), _ctl.value),
+                color: Color.lerp(const Color(0xFFFF453A),
+                    const Color(0xFF7A0000), _ctl.value),
                 shape: BoxShape.circle,
               ),
             ),
@@ -1085,7 +1112,11 @@ class _RecordingPillState extends State<_RecordingPill> with SingleTickerProvide
           const SizedBox(width: 8),
           Text(
             widget.elapsed,
-            style: DCText.mono(size: 16, weight: FontWeight.w600, color: Colors.white, letterSpacing: -0.32),
+            style: DCText.mono(
+                size: 16,
+                weight: FontWeight.w600,
+                color: Colors.white,
+                letterSpacing: -0.32),
           ),
         ],
       ),
@@ -1121,7 +1152,9 @@ class _ExpandedHud extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(taskTitle, style: DCText.inter(size: 13, weight: FontWeight.w500, color: Colors.white)),
+          Text(taskTitle,
+              style: DCText.inter(
+                  size: 13, weight: FontWeight.w500, color: Colors.white)),
           const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 3,
@@ -1134,7 +1167,12 @@ class _ExpandedHud extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(s[0], style: DCText.mono(size: 9, weight: FontWeight.w500, color: Colors.white60, letterSpacing: 1.3)),
+                  Text(s[0],
+                      style: DCText.mono(
+                          size: 9,
+                          weight: FontWeight.w500,
+                          color: Colors.white60,
+                          letterSpacing: 1.3)),
                   const SizedBox(height: 2),
                   Text(
                     s[1],

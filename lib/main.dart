@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'l10n/app_localizations.dart';
 import 'router.dart';
 import 'services/auth_service.dart';
 import 'services/compression_queue.dart';
@@ -8,6 +9,7 @@ import 'services/recording_manager.dart';
 import 'services/token_storage.dart';
 import 'state/auth_controller.dart';
 import 'state/hand_presence_settings_controller.dart';
+import 'state/locale_controller.dart';
 import 'state/theme_controller.dart';
 import 'theme/app_theme.dart';
 import 'theme/tokens.dart';
@@ -17,6 +19,9 @@ void main() async {
 
   final themeController = ThemeController();
   await themeController.load();
+
+  final localeController = LocaleController();
+  await localeController.load();
 
   final handPresenceSettings = HandPresenceSettingsController();
   await handPresenceSettings.load();
@@ -42,6 +47,7 @@ void main() async {
 
   runApp(DigientsApp(
     themeController: themeController,
+    localeController: localeController,
     authController: authController,
     handPresenceSettings: handPresenceSettings,
     compressionQueue: compressionQueue,
@@ -50,6 +56,7 @@ void main() async {
 
 class DigientsApp extends StatelessWidget {
   final ThemeController themeController;
+  final LocaleController localeController;
   final AuthController authController;
   final HandPresenceSettingsController handPresenceSettings;
   final CompressionQueue compressionQueue;
@@ -57,6 +64,7 @@ class DigientsApp extends StatelessWidget {
   const DigientsApp({
     super.key,
     required this.themeController,
+    required this.localeController,
     required this.authController,
     required this.handPresenceSettings,
     required this.compressionQueue,
@@ -67,20 +75,24 @@ class DigientsApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeController>.value(value: themeController),
+        ChangeNotifierProvider<LocaleController>.value(value: localeController),
         ChangeNotifierProvider<AuthController>.value(value: authController),
         ChangeNotifierProvider<HandPresenceSettingsController>.value(
             value: handPresenceSettings),
         ChangeNotifierProvider<CompressionQueue>.value(value: compressionQueue),
       ],
-      child: Consumer<ThemeController>(
-        builder: (context, ctl, _) {
+      child: Consumer2<ThemeController, LocaleController>(
+        builder: (context, themeCtl, localeCtl, _) {
           final router = buildRouter(authController);
           return MaterialApp.router(
-            title: 'Digients Capture',
+            onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
             debugShowCheckedModeBanner: false,
+            locale: localeCtl.locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
             theme: buildTheme(DCColors.light, Brightness.light),
             darkTheme: buildTheme(DCColors.dark, Brightness.dark),
-            themeMode: ctl.mode,
+            themeMode: themeCtl.mode,
             routerConfig: router,
           );
         },

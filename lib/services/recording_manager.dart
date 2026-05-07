@@ -78,7 +78,8 @@ class RecordingManager {
 
   Future<Directory> _getRecordingsDirectory() async {
     final Directory documentsDir = await getApplicationDocumentsDirectory();
-    final Directory recordingsDir = Directory(path.join(documentsDir.path, 'recordings'));
+    final Directory recordingsDir =
+        Directory(path.join(documentsDir.path, 'recordings'));
 
     if (!await recordingsDir.exists()) {
       await recordingsDir.create(recursive: true);
@@ -98,7 +99,8 @@ class RecordingManager {
 
   Future<String> createRecordingDirectory(String sessionId) async {
     final Directory recordingsDir = await _getRecordingsDirectory();
-    final Directory recordingDir = Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+    final Directory recordingDir =
+        Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
 
     if (!await recordingDir.exists()) {
       await recordingDir.create(recursive: true);
@@ -120,7 +122,7 @@ class RecordingManager {
 
       return jsonList.map((json) => Recording.fromJson(json)).toList();
     } catch (e) {
-      print('Error loading recordings: $e');
+      debugPrint('Error loading recordings: $e');
       return [];
     }
   }
@@ -131,11 +133,12 @@ class RecordingManager {
       recordings.add(recording);
 
       final File recordingsFile = await _getRecordingsFile();
-      final String content = jsonEncode(recordings.map((r) => r.toJson()).toList());
+      final String content =
+          jsonEncode(recordings.map((r) => r.toJson()).toList());
 
       await recordingsFile.writeAsString(content);
     } catch (e) {
-      print('Error saving recording: $e');
+      debugPrint('Error saving recording: $e');
     }
   }
 
@@ -146,25 +149,28 @@ class RecordingManager {
       recordings.removeWhere((r) => r.sessionId == sessionId);
 
       final File recordingsFile = await _getRecordingsFile();
-      final String content = jsonEncode(recordings.map((r) => r.toJson()).toList());
+      final String content =
+          jsonEncode(recordings.map((r) => r.toJson()).toList());
       await recordingsFile.writeAsString(content);
 
       // Delete the actual recording directory
       final Directory recordingsDir = await _getRecordingsDirectory();
-      final Directory recordingDir = Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+      final Directory recordingDir =
+          Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
 
       if (await recordingDir.exists()) {
         await recordingDir.delete(recursive: true);
       }
     } catch (e) {
-      print('Error deleting recording: $e');
+      debugPrint('Error deleting recording: $e');
     }
   }
 
   Future<int?> calculateRecordingSize(String sessionId) async {
     try {
       final Directory recordingsDir = await _getRecordingsDirectory();
-      final Directory recordingDir = Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+      final Directory recordingDir =
+          Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
 
       if (!await recordingDir.exists()) {
         return null;
@@ -174,7 +180,8 @@ class RecordingManager {
       // is the recording payload (metadata + video + motion), not the
       // tar.gz we built from it. Skip any `.tar.gz` / `.tmp.tar` siblings.
       int totalSize = 0;
-      await for (final FileSystemEntity entity in recordingDir.list(recursive: true)) {
+      await for (final FileSystemEntity entity
+          in recordingDir.list(recursive: true)) {
         if (entity is! File) continue;
         final base = path.basename(entity.path);
         if (base.endsWith('.tar.gz') || base.endsWith('.tmp.tar')) continue;
@@ -184,7 +191,7 @@ class RecordingManager {
 
       return (totalSize / (1024 * 1024)).round(); // Convert to MB
     } catch (e) {
-      print('Error calculating recording size: $e');
+      debugPrint('Error calculating recording size: $e');
       return null;
     }
   }
@@ -393,15 +400,18 @@ class RecordingManager {
     }
   }
 
-  Future<void> saveMetadata(String sessionId, RecordingMetadata metadata) async {
+  Future<void> saveMetadata(
+      String sessionId, RecordingMetadata metadata) async {
     try {
       final Directory recordingsDir = await _getRecordingsDirectory();
-      final Directory recordingDir = Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
-      final File metadataFile = File(path.join(recordingDir.path, 'metadata.json'));
+      final Directory recordingDir =
+          Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+      final File metadataFile =
+          File(path.join(recordingDir.path, 'metadata.json'));
 
       await metadataFile.writeAsString(metadata.toJsonString());
     } catch (e) {
-      print('Error saving metadata: $e');
+      debugPrint('Error saving metadata: $e');
     }
   }
 
@@ -443,7 +453,7 @@ class RecordingManager {
       if (canonical != null) return canonical;
       return await buildArchive(sessionId);
     } catch (e) {
-      print('Error exporting recording: $e');
+      debugPrint('Error exporting recording: $e');
       return null;
     }
   }
@@ -495,10 +505,11 @@ class RecordingManager {
         [file],
         subject: 'Egocentric Video Recording - $archiveBase',
         text: 'Egocentric video recording data package',
-        sharePositionOrigin: sharePositionOrigin ?? const Rect.fromLTWH(0, 0, 1, 1),
+        sharePositionOrigin:
+            sharePositionOrigin ?? const Rect.fromLTWH(0, 0, 1, 1),
       );
     } catch (e) {
-      print('Error sharing recording: $e');
+      debugPrint('Error sharing recording: $e');
       rethrow;
     }
   }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/l10n.dart';
 import '../theme/tokens.dart';
 import '../theme/text_styles.dart';
 
@@ -7,7 +9,8 @@ class DCChip extends StatelessWidget {
   final bool active;
   final VoidCallback? onTap;
 
-  const DCChip({super.key, required this.label, this.active = false, this.onTap});
+  const DCChip(
+      {super.key, required this.label, this.active = false, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -74,18 +77,18 @@ class DCPointsPill extends StatelessWidget {
 enum SubmissionStatus { ondevice, uploading, review, approved, rejected }
 
 extension SubmissionStatusLabel on SubmissionStatus {
-  String get label {
+  String label(AppLocalizations l10n) {
     switch (this) {
       case SubmissionStatus.ondevice:
-        return 'On Device';
+        return l10n.statusOnDevice;
       case SubmissionStatus.uploading:
-        return 'Uploading';
+        return l10n.statusUploading;
       case SubmissionStatus.review:
-        return 'In Review';
+        return l10n.statusInReview;
       case SubmissionStatus.approved:
-        return 'Approved';
+        return l10n.statusApproved;
       case SubmissionStatus.rejected:
-        return 'Rejected';
+        return l10n.statusRejected;
     }
   }
 }
@@ -97,6 +100,7 @@ class DCStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     Color fg;
     Color bg;
     switch (status) {
@@ -123,7 +127,8 @@ class DCStatusBadge extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -134,8 +139,12 @@ class DCStatusBadge extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            status.label.toUpperCase(),
-            style: DCText.mono(size: 10, weight: FontWeight.w500, color: fg, letterSpacing: 1.4),
+            status.label(l10n).toUpperCase(),
+            style: DCText.mono(
+                size: 10,
+                weight: FontWeight.w500,
+                color: fg,
+                letterSpacing: 1.4),
           ),
         ],
       ),

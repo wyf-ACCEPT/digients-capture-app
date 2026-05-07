@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../l10n/l10n.dart';
+import '../../l10n/localized_fixtures.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/cards.dart';
@@ -12,8 +14,9 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
-    final profile = fixtureProfile;
-    final cats = fixtureCategories;
+    final l10n = context.l10n;
+    const profile = fixtureProfile;
+    const cats = fixtureCategories;
     final totalTasks = cats.fold<int>(0, (s, c) => s + c.taskCount);
 
     return SafeArea(
@@ -29,13 +32,17 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'WELCOME BACK',
+                      l10n.homeWelcomeBack,
                       style: DCText.eyebrow(color: c.textDim, size: 11),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       profile.displayName,
-                      style: DCText.inter(size: 22, weight: FontWeight.w700, color: c.text, letterSpacing: -0.44),
+                      style: DCText.inter(
+                          size: 22,
+                          weight: FontWeight.w700,
+                          color: c.text,
+                          letterSpacing: -0.44),
                     ),
                   ],
                 ),
@@ -56,7 +63,10 @@ class HomeScreen extends StatelessWidget {
                   child: Center(
                     child: Text(
                       _initials(profile.displayName),
-                      style: DCText.inter(size: 14, weight: FontWeight.w700, color: Colors.white),
+                      style: DCText.inter(
+                          size: 14,
+                          weight: FontWeight.w700,
+                          color: Colors.white),
                     ),
                   ),
                 ),
@@ -72,11 +82,13 @@ class HomeScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('BALANCE', style: DCText.eyebrow(color: c.textDim, size: 10)),
+                      Text(l10n.balance,
+                          style: DCText.eyebrow(color: c.textDim, size: 10)),
                       const SizedBox(height: 6),
                       Text(
-                        '${_format(profile.balancePoints)} pts',
-                        style: DCText.mono(size: 24, weight: FontWeight.w600, color: c.text),
+                        '${_format(profile.balancePoints)} ${l10n.pointsSuffix}',
+                        style: DCText.mono(
+                            size: 24, weight: FontWeight.w600, color: c.text),
                       ),
                     ],
                   ),
@@ -87,11 +99,15 @@ class HomeScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('PENDING', style: DCText.eyebrow(color: c.textDim, size: 10)),
+                      Text(l10n.pending,
+                          style: DCText.eyebrow(color: c.textDim, size: 10)),
                       const SizedBox(height: 6),
                       Text(
-                        '${_format(profile.pendingPoints)} pts',
-                        style: DCText.mono(size: 24, weight: FontWeight.w600, color: c.warning),
+                        '${_format(profile.pendingPoints)} ${l10n.pointsSuffix}',
+                        style: DCText.mono(
+                            size: 24,
+                            weight: FontWeight.w600,
+                            color: c.warning),
                       ),
                     ],
                   ),
@@ -105,13 +121,18 @@ class HomeScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Choose a category',
-                  style: DCText.inter(size: 18, weight: FontWeight.w600, color: c.text, letterSpacing: -0.18),
+                  l10n.chooseCategory,
+                  style: DCText.inter(
+                      size: 18,
+                      weight: FontWeight.w600,
+                      color: c.text,
+                      letterSpacing: -0.18),
                 ),
               ),
               Text(
-                '$totalTasks tasks',
-                style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                l10n.tasksCount(totalTasks),
+                style: DCText.mono(
+                    size: 11, weight: FontWeight.w500, color: c.textDim),
               ),
             ],
           ),
@@ -132,7 +153,11 @@ class HomeScreen extends StatelessWidget {
 
   String _initials(String name) {
     final parts = name.split(' ');
-    return parts.map((p) => p.isNotEmpty ? p[0] : '').take(2).join().toUpperCase();
+    return parts
+        .map((p) => p.isNotEmpty ? p[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
   }
 
   String _format(int n) {
@@ -153,6 +178,7 @@ class _CategoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     final disabled = category.soon;
     return Opacity(
       opacity: disabled ? 0.55 : 1.0,
@@ -168,14 +194,19 @@ class _CategoryTile extends StatelessWidget {
                   top: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: c.borderStrong),
                     ),
                     child: Text(
-                      'SOON',
-                      style: DCText.mono(size: 9, weight: FontWeight.w600, color: c.textFaint, letterSpacing: 1.4),
+                      l10n.comingSoon,
+                      style: DCText.mono(
+                          size: 9,
+                          weight: FontWeight.w600,
+                          color: c.textFaint,
+                          letterSpacing: 1.4),
                     ),
                   ),
                 ),
@@ -184,7 +215,8 @@ class _CategoryTile extends StatelessWidget {
                 right: -10,
                 child: Opacity(
                   opacity: 0.30,
-                  child: Icon(_iconFor(category.id), size: 110, color: c.accent),
+                  child:
+                      Icon(_iconFor(category.id), size: 110, color: c.accent),
                 ),
               ),
               Column(
@@ -192,23 +224,34 @@ class _CategoryTile extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    category.title,
+                    category.localizedTitle(l10n),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: DCText.inter(size: 18, weight: FontWeight.w600, color: c.text, letterSpacing: -0.18, height: 1.15),
+                    style: DCText.inter(
+                        size: 18,
+                        weight: FontWeight.w600,
+                        color: c.text,
+                        letterSpacing: -0.18,
+                        height: 1.15),
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${category.taskCount} tasks',
-                        style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                        l10n.tasksCount(category.taskCount),
+                        style: DCText.mono(
+                            size: 11,
+                            weight: FontWeight.w500,
+                            color: c.textDim),
                       ),
                       if (category.rewardPoints != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          'up to +${category.rewardPoints}',
-                          style: DCText.mono(size: 11, weight: FontWeight.w600, color: c.accent),
+                          l10n.upToPoints(category.rewardPoints!),
+                          style: DCText.mono(
+                              size: 11,
+                              weight: FontWeight.w600,
+                              color: c.accent),
                         ),
                       ],
                     ],

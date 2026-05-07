@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../l10n/l10n.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/cards.dart';
@@ -12,7 +13,8 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
-    final p = fixtureProfile;
+    final l10n = context.l10n;
+    const p = fixtureProfile;
 
     return SafeArea(
       bottom: false,
@@ -35,7 +37,8 @@ class ProfileScreen extends StatelessWidget {
                 child: Center(
                   child: Text(
                     _initials(p.displayName),
-                    style: DCText.inter(size: 22, weight: FontWeight.w700, color: Colors.white),
+                    style: DCText.inter(
+                        size: 22, weight: FontWeight.w700, color: Colors.white),
                   ),
                 ),
               ),
@@ -46,12 +49,17 @@ class ProfileScreen extends StatelessWidget {
                   children: [
                     Text(
                       p.displayName,
-                      style: DCText.inter(size: 22, weight: FontWeight.w700, color: c.text, letterSpacing: -0.44),
+                      style: DCText.inter(
+                          size: 22,
+                          weight: FontWeight.w700,
+                          color: c.text,
+                          letterSpacing: -0.44),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       p.uid,
-                      style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                      style: DCText.mono(
+                          size: 11, weight: FontWeight.w500, color: c.textDim),
                     ),
                   ],
                 ),
@@ -73,9 +81,18 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: _StatTile(label: 'BALANCE', value: _format(p.balancePoints), suffix: 'pts')),
+              Expanded(
+                  child: _StatTile(
+                      label: l10n.balance,
+                      value: _format(p.balancePoints),
+                      suffix: l10n.pointsSuffix)),
               const SizedBox(width: 10),
-              Expanded(child: _StatTile(label: 'PENDING', value: _format(p.pendingPoints), suffix: 'pts', color: c.warning)),
+              Expanded(
+                  child: _StatTile(
+                      label: l10n.pending,
+                      value: _format(p.pendingPoints),
+                      suffix: l10n.pointsSuffix,
+                      color: c.warning)),
             ],
           ),
           const SizedBox(height: 12),
@@ -83,11 +100,20 @@ class ProfileScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: [
-                Expanded(child: _MiniStat(label: 'HOURS', value: p.hoursLogged.toStringAsFixed(1))),
+                Expanded(
+                    child: _MiniStat(
+                        label: l10n.profileHours,
+                        value: p.hoursLogged.toStringAsFixed(1))),
                 Container(width: 1, height: 32, color: c.border),
-                Expanded(child: _MiniStat(label: 'SUBMITTED', value: '${p.submittedCount}')),
+                Expanded(
+                    child: _MiniStat(
+                        label: l10n.profileSubmitted,
+                        value: '${p.submittedCount}')),
                 Container(width: 1, height: 32, color: c.border),
-                Expanded(child: _MiniStat(label: 'APPROVAL', value: '${(p.approvalRate * 100).round()}%')),
+                Expanded(
+                    child: _MiniStat(
+                        label: l10n.profileApproval,
+                        value: '${(p.approvalRate * 100).round()}%')),
               ],
             ),
           ),
@@ -97,14 +123,22 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('CAPABILITY', style: DCText.eyebrow(color: c.textDim, size: 10)),
+                Text(l10n.profileCapability,
+                    style: DCText.eyebrow(color: c.textDim, size: 10)),
                 const SizedBox(height: 12),
                 AspectRatio(
                   aspectRatio: 1,
                   child: CustomPaint(
                     painter: _RadarPainter(
                       values: p.capabilities,
-                      labels: const ['Household', 'Industrial', 'Sports', 'Variety', 'Speed', 'Approval'],
+                      labels: [
+                        l10n.capabilityHousehold,
+                        l10n.capabilityIndustrial,
+                        l10n.capabilitySports,
+                        l10n.capabilityVariety,
+                        l10n.capabilitySpeed,
+                        l10n.capabilityApproval,
+                      ],
                       colors: c,
                     ),
                   ),
@@ -121,9 +155,14 @@ class ProfileScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
                   child: Row(
                     children: [
-                      Text('LEADERBOARD · GLOBAL', style: DCText.eyebrow(color: c.textDim, size: 10)),
+                      Text(l10n.leaderboardGlobal,
+                          style: DCText.eyebrow(color: c.textDim, size: 10)),
                       const Spacer(),
-                      Text('Rank #27', style: DCText.mono(size: 11, weight: FontWeight.w600, color: c.text)),
+                      Text(l10n.rankNumber(27),
+                          style: DCText.mono(
+                              size: 11,
+                              weight: FontWeight.w600,
+                              color: c.text)),
                     ],
                   ),
                 ),
@@ -131,10 +170,13 @@ class ProfileScreen extends StatelessWidget {
                   final row = fixtureLeaderboard[i];
                   final isLast = i == fixtureLeaderboard.length - 1;
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: row.isYou ? c.accentTint : null,
-                      border: Border(bottom: BorderSide(color: isLast ? Colors.transparent : c.border)),
+                      border: Border(
+                          bottom: BorderSide(
+                              color: isLast ? Colors.transparent : c.border)),
                     ),
                     child: Row(
                       children: [
@@ -154,7 +196,8 @@ class ProfileScreen extends StatelessWidget {
                             row.name,
                             style: DCText.inter(
                               size: 14,
-                              weight: row.isYou ? FontWeight.w600 : FontWeight.w500,
+                              weight:
+                                  row.isYou ? FontWeight.w600 : FontWeight.w500,
                               color: c.text,
                             ),
                           ),
@@ -164,7 +207,10 @@ class ProfileScreen extends StatelessWidget {
                           child: Text(
                             '${row.hours.toStringAsFixed(1)}h',
                             textAlign: TextAlign.right,
-                            style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                            style: DCText.mono(
+                                size: 11,
+                                weight: FontWeight.w500,
+                                color: c.textDim),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -173,7 +219,10 @@ class ProfileScreen extends StatelessWidget {
                           child: Text(
                             _format(row.points),
                             textAlign: TextAlign.right,
-                            style: DCText.mono(size: 12, weight: FontWeight.w600, color: c.accent),
+                            style: DCText.mono(
+                                size: 12,
+                                weight: FontWeight.w600,
+                                color: c.accent),
                           ),
                         ),
                       ],
@@ -190,7 +239,11 @@ class ProfileScreen extends StatelessWidget {
 
   String _initials(String name) {
     final parts = name.split(' ');
-    return parts.map((p) => p.isNotEmpty ? p[0] : '').take(2).join().toUpperCase();
+    return parts
+        .map((p) => p.isNotEmpty ? p[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase();
   }
 
   String _format(int n) {
@@ -209,7 +262,11 @@ class _StatTile extends StatelessWidget {
   final String value;
   final String suffix;
   final Color? color;
-  const _StatTile({required this.label, required this.value, required this.suffix, this.color});
+  const _StatTile(
+      {required this.label,
+      required this.value,
+      required this.suffix,
+      this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -225,9 +282,16 @@ class _StatTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(value, style: DCText.mono(size: 26, weight: FontWeight.w700, color: color ?? c.text, letterSpacing: -0.52)),
+              Text(value,
+                  style: DCText.mono(
+                      size: 26,
+                      weight: FontWeight.w700,
+                      color: color ?? c.text,
+                      letterSpacing: -0.52)),
               const SizedBox(width: 4),
-              Text(suffix, style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim)),
+              Text(suffix,
+                  style: DCText.mono(
+                      size: 11, weight: FontWeight.w500, color: c.textDim)),
             ],
           ),
         ],
@@ -246,7 +310,9 @@ class _MiniStat extends StatelessWidget {
     final c = context.dc;
     return Column(
       children: [
-        Text(value, style: DCText.mono(size: 18, weight: FontWeight.w700, color: c.text)),
+        Text(value,
+            style:
+                DCText.mono(size: 18, weight: FontWeight.w700, color: c.text)),
         const SizedBox(height: 4),
         Text(label, style: DCText.eyebrow(color: c.textDim, size: 9)),
       ],
@@ -258,7 +324,8 @@ class _RadarPainter extends CustomPainter {
   final List<double> values;
   final List<String> labels;
   final DCColors colors;
-  _RadarPainter({required this.values, required this.labels, required this.colors});
+  _RadarPainter(
+      {required this.values, required this.labels, required this.colors});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -275,7 +342,8 @@ class _RadarPainter extends CustomPainter {
       final path = Path();
       for (int i = 0; i < n; i++) {
         final angle = -pi / 2 + i * 2 * pi / n;
-        final p = Offset(center.dx + cos(angle) * radius * ratio, center.dy + sin(angle) * radius * ratio);
+        final p = Offset(center.dx + cos(angle) * radius * ratio,
+            center.dy + sin(angle) * radius * ratio);
         if (i == 0) {
           path.moveTo(p.dx, p.dy);
         } else {
@@ -286,16 +354,23 @@ class _RadarPainter extends CustomPainter {
       canvas.drawPath(path, ringPaint);
     }
 
-    final axisPaint = Paint()..color = colors.border..strokeWidth = 1;
+    final axisPaint = Paint()
+      ..color = colors.border
+      ..strokeWidth = 1;
     for (int i = 0; i < n; i++) {
       final angle = -pi / 2 + i * 2 * pi / n;
-      canvas.drawLine(center, Offset(center.dx + cos(angle) * radius, center.dy + sin(angle) * radius), axisPaint);
+      canvas.drawLine(
+          center,
+          Offset(
+              center.dx + cos(angle) * radius, center.dy + sin(angle) * radius),
+          axisPaint);
     }
 
     final valuePath = Path();
     for (int i = 0; i < n; i++) {
       final angle = -pi / 2 + i * 2 * pi / n;
-      final p = Offset(center.dx + cos(angle) * radius * values[i], center.dy + sin(angle) * radius * values[i]);
+      final p = Offset(center.dx + cos(angle) * radius * values[i],
+          center.dy + sin(angle) * radius * values[i]);
       if (i == 0) {
         valuePath.moveTo(p.dx, p.dy);
       } else {
@@ -303,31 +378,41 @@ class _RadarPainter extends CustomPainter {
       }
     }
     valuePath.close();
-    canvas.drawPath(valuePath, Paint()..color = colors.accent.withValues(alpha: 0.2));
-    canvas.drawPath(valuePath, Paint()
-      ..color = colors.accent
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke);
+    canvas.drawPath(
+        valuePath, Paint()..color = colors.accent.withValues(alpha: 0.2));
+    canvas.drawPath(
+        valuePath,
+        Paint()
+          ..color = colors.accent
+          ..strokeWidth = 1.5
+          ..style = PaintingStyle.stroke);
 
     for (int i = 0; i < n; i++) {
       final angle = -pi / 2 + i * 2 * pi / n;
-      final p = Offset(center.dx + cos(angle) * radius * values[i], center.dy + sin(angle) * radius * values[i]);
+      final p = Offset(center.dx + cos(angle) * radius * values[i],
+          center.dy + sin(angle) * radius * values[i]);
       canvas.drawCircle(p, 3, Paint()..color = colors.accent);
     }
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     for (int i = 0; i < labels.length; i++) {
       final angle = -pi / 2 + i * 2 * pi / n;
-      final lp = Offset(center.dx + cos(angle) * (radius + 16), center.dy + sin(angle) * (radius + 16));
+      final lp = Offset(center.dx + cos(angle) * (radius + 16),
+          center.dy + sin(angle) * (radius + 16));
       textPainter.text = TextSpan(
         text: labels[i],
-        style: DCText.mono(size: 11, weight: FontWeight.w500, color: colors.text),
+        style:
+            DCText.mono(size: 11, weight: FontWeight.w500, color: colors.text),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(lp.dx - textPainter.width / 2, lp.dy - textPainter.height / 2));
+      textPainter.paint(
+          canvas,
+          Offset(
+              lp.dx - textPainter.width / 2, lp.dy - textPainter.height / 2));
     }
   }
 
   @override
-  bool shouldRepaint(_RadarPainter old) => false;
+  bool shouldRepaint(_RadarPainter old) =>
+      old.values != values || old.labels != labels || old.colors != colors;
 }

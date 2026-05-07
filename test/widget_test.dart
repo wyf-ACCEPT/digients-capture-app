@@ -7,6 +7,7 @@ import 'package:digients_app/services/recording_manager.dart';
 import 'package:digients_app/services/token_storage.dart';
 import 'package:digients_app/state/auth_controller.dart';
 import 'package:digients_app/state/hand_presence_settings_controller.dart';
+import 'package:digients_app/state/locale_controller.dart';
 import 'package:digients_app/state/theme_controller.dart';
 
 void main() {
@@ -18,8 +19,10 @@ void main() {
     );
     final handPresence = HandPresenceSettingsController();
     final compressionQueue = CompressionQueue(RecordingManager());
+    final locale = LocaleController();
     await tester.pumpWidget(DigientsApp(
       themeController: theme,
+      localeController: locale,
       authController: auth,
       handPresenceSettings: handPresence,
       compressionQueue: compressionQueue,

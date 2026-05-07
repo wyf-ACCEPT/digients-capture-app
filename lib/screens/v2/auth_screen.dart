@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/auth.dart';
 import '../../services/auth_service.dart';
 import '../../state/auth_controller.dart';
@@ -35,9 +36,10 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _sendOtp() async {
     final id = _idController.text.trim();
     if (id.isEmpty) {
+      final l10n = context.l10n;
       _showError(_method == AuthIdentifierType.phone
-          ? 'Enter a phone number first.'
-          : 'Enter an email first.');
+          ? l10n.authEnterPhoneFirst
+          : l10n.authEnterEmailFirst);
       return;
     }
     try {
@@ -56,7 +58,7 @@ class _AuthScreenState extends State<AuthScreen> {
     final id = _idController.text.trim();
     final code = _otpController.text.trim();
     if (code.length != 6) {
-      _showError('Enter the 6-digit code.');
+      _showError(context.l10n.authEnterSixDigitCode);
       return;
     }
     try {
@@ -105,13 +107,17 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   String _describe(Object e) {
-    if (e is AuthException) return e.message;
-    return 'Something went wrong: $e';
+    if (e is AuthException) {
+      if (e.code == 'invalid_otp') return context.l10n.authInvalidCode;
+      return e.message;
+    }
+    return context.l10n.authSomethingWentWrong(e.toString());
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     final auth = context.watch<AuthController>();
     final isRegister = _mode == AuthMode.register;
     final busy = auth.isBusy;
@@ -135,24 +141,31 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.camera_alt, color: Colors.white, size: 30),
+                child:
+                    const Icon(Icons.camera_alt, color: Colors.white, size: 30),
               ),
               const SizedBox(height: 24),
               Text(
-                isRegister ? 'Create account' : 'Welcome back',
-                style: DCText.inter(size: 30, weight: FontWeight.w700, color: c.text, letterSpacing: -0.75),
+                isRegister ? l10n.authCreateAccount : l10n.authWelcomeBack,
+                style: DCText.inter(
+                    size: 30,
+                    weight: FontWeight.w700,
+                    color: c.text,
+                    letterSpacing: -0.75),
               ),
               const SizedBox(height: 8),
               Text(
-                isRegister
-                    ? 'Sign up to start contributing recordings.'
-                    : 'Sign in to continue capturing.',
-                style: DCText.inter(size: 15, weight: FontWeight.w500, color: c.textDim),
+                isRegister ? l10n.authSignUpSubtitle : l10n.authSignInSubtitle,
+                style: DCText.inter(
+                    size: 15, weight: FontWeight.w500, color: c.textDim),
               ),
               const SizedBox(height: 28),
               DCSegmented<AuthIdentifierType>(
-                values: const [AuthIdentifierType.phone, AuthIdentifierType.email],
-                labels: const ['Phone', 'Email'],
+                values: const [
+                  AuthIdentifierType.phone,
+                  AuthIdentifierType.email
+                ],
+                labels: [l10n.authPhone, l10n.authEmail],
                 selected: _method,
                 onChanged: (v) {
                   if (busy) return;
@@ -166,7 +179,9 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 16),
               DCInputField(
                 controller: _idController,
-                hint: _method == AuthIdentifierType.phone ? '+1 555 0100' : 'you@example.com',
+                hint: _method == AuthIdentifierType.phone
+                    ? '+1 555 0100'
+                    : 'you@example.com',
                 keyboardType: _method == AuthIdentifierType.phone
                     ? TextInputType.phone
                     : TextInputType.emailAddress,
@@ -182,21 +197,27 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Mock backend · the code is 123456',
-                  style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                  l10n.authMockBackendCode,
+                  style: DCText.mono(
+                      size: 11, weight: FontWeight.w500, color: c.textDim),
                 ),
               ],
               if (isRegister) ...[
                 const SizedBox(height: 12),
                 Text.rich(
                   TextSpan(
-                    style: DCText.inter(size: 12, weight: FontWeight.w500, color: c.textDim),
+                    style: DCText.inter(
+                        size: 12, weight: FontWeight.w500, color: c.textDim),
                     children: [
-                      const TextSpan(text: 'By creating an account you agree to our '),
-                      TextSpan(text: 'Terms', style: TextStyle(color: c.accent)),
-                      const TextSpan(text: ' and '),
-                      TextSpan(text: 'Privacy Policy', style: TextStyle(color: c.accent)),
-                      const TextSpan(text: '.'),
+                      TextSpan(text: l10n.authAgreementPrefix),
+                      TextSpan(
+                          text: l10n.authTerms,
+                          style: TextStyle(color: c.accent)),
+                      TextSpan(text: l10n.authAgreementMiddle),
+                      TextSpan(
+                          text: l10n.authPrivacyPolicy,
+                          style: TextStyle(color: c.accent)),
+                      TextSpan(text: l10n.authAgreementSuffix),
                     ],
                   ),
                 ),
@@ -204,10 +225,12 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 18),
               DCButton(
                 label: !_otpSent
-                    ? (busy ? 'Sending…' : 'Send verification code')
+                    ? (busy ? l10n.authSending : l10n.authSendVerificationCode)
                     : (busy
-                        ? 'Verifying…'
-                        : (isRegister ? 'Create account' : 'Sign in')),
+                        ? l10n.authVerifying
+                        : (isRegister
+                            ? l10n.authCreateAccount
+                            : l10n.authSignIn)),
                 onPressed: busy ? null : (!_otpSent ? _sendOtp : _verifyOtp),
               ),
               const SizedBox(height: 20),
@@ -216,7 +239,11 @@ class _AuthScreenState extends State<AuthScreen> {
                   Expanded(child: Divider(color: c.border)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('or', style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textFaint)),
+                    child: Text(l10n.authOr,
+                        style: DCText.mono(
+                            size: 11,
+                            weight: FontWeight.w500,
+                            color: c.textFaint)),
                   ),
                   Expanded(child: Divider(color: c.border)),
                 ],
@@ -226,7 +253,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 children: [
                   Expanded(
                     child: DCButton.secondary(
-                      label: 'Apple',
+                      label: l10n.authApple,
                       leadingIcon: Icons.apple,
                       onPressed: busy ? null : _signInWithApple,
                     ),
@@ -234,7 +261,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: DCButton.secondary(
-                      label: 'Google',
+                      label: l10n.authGoogle,
                       leadingIcon: Icons.g_mobiledata,
                       onPressed: busy ? null : _signInWithGoogle,
                     ),
@@ -247,18 +274,26 @@ class _AuthScreenState extends State<AuthScreen> {
                   onTap: busy
                       ? null
                       : () => setState(() {
-                            _mode = isRegister ? AuthMode.signIn : AuthMode.register;
+                            _mode = isRegister
+                                ? AuthMode.signIn
+                                : AuthMode.register;
                             _otpSent = false;
                             _otpController.clear();
                           }),
                   child: Text.rich(
                     TextSpan(
-                      style: DCText.inter(size: 14, weight: FontWeight.w500, color: c.textDim),
+                      style: DCText.inter(
+                          size: 14, weight: FontWeight.w500, color: c.textDim),
                       children: [
-                        TextSpan(text: isRegister ? 'Already have an account? ' : "Don't have an account? "),
                         TextSpan(
-                          text: isRegister ? 'Sign in' : 'Register',
-                          style: TextStyle(color: c.accent, fontWeight: FontWeight.w600),
+                            text: isRegister
+                                ? l10n.authAlreadyHaveAccount
+                                : l10n.authDontHaveAccount),
+                        TextSpan(
+                          text:
+                              isRegister ? l10n.authSignIn : l10n.authRegister,
+                          style: TextStyle(
+                              color: c.accent, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../theme/text_styles.dart';
 
 /// Lightweight overlay shown after a vol-button stop saves a submission.
@@ -64,12 +65,14 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
       decoration: BoxDecoration(
         color: const Color(0xFF111114),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF14C9A8).withValues(alpha: 0.5)),
+        border:
+            Border.all(color: const Color(0xFF14C9A8).withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF14C9A8).withValues(alpha: 0.18),
@@ -88,11 +91,12 @@ class _Card extends StatelessWidget {
               shape: BoxShape.circle,
               color: Color(0xFF14C9A8),
             ),
-            child: const Icon(Icons.check_rounded, color: Colors.black, size: 32),
+            child:
+                const Icon(Icons.check_rounded, color: Colors.black, size: 32),
           ),
           const SizedBox(height: 18),
           Text(
-            'Submission saved',
+            l10n.submissionSaved,
             style: DCText.inter(
               size: 18,
               weight: FontWeight.w600,
@@ -102,7 +106,7 @@ class _Card extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Take $takeNumber · +$points points',
+            l10n.takePoints(takeNumber, points),
             style: DCText.mono(
               size: 12,
               weight: FontWeight.w500,
@@ -112,7 +116,7 @@ class _Card extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           Text(
-            'PRESS VOLUME BUTTON\nFOR ANOTHER TAKE',
+            l10n.pressVolumeAnotherTake,
             textAlign: TextAlign.center,
             style: DCText.mono(
               size: 11,

@@ -105,12 +105,12 @@ The `intrinsics.reliable` boolean indicates whether downstream pipeline should t
 ## Key Constraints
 
 ### Privacy Requirements
-- **No audio recording**: The app intentionally does not capture audio to avoid ambient conversations
-- **No microphone permissions**: Do not add microphone permissions to manifests
+- **No audio recording at runtime**: The app does not capture audio. Native code paths do not call any microphone APIs.
+- **`NSMicrophoneUsageDescription` in Info.plist is required for App Store Connect upload (error 90683)**: audio-playback dependencies (`just_audio` for voice cues, `audio_session`, etc.) reference `AVAudioSession`, which Apple's static analyzer flags as needing a microphone usage description, even when only used for playback. The declared string honestly states "No audio is captured" so the runtime contract matches actual behavior. Do not remove this key.
 - **Local storage only**: No automatic cloud upload in v1
 
 ### Platform-Specific Considerations
-- **iOS**: Requires iOS 15.0+, camera permission in Info.plist, developer signing for device deployment
+- **iOS**: Requires iOS 15.0+, `NSCameraUsageDescription` + `NSMicrophoneUsageDescription` (playback-only) in Info.plist, developer signing for device deployment
 - **Android**: Requires API 26+, Camera2 API support, handles LEGACY hardware level gracefully
 
 ### Schema Compliance
