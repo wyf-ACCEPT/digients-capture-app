@@ -1,0 +1,19 @@
+.github/workflows/release.yml
+  s_195e10f2fa5309::t_9d3bf650558160 1-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "09a772215382f3cec50388ce806c5aec95751986",
+  "prompts": {},
+  "sessions": {
+    "s_195e10f2fa5309": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3eaa814e-7173-454a-a272-93134a08b987",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
