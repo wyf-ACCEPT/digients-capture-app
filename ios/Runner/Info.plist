@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs camera access to capture egocentric video for robo foundation model training data collection. No audio is recorded to protect privacy.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app uses an audio framework for voice playback during recording. No audio is captured to protect privacy.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
