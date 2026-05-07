@@ -117,8 +117,10 @@ flutter:
   assets:
     - assets/audio/hand_state/
     - assets/audio/hand_state_voice/
+    - assets/audio/hand_state_voice_zh/
     - assets/audio/session/
     - assets/audio/session_voice/
+    - assets/audio/session_voice_zh/
     - assets/models/hand_landmarker.task
 
   # An image asset can refer to one or more resolution-specific "variants", see

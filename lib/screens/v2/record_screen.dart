@@ -10,6 +10,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../l10n/l10n.dart';
 import '../../l10n/localized_fixtures.dart';
 import '../../state/hand_presence_settings_controller.dart';
+import '../../state/locale_controller.dart';
 import '../../services/hand_presence/hand_presence_state.dart';
 import '../../theme/text_styles.dart';
 import '../../services/camera_service.dart';
@@ -97,6 +98,7 @@ class _RecordScreenState extends State<RecordScreen> {
   // unbounded double so AnimatedRotation always takes the shortest arc.
   StreamSubscription<AccelerometerEvent>? _accelSub;
   double _hudTurns = 0.0;
+  LocaleController? _localeController;
 
   @override
   void initState() {
@@ -109,7 +111,13 @@ class _RecordScreenState extends State<RecordScreen> {
     _accelSub = accelerometerEventStream(
       samplingPeriod: const Duration(milliseconds: 200),
     ).listen(_onAccel);
-    _handAudio.initialize();
+    final localeController =
+        Provider.of<LocaleController>(context, listen: false);
+    _localeController = localeController;
+    localeController.addListener(_onLocaleChanged);
+    unawaited(
+        _handAudio.setVoiceLanguageCode(localeController.locale.languageCode));
+    unawaited(_handAudio.initialize());
     // Detector is started in _start() — not here — so per-hand voice cues
     // don't fire during the mount-instructions overlay (~6 s before
     // recording actually begins).
@@ -122,6 +130,7 @@ class _RecordScreenState extends State<RecordScreen> {
     _popupAutoDismissTimer?.cancel();
     _preStartCountdownTimer?.cancel();
     _volSub?.cancel();
+    _localeController?.removeListener(_onLocaleChanged);
     _volumeButtons.dispose();
     _handDetector.dispose();
     _handAudio.dispose();
@@ -162,6 +171,12 @@ class _RecordScreenState extends State<RecordScreen> {
 
   void _applySettings(HandPresenceSettingsController settings) {
     _handAudio.voiceEnabled = settings.voiceCuesEnabled;
+  }
+
+  void _onLocaleChanged() {
+    final locale = _localeController?.locale;
+    if (locale == null) return;
+    unawaited(_handAudio.setVoiceLanguageCode(locale.languageCode));
   }
 
   void _onTransitionForHaptic(HandPresenceTransition t, bool vibrateOnNone) {
