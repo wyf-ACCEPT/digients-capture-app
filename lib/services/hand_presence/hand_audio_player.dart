@@ -17,8 +17,8 @@ import 'hand_presence_state.dart';
 ///     (kept available for users who want a beep on top of the voice).
 ///
 /// One preloaded `AudioPlayer` per cue so playback is non-blocking and has
-/// no model-load latency. Audio session is ambient + mix-with-others so we
-/// never duck the user's music or fight the silent switch.
+/// no model-load latency. Audio session is playback + mix-with-others so cues
+/// still play through the iPhone silent switch without ducking user audio.
 class HandAudioPlayer {
   HandAudioPlayer({
     Stream<HandPresenceTransition>? transitions,
@@ -91,7 +91,7 @@ class HandAudioPlayer {
 
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration(
-      avAudioSessionCategory: AVAudioSessionCategory.ambient,
+      avAudioSessionCategory: AVAudioSessionCategory.playback,
       avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
       avAudioSessionMode: AVAudioSessionMode.defaultMode,
       androidAudioAttributes: AndroidAudioAttributes(
