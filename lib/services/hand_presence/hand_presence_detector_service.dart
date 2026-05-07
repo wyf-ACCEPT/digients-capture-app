@@ -113,8 +113,10 @@ class HandPresenceDetectorService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> dispose() async {
-    await _sub?.cancel();
+  @override
+  void dispose() {
+    _sub?.cancel();
     _sub = null;
+    super.dispose();
   }
 }
