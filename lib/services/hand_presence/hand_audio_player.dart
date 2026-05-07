@@ -26,7 +26,9 @@ class HandAudioPlayer {
     this.voiceEnabled = true,
     this.tonesEnabled = false,
     this.recordingStartEnabled = true,
+    String voiceLanguageCode = 'zh',
   }) {
+    _voiceLanguageCode = _normalizeVoiceLanguage(voiceLanguageCode);
     if (transitions != null) bind(transitions);
     if (sideTransitions != null) bindSides(sideTransitions);
   }
@@ -34,6 +36,7 @@ class HandAudioPlayer {
   bool voiceEnabled;
   bool tonesEnabled;
   bool recordingStartEnabled;
+  late String _voiceLanguageCode;
 
   final Map<HandPresenceState, AudioPlayer> _tonePlayers = {
     HandPresenceState.both: AudioPlayer(),
@@ -101,16 +104,21 @@ class HandAudioPlayer {
     await Future.wait([
       for (final entry in _tonePlayers.entries)
         entry.value.setAsset(_toneAssetFor(entry.key)),
-      for (final entry in _stateVoicePlayers.entries)
-        entry.value.setAsset(_stateVoiceAssetFor(entry.key)),
-      for (final entry in _sideVoicePlayers.entries)
-        entry.value.setAsset('assets/audio/hand_state_voice/${entry.key}.wav'),
+      ..._voiceAssetLoaders(),
       _recordingStartPlayer.setAsset('assets/audio/session/recording_start.wav'),
       _recordingStopPlayer.setAsset('assets/audio/session/recording_stop.wav'),
       _submissionSuccessPlayer
           .setAsset('assets/audio/session/submission_success.wav'),
-      _armedPromptPlayer.setAsset('assets/audio/session_voice/armed_prompt.wav'),
     ]);
+  }
+
+  Future<void> setVoiceLanguageCode(String languageCode) async {
+    final normalized = _normalizeVoiceLanguage(languageCode);
+    if (_voiceLanguageCode == normalized) return;
+    _voiceLanguageCode = normalized;
+    if (!_initialized) return;
+    await _stopAllVoice();
+    await Future.wait(_voiceAssetLoaders());
   }
 
   void bind(Stream<HandPresenceTransition> transitions) {
@@ -265,8 +273,33 @@ class HandAudioPlayer {
   String _toneAssetFor(HandPresenceState s) =>
       'assets/audio/hand_state/${_baseName(s)}.wav';
 
+  List<Future<Duration?>> _voiceAssetLoaders() {
+    return [
+      for (final entry in _stateVoicePlayers.entries)
+        entry.value.setAsset(_stateVoiceAssetFor(entry.key)),
+      for (final entry in _sideVoicePlayers.entries)
+        entry.value.setAsset(_sideVoiceAssetFor(entry.key)),
+      _armedPromptPlayer.setAsset(_armedPromptAsset),
+    ];
+  }
+
+  String get _voiceDir => _voiceLanguageCode == 'zh'
+      ? 'assets/audio/hand_state_voice_zh'
+      : 'assets/audio/hand_state_voice';
+
+  String get _sessionVoiceDir => _voiceLanguageCode == 'zh'
+      ? 'assets/audio/session_voice_zh'
+      : 'assets/audio/session_voice';
+
+  String get _armedPromptAsset => '$_sessionVoiceDir/armed_prompt.wav';
+
   String _stateVoiceAssetFor(HandPresenceState s) =>
-      'assets/audio/hand_state_voice/${_baseName(s)}.wav';
+      '$_voiceDir/${_baseName(s)}.wav';
+
+  String _sideVoiceAssetFor(String key) => '$_voiceDir/$key.wav';
+
+  String _normalizeVoiceLanguage(String languageCode) =>
+      languageCode == 'en' ? 'en' : 'zh';
 
   String _baseName(HandPresenceState s) => switch (s) {
         HandPresenceState.both => 'both',
