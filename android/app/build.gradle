@@ -33,13 +33,14 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
-
-            // R8 minify disabled: MediaPipe pulls in transitive AutoValue/JavaPoet
-            // code that references javax.lang.model.* (compiler-only APIs not on
-            // Android), which R8 strict mode rejects. APK is ~30% larger but
-            // sideload distribution doesn't care; revisit when targeting Play Store.
-            minifyEnabled = false
-            shrinkResources = false
+            // R8 trips on transitive AutoValue references inside MediaPipe
+            // Tasks Vision (javax.lang.model.* — annotation-processor APIs
+            // not present at runtime). Disabling minification skips the
+            // R8 pass entirely. APK is ~3× larger but ships cleanly. If
+            // size becomes a concern we can add proguard-rules.pro with
+            // -dontwarn javax.lang.model.** and friends.
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
@@ -49,11 +50,10 @@ flutter {
 }
 
 dependencies {
-    // ARCore (Google AR Core) — provides 6DOF pose via Shared Camera mode so we
-    // can keep Camera2 + MediaCodec recording while pose data is computed alongside.
-    // Declared "optional" in the manifest, so devices without ARCore install simply
-    // fall back to the imu_raw tier per RECORDING_DATA_STRUCTURE_V1.1.md §4.
-    implementation 'com.google.ar:core:1.46.0'
+    // ARCore was the v1.1 SharedCamera pose source. v1.2 drops it: pose
+    // reconstruction now happens entirely offline (DROID-SLAM today,
+    // offline VIO next), so the mobile side records video + raw IMU only.
+    // See docs/specs/RECORDING_DATA_STRUCTURE_V1.2.md.
 
     // MediaPipe Tasks Vision — on-device HandLandmarker for the V2 hand-presence
     // feedback layer. Inference runs at 10 fps on a dedicated thread and never

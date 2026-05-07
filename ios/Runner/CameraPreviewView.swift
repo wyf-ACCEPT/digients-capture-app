@@ -1,37 +1,30 @@
-import ARKit
+import AVFoundation
 import Flutter
-import SceneKit
 import UIKit
 
-// ARSCNView auto-renders the ARSession's camera background. We don't add any AR
-// content — it's purely a viewfinder bound to the same ARSession that the
-// recorder writes from.
+/// Live preview view backed by the AVCaptureSession on the recording handler.
+/// Replaces the v1.1 ARSCNView path (we no longer use ARKit under v1.2).
 final class PreviewContainerView: UIView {
-    let arView = ARSCNView()
+    override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+    var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 
-    init(session: ARSession) {
+    init(session: AVCaptureSession) {
         super.init(frame: .zero)
         backgroundColor = .black
-        arView.session = session
-        arView.scene = SCNScene()
-        arView.automaticallyUpdatesLighting = false
-        arView.autoenablesDefaultLighting = false
-        arView.preferredFramesPerSecond = 30
-        addSubview(arView)
+        previewLayer.session = session
+        previewLayer.videoGravity = .resizeAspectFill
+        if let conn = previewLayer.connection, conn.isVideoOrientationSupported {
+            conn.videoOrientation = .portrait
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        arView.frame = bounds
-    }
 }
 
 final class CameraPreviewView: NSObject, FlutterPlatformView {
     private let containerView: PreviewContainerView
 
-    init(session: ARSession) {
+    init(session: AVCaptureSession) {
         containerView = PreviewContainerView(session: session)
         super.init()
     }
@@ -48,7 +41,7 @@ final class CameraPreviewFactory: NSObject, FlutterPlatformViewFactory {
     }
 
     func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
-        let session = cameraHandler?.arSession ?? ARSession()
+        let session = cameraHandler?.captureSession ?? AVCaptureSession()
         return CameraPreviewView(session: session)
     }
 

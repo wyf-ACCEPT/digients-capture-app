@@ -80,6 +80,9 @@ class HandAudioPlayer {
   final AudioPlayer _recordingStopPlayer = AudioPlayer();
   final AudioPlayer _submissionSuccessPlayer = AudioPlayer();
   final AudioPlayer _armedPromptPlayer = AudioPlayer();
+  // Pre-start voice ("please move hands to task region…"). Spoken once
+  // the user commits to a take but before the 3-second countdown.
+  final AudioPlayer _preStartPromptPlayer = AudioPlayer();
 
   StreamSubscription<HandPresenceTransition>? _sub;
   StreamSubscription<HandSideTransition>? _sideSub;
@@ -109,6 +112,10 @@ class HandAudioPlayer {
       _recordingStopPlayer.setAsset('assets/audio/session/recording_stop.wav'),
       _submissionSuccessPlayer
           .setAsset('assets/audio/session/submission_success.wav'),
+      // Pinned to English for now — only one rendition shipped today.
+      // Re-fetch via _voiceAssetLoaders() once a zh variant is added.
+      _preStartPromptPlayer
+          .setAsset('assets/audio/session_voice/pre_start_prompt.wav'),
     ]);
   }
 
@@ -168,6 +175,40 @@ class HandAudioPlayer {
     }
   }
 
+  /// Speak "please move hands to task region…" before the 3-second
+  /// countdown. Returns when playback finishes so the caller can chain
+  /// the countdown precisely off voice end.
+  Future<void> playPreStartPrompt() async {
+    if (!_initialized) return;
+    if (!voiceEnabled) {
+      // Voice disabled in settings — still hold the slot for ~the same
+      // duration the voice would have taken so the post-press timing
+      // stays consistent.
+      await Future<void>.delayed(const Duration(seconds: 4));
+      return;
+    }
+    await _stopAllVoice();
+    await _preStartPromptPlayer.stop();
+    await _preStartPromptPlayer.seek(Duration.zero);
+    final completer = Completer<void>();
+    StreamSubscription<ProcessingState>? sub;
+    sub = _preStartPromptPlayer.processingStateStream.listen((s) {
+      if (s == ProcessingState.completed) {
+        sub?.cancel();
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+    unawaited(_preStartPromptPlayer.play());
+    return completer.future;
+  }
+
+  Future<void> stopPreStartPrompt() async {
+    if (!_initialized) return;
+    if (_preStartPromptPlayer.playing) {
+      await _preStartPromptPlayer.stop();
+    }
+  }
+
   Future<void> _playAndAwait(AudioPlayer player) async {
     if (!_initialized) return;
     if (player == _recordingStartPlayer && !recordingStartEnabled) return;
@@ -198,11 +239,12 @@ class HandAudioPlayer {
   }
 
   Future<void> _stopAllVoice() async {
-    // Last-state-wins per §4.3 — drop in-flight voice across all three
-    // banks (composite, per-hand, and the armed-state prompt). Without
-    // including the armed prompt here, a state announcement fired right
-    // after a fast vol-button press could overlap the tail of the prompt.
+    // Last-state-wins per §4.3 — drop in-flight voice across every bank
+    // (composite state, per-hand transitions, armed prompt, pre-start
+    // prompt). Otherwise a hand-state announcement fired during the
+    // pre-start countdown could leak in over the prompt's tail.
     if (_armedPromptPlayer.playing) await _armedPromptPlayer.stop();
+    if (_preStartPromptPlayer.playing) await _preStartPromptPlayer.stop();
     for (final p in _stateVoicePlayers.values) {
       if (p.playing) await p.stop();
     }
@@ -324,6 +366,7 @@ class HandAudioPlayer {
       _recordingStopPlayer.dispose(),
       _submissionSuccessPlayer.dispose(),
       _armedPromptPlayer.dispose(),
+      _preStartPromptPlayer.dispose(),
     ]);
   }
 }

@@ -8,7 +8,10 @@ import '../../widgets/buttons.dart';
 import '../../widgets/cards.dart';
 import '../../widgets/chips.dart';
 import '../../widgets/nav.dart';
+import '../../widgets/recording_thumbnail.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
 import '../../widgets/export_progress.dart';
@@ -54,16 +57,24 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final origin =
         box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final queue = context.read<CompressionQueue>();
+    final sid = _recording!.sessionId;
     try {
-      // Build the archive while the progress modal is up so the user has
-      // a clear "I'm working on it" signal even on long recordings; then
-      // hand off to the system share sheet only after compression is done.
-      final archivePath = await withExportProgress<String?>(
-        context,
-        initialMessage: l10n.compressingRecording,
-        work: (_) => _manager.exportRecording(_recording!.sessionId),
-      );
+      // Common case after we ship: the archive was built right after the
+      // recording stopped, so this returns instantly. Slow path covers
+      // legacy recordings + ones whose compression hadn't finished yet
+      // when the user tapped Share — the modal then sits up while the
+      // queue's worker isolate finishes the build.
+      final String? archivePath = queue.isReady(sid)
+          ? await _manager.exportRecording(sid)
+          : await withExportProgress<String?>(
+              context,
+              initialMessage: l10n.compressingRecording,
+              work: (_) => queue.waitForReady(sid),
+            );
       if (archivePath == null || !mounted) return;
+      // The archive on disk already has the slug-based filename, so no
+      // XFile.name override is needed.
       await Share.shareXFiles(
         [XFile(archivePath)],
         subject: l10n.shareSubjectRecording,
@@ -123,30 +134,38 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
-                DCImagePlaceholder(
+                SizedBox(
                   height: 210,
-                  caption: r.sessionId.substring(0, 8),
-                  overlays: [
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _formatDuration(r.durationSeconds),
-                          style: DCText.mono(
-                              size: 11,
-                              weight: FontWeight.w500,
-                              color: Colors.white),
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      RecordingThumbnail(
+                        recording: r,
+                        surface: c.surface2,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _formatDuration(r.durationSeconds),
+                            style: DCText.mono(
+                                size: 11,
+                                weight: FontWeight.w500,
+                                color: Colors.white),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const DCStatusBadge(status: SubmissionStatus.ondevice),

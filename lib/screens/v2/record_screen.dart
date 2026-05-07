@@ -14,6 +14,7 @@ import '../../state/locale_controller.dart';
 import '../../services/hand_presence/hand_presence_state.dart';
 import '../../theme/text_styles.dart';
 import '../../services/camera_service.dart';
+import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../services/hand_presence/hand_presence_controller.dart';
 import '../../services/hand_presence/hand_presence_detector_service.dart';
@@ -37,11 +38,15 @@ class RecordScreen extends StatefulWidget {
 ///
 /// `mounting`  — mount-instructions overlay is up; nothing else runs.
 /// `armed`     — camera live, waiting for a vol-button press to start.
+/// `starting`  — vol-button pressed; the pre-start voice cue is playing
+///               and a 3-second countdown follows. Recording hasn't
+///               actually started yet — gives the user time to position
+///               their hands. Vol button is ignored during this phase.
 /// `recording` — capture in progress; vol-button press will stop.
 /// `submitted` — capture stopped, success popup is up. The next vol-button
 ///               press dismisses the popup and rearms (or starts the next
 ///               take immediately, see [_onVolButtonPress]).
-enum _Phase { mounting, armed, recording, submitted }
+enum _Phase { mounting, armed, starting, recording, submitted }
 
 class _RecordScreenState extends State<RecordScreen> {
   final CameraService _cameraService = CameraService();
@@ -64,6 +69,15 @@ class _RecordScreenState extends State<RecordScreen> {
   // sees "Take 1", "Take 2"… for back-to-back captures of the same task.
   int _takeNumber = 0;
   int _lastSubmissionPoints = 0;
+
+  // Pre-start sequence state. The vol-button press transitions to
+  // _Phase.starting, plays the pre-start voice, then runs a 3-second
+  // visible countdown. Both the voice future and the countdown timer
+  // need to be cancelable on close-button / unmount so we don't kick off
+  // recording after the user has bailed.
+  static const Duration _preStartCountdown = Duration(seconds: 3);
+  Timer? _preStartCountdownTimer;
+  int? _startingSecondsRemaining;
 
   String? _sessionId;
   DateTime? _startTime;
@@ -114,6 +128,7 @@ class _RecordScreenState extends State<RecordScreen> {
     _accelSub?.cancel();
     _ticker?.cancel();
     _popupAutoDismissTimer?.cancel();
+    _preStartCountdownTimer?.cancel();
     _volSub?.cancel();
     _localeController?.removeListener(_onLocaleChanged);
     _volumeButtons.dispose();
@@ -233,25 +248,74 @@ class _RecordScreenState extends State<RecordScreen> {
         return;
       case _Phase.armed:
         unawaited(_handAudio.stopArmedPrompt());
-        _start();
+        _runPreStartSequence();
+        return;
+      case _Phase.starting:
+        // The user already committed; ignore further vol presses until
+        // recording actually starts. Stop button is what cancels (via X).
         return;
       case _Phase.recording:
         _stop();
         return;
       case _Phase.submitted:
         // Pressing vol while the popup is up means the user wants to keep
-        // capturing — dismiss the popup and start the next take immediately
-        // so back-to-back rhythm isn't blocked by the auto-dismiss timer.
-        // Skip the armed prompt voice on this fast path; it would only
-        // overlap with the recording-start chirp / first-state cue that
-        // _start() schedules right after.
+        // capturing — dismiss the popup and run the same pre-start
+        // sequence so back-to-back takes get the same prepare-then-record
+        // rhythm as the first take.
         _popupAutoDismissTimer?.cancel();
         _popupAutoDismissTimer = null;
         unawaited(_handAudio.stopArmedPrompt());
-        setState(() => _phase = _Phase.armed);
-        _start();
+        _runPreStartSequence();
         return;
     }
+  }
+
+  /// Three-step prepare-then-record:
+  ///   1. flip phase → starting (HUD shows "place hands in view")
+  ///   2. play the pre-start voice cue, await playback
+  ///   3. visible 3-second countdown (3 → 2 → 1)
+  ///   4. _start() — fires the recording-start chirp and begins capture
+  ///
+  /// Cancelable via [_cancelPreStartSequence] (called from the X close
+  /// button and dispose). If the user has navigated away or the phase
+  /// changed by the time any await completes, the sequence aborts cleanly.
+  Future<void> _runPreStartSequence() async {
+    if (!mounted) return;
+    setState(() {
+      _phase = _Phase.starting;
+      _startingSecondsRemaining = null;
+    });
+    try {
+      await _handAudio.playPreStartPrompt();
+    } catch (_) {
+      // Voice playback is supplementary; carry on with the countdown.
+    }
+    if (!mounted || _phase != _Phase.starting) return;
+    setState(() => _startingSecondsRemaining = _preStartCountdown.inSeconds);
+    _preStartCountdownTimer?.cancel();
+    _preStartCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted || _phase != _Phase.starting) {
+        t.cancel();
+        _preStartCountdownTimer = null;
+        return;
+      }
+      final remaining = (_startingSecondsRemaining ?? 0) - 1;
+      if (remaining > 0) {
+        setState(() => _startingSecondsRemaining = remaining);
+        return;
+      }
+      t.cancel();
+      _preStartCountdownTimer = null;
+      setState(() => _startingSecondsRemaining = null);
+      _start();
+    });
+  }
+
+  void _cancelPreStartSequence() {
+    _preStartCountdownTimer?.cancel();
+    _preStartCountdownTimer = null;
+    _startingSecondsRemaining = null;
+    unawaited(_handAudio.stopPreStartPrompt());
   }
 
   Future<void> _start() async {
@@ -262,6 +326,13 @@ class _RecordScreenState extends State<RecordScreen> {
     if (!ok) {
       setState(() => _errorMessage = l10n.failedToStartRecording);
       return;
+    }
+    // Pause the background compressor — we don't want a worker isolate
+    // contending with the encoder for CPU during a take. It resumes in
+    // _stop() once metadata is saved and the new recording is queued.
+    if (mounted) {
+      // ignore: use_build_context_synchronously
+      Provider.of<CompressionQueue>(context, listen: false).pause();
     }
     // Each take gets a clean smoothing window + warmup; otherwise stale
     // state from the previous take could fire spurious "exit" cues.
@@ -319,6 +390,9 @@ class _RecordScreenState extends State<RecordScreen> {
     if (!mounted) return;
     if (result == null || _sessionId == null) {
       // Nothing was actually recorded — drop straight back to armed.
+      // Resume the compressor since we paused it on _start(); without
+      // this, an aborted take would leave the queue indefinitely paused.
+      Provider.of<CompressionQueue>(context, listen: false).resume();
       _enterArmed();
       return;
     }
@@ -329,8 +403,6 @@ class _RecordScreenState extends State<RecordScreen> {
     final durationSec =
         (result['durationSeconds'] as int?) ?? _elapsed.inSeconds;
     final frameCount = (result['frameCount'] as int?) ?? 0;
-    final actualPoseSource = (result['poseSource'] as String?) ??
-        (_cameraInfo?['poseSource'] as String?);
     final measuredMotionRateHz =
         (result['motionRateHzMeasured'] as num?)?.toDouble();
     // Pull actual encoded dimensions from native; iOS may pick 1920×1440 etc.
@@ -356,7 +428,6 @@ class _RecordScreenState extends State<RecordScreen> {
           capturedAt: capturedAt,
           durationSeconds: durationSec,
           frameCount: frameCount,
-          poseSourceOverride: actualPoseSource,
           measuredMotionRateHz: measuredMotionRateHz,
           videoWidth: capW,
           videoHeight: capH,
@@ -365,6 +436,7 @@ class _RecordScreenState extends State<RecordScreen> {
 
     if (!mounted) return;
     final pts = task?.rewardPoints ?? 0;
+    final completedSessionId = _sessionId!;
     setState(() {
       _phase = _Phase.submitted;
       _takeNumber += 1;
@@ -374,6 +446,16 @@ class _RecordScreenState extends State<RecordScreen> {
       _startTime = null;
       _elapsed = Duration.zero;
     });
+    // Generate the first-frame thumbnail synchronously so the submissions
+    // list always has something to show — and so it lands on disk before
+    // the post-compression cleanup deletes video.mp4. ~100 ms.
+    unawaited(_recordingManager.ensureThumbnail(completedSessionId));
+    // Hand the just-finished take off to the background compressor and
+    // resume the queue. The user keeps recording back-to-back takes; the
+    // queue serializes them so we never run two builds at once.
+    final queue = Provider.of<CompressionQueue>(context, listen: false);
+    queue.enqueue(completedSessionId);
+    queue.resume();
     unawaited(_handAudio.playSubmissionSuccess());
 
     // Auto-dismiss the popup and rearm after a short hold. Press-vol or tap
@@ -398,7 +480,6 @@ class _RecordScreenState extends State<RecordScreen> {
     required DateTime capturedAt,
     required int durationSeconds,
     required int frameCount,
-    String? poseSourceOverride,
     double? measuredMotionRateHz,
     int videoWidth = 1920,
     int videoHeight = 1080,
@@ -411,104 +492,97 @@ class _RecordScreenState extends State<RecordScreen> {
         (dev['os'] as String?) ?? (Platform.isAndroid ? 'android' : 'ios');
     final isAndroid = os == 'android';
 
-    // Intrinsics
-    final IntrinsicsInfo intrinsics;
-    final intrinsicsSourceFromNative = cam['intrinsicsSource'] as String?;
-    if (isAndroid) {
-      final matrix = (cam['intrinsicMatrix'] as List?)
-          ?.map((row) =>
-              (row as List).cast<num>().map((n) => n.toDouble()).toList())
-          .toList();
-      final source = (cam['intrinsicSource'] as String?) ?? 'none';
-      final hwLevelFull = (cam['hardwareLevelFull'] as bool?) ?? false;
-      final coeffs = (cam['distortionCoeffs'] as List?)
-          ?.cast<num>()
-          .map((n) => n.toDouble())
-          .toList();
-      final reliable = source == 'static' && hwLevelFull && !stab;
-      final notes = switch (source) {
-        'static' =>
-          'Static intrinsics from Camera2 LENS_INTRINSIC_CALIBRATION.',
-        'estimated_fallback' =>
-          'Static intrinsics derived from focal length and sensor size.',
-        _ => 'No intrinsics available from Camera2 characteristics.',
-      };
-      intrinsics = IntrinsicsInfo(
-        source: source,
-        staticMatrix: matrix,
-        distortionModel: coeffs != null && coeffs.isNotEmpty ? 'opencv5' : null,
-        distortionCoeffs: coeffs,
-        reliable: reliable,
-        notes: notes,
-      );
-    } else {
-      // iOS: per-frame intrinsics from ARFrame.camera.intrinsics, written natively.
-      intrinsics = IntrinsicsInfo(
-        source: intrinsicsSourceFromNative ?? 'per_frame',
-        perFrameFile: 'frames.jsonl',
-        reliable: !stab,
-        notes: 'Per-frame intrinsics from ARFrame.camera.intrinsics.',
-      );
-    }
-
-    // Pose
-    final poseSource =
-        poseSourceOverride ?? (cam['poseSource'] as String?) ?? 'none';
-    final poseInfo = PoseInfo(
-      source: poseSource,
-      frameOrigin: cam['poseFrameOrigin'] as String?,
-      coordinateConvention: cam['poseCoordinateConvention'] as String?,
-      transformKind: cam['poseTransformKind'] as String?,
-      rateHz: (cam['poseRateHz'] as num?)?.toDouble(),
-      trackingStateField: poseSource == 'arkit' || poseSource == 'arcore'
-          ? 'tracking_state'
-          : null,
-      notes: switch (poseSource) {
-        'arkit' =>
-          'ARWorldTrackingConfiguration, autoFocusEnabled=false, planeDetection=none.',
-        'arcore' => 'ARCore Shared Camera mode. Default config.',
-        'imu_raw' =>
-          'No system VIO available; offline VIO consumes motion.jsonl.',
-        _ => 'No pose source available.',
-      },
+    // Intrinsics — v1.2 only accepts source="static". The native side computes
+    // a single 3×3 K from the active camera-format calibration data; the
+    // distortion model must be "brown_conrady" or "kannala_brandt" or null.
+    final matrix = (cam['intrinsicMatrix'] as List?)
+        ?.map((row) =>
+            (row as List).cast<num>().map((n) => n.toDouble()).toList())
+        .toList();
+    final coeffs = (cam['distortionCoeffs'] as List?)
+        ?.cast<num>()
+        .map((n) => n.toDouble())
+        .toList();
+    final distortionModel = cam['distortionModel'] as String?;
+    final intrinsicsReliable =
+        matrix != null && !stab; // schema requires bool; default to false-only when no K
+    final intrinsicsNotes = (cam['intrinsicsNotes'] as String?) ??
+        (isAndroid
+            ? 'Static intrinsics from Camera2 LENS_INTRINSIC_CALIBRATION, rescaled to video resolution by a single uniform scalar.'
+            : 'Static intrinsics from AVCaptureDevice activeFormat at locked focus.');
+    final intrinsics = IntrinsicsInfo(
+      source: 'static',
+      staticMatrix: matrix,
+      distortionModel: distortionModel,
+      distortionCoeffs: coeffs,
+      reliable: intrinsicsReliable,
+      notes: intrinsicsNotes,
     );
 
-    // Motion. Always recorded if we have a usable IMU; the device almost always
-    // does. Native side reports actual measured rate at stop time on Android.
+    // Motion — v1.2 requires recorded=true. We assume the IMU writer is
+    // running; if for some reason it isn't, the bundle will fail the
+    // pipeline's validator and we'll see it server-side rather than
+    // silently shipping a degraded capture.
     final advertisedMotionRate = (cam['motionRateHz'] as num?)?.toDouble();
-    final motionRecorded =
-        advertisedMotionRate != null && advertisedMotionRate > 0;
     final motionInfo = MotionInfo(
-      recorded: motionRecorded,
+      recorded: true,
       rateHz: measuredMotionRateHz != null && measuredMotionRateHz > 0
           ? measuredMotionRateHz
           : advertisedMotionRate,
-      gyroUnits: motionRecorded
-          ? (cam['motionGyroUnits'] as String?) ?? 'rad/s'
-          : null,
-      accelUnits: motionRecorded
-          ? (cam['motionAccelUnits'] as String?) ?? 'm/s^2'
-          : null,
-      accelIncludesGravity: motionRecorded
-          ? (cam['motionAccelIncludesGravity'] as bool?) ??
-              (isAndroid ? true : false)
-          : null,
-      frame: motionRecorded
-          ? (cam['motionFrame'] as String?) ?? 'device_body'
-          : null,
-      notes: motionRecorded
-          ? (isAndroid
-              ? 'Android Sensor TYPE_GYROSCOPE + TYPE_ACCELEROMETER at SENSOR_DELAY_FASTEST.'
-              : 'iOS CMMotionManager.deviceMotion at 100 Hz.')
-          : null,
+      gyroUnits: (cam['motionGyroUnits'] as String?) ?? 'rad/s',
+      accelUnits: (cam['motionAccelUnits'] as String?) ?? 'm/s^2',
+      accelIncludesGravity:
+          (cam['motionAccelIncludesGravity'] as bool?) ??
+              (isAndroid ? true : false),
+      frame: (cam['motionFrame'] as String?) ?? 'device_body',
+      notes: isAndroid
+          ? 'Android Sensor TYPE_GYROSCOPE + TYPE_ACCELEROMETER at SENSOR_DELAY_FASTEST, ordered queue, one row per gyro event.'
+          : 'iOS CMMotionManager.deviceMotion at 100 Hz.',
+      // Each must be > 0 if present per the schema; surface only when native
+      // hands a positive value (e.g. from a per-model datasheet table).
+      noiseDensityGyro:
+          _positiveOrNull((cam['imuNoiseDensityGyro'] as num?)?.toDouble()),
+      noiseDensityAccel:
+          _positiveOrNull((cam['imuNoiseDensityAccel'] as num?)?.toDouble()),
+      randomWalkGyro:
+          _positiveOrNull((cam['imuRandomWalkGyro'] as num?)?.toDouble()),
+      randomWalkAccel:
+          _positiveOrNull((cam['imuRandomWalkAccel'] as num?)?.toDouble()),
     );
 
+    // Extrinsics — only emit when the native side actually provides a 4×4.
+    // Android Camera2 hands us LENS_POSE_TRANSLATION + LENS_POSE_ROTATION
+    // → "platform_api". iOS doesn't expose this; falls back to omitting the
+    // block entirely so the offline VIO solves for it.
+    ExtrinsicsInfo? extrinsics;
+    final tCamImuRaw = cam['tCamImu'] as List?;
+    final extrinsicsSource = cam['extrinsicsSource'] as String?;
+    if (tCamImuRaw != null && extrinsicsSource != null) {
+      final tCamImu = tCamImuRaw
+          .map((row) =>
+              (row as List).cast<num>().map((n) => n.toDouble()).toList())
+          .toList();
+      extrinsics = ExtrinsicsInfo(
+        tCamImu: tCamImu,
+        source: extrinsicsSource,
+        timeOffsetSec: (cam['extrinsicsTimeOffsetSec'] as num?)?.toDouble(),
+        rotationStddevDeg:
+            (cam['extrinsicsRotationStddevDeg'] as num?)?.toDouble(),
+        translationStddevM:
+            (cam['extrinsicsTranslationStddevM'] as num?)?.toDouble(),
+        notes: cam['extrinsicsNotes'] as String?,
+      );
+    }
+
+    final rollingShutter = (cam['rollingShutterSkewNs'] as num?)?.toInt();
+    final deviceClockId = cam['deviceClockId'] as String?;
+
     return RecordingMetadata(
-      schemaVersion: '1.1',
+      schemaVersion: '1.2',
       sessionId: sessionId,
       capturedAtUtc: capturedAt,
       sessionClockOrigin: 'unix_epoch',
-      appVersion: '2.1.0',
+      appVersion: '2.2.0',
       device: DeviceInfo(
         os: os,
         osVersion: (dev['osVersion'] as String?) ?? '',
@@ -516,12 +590,13 @@ class _RecordScreenState extends State<RecordScreen> {
             (dev['manufacturer'] as String?) ?? (isAndroid ? '' : 'Apple'),
         model: (dev['model'] as String?) ?? '',
         modelIdentifier: (dev['modelIdentifier'] as String?) ?? '',
-        hasArkit: dev['hasArkit'] as bool?,
-        hasArcore: dev['hasArcore'] as bool?,
       ),
       camera: CameraInfo(
         lensId: (cam['lensId'] as String?) ?? '',
-        lensType: (cam['lensType'] as String?) ?? 'unknown',
+        // Per spec §3 the lens_type is *derived* from the chosen FOV. Native
+        // computes it (>=100° → "ultrawide", else "wide") and we just pass
+        // through; the schema rejects "telephoto" / "unknown".
+        lensType: (cam['lensType'] as String?) ?? 'wide',
         physicalFocalLengthMm:
             (cam['physicalFocalLengthMm'] as num?)?.toDouble(),
         sensorPhysicalSizeMm: (cam['sensorPhysicalSizeMm'] as List?)
@@ -536,6 +611,9 @@ class _RecordScreenState extends State<RecordScreen> {
         videoStabilizationEnabled: stab,
         opticalStabilizationEnabled:
             (cam['opticalStabilizationEnabled'] as bool?) ?? false,
+        rollingShutterSkewNs: (rollingShutter != null && rollingShutter >= 0)
+            ? rollingShutter
+            : null,
       ),
       video: VideoInfo(
         codec: 'hevc',
@@ -551,15 +629,20 @@ class _RecordScreenState extends State<RecordScreen> {
         hasAudioTrack: false,
       ),
       intrinsics: intrinsics,
-      pose: poseInfo,
+      // Pose block intentionally omitted under v1.2 (spec §4.2 + §10).
       motion: motionInfo,
+      extrinsics: extrinsics,
+      deviceClockId: deviceClockId,
       capturePlatform: CapturePlatformInfo(
         flutterVersion: '3.41.7',
         nativeSdkVersion: isAndroid ? 'android' : 'ios',
-        capturePipelineVersion: '2.1.0',
+        capturePipelineVersion: '2.2.0',
       ),
     );
   }
+
+  static double? _positiveOrNull(double? v) =>
+      (v != null && v > 0) ? v : null;
 
   String _format(Duration d) {
     final m = d.inMinutes.toString().padLeft(2, '0');
@@ -708,7 +791,7 @@ class _RecordScreenState extends State<RecordScreen> {
                 _ExpandedHud(
                   taskTitle:
                       findTask(widget.taskId)?.localizedTitle(l10n) ?? '',
-                  poseSource: (_cameraInfo?['poseSource'] as String?) ?? 'NONE',
+                  lensType: (_cameraInfo?['lensType'] as String?) ?? 'wide',
                 ),
               ),
             ),
@@ -803,6 +886,14 @@ class _RecordScreenState extends State<RecordScreen> {
             ),
           if (_phase == _Phase.armed && _errorMessage == null)
             Positioned.fill(child: _rotated(const _ArmedPrompt())),
+          if (_phase == _Phase.starting && _errorMessage == null)
+            Positioned.fill(
+              child: _rotated(
+                _PreStartOverlay(
+                  secondsRemaining: _startingSecondsRemaining,
+                ),
+              ),
+            ),
           // Top-right close button — always available so the user can leave
           // the screen, since the vol-button flow has no other terminal
           // state. Stops capture cleanly first if recording.
@@ -844,8 +935,80 @@ class _RecordScreenState extends State<RecordScreen> {
         await _cameraService.stopRecording();
       } catch (_) {}
     }
+    // Cancel the pre-start voice + countdown if the user bails between
+    // press and start.
+    _cancelPreStartSequence();
+    // The queue may have been paused if a recording was in flight; make
+    // sure the background compressor is unblocked before we leave.
+    if (mounted) {
+      Provider.of<CompressionQueue>(context, listen: false).resume();
+    }
     if (!mounted) return;
     Navigator.of(context).pop();
+  }
+}
+
+/// Visible counterpart to the pre-start voice cue + 3-second countdown.
+/// While the voice is still playing, [secondsRemaining] is null and we
+/// show "PLACE HANDS IN VIEW". Once the countdown begins, we render the
+/// remaining seconds as a large digit. The voice cue itself runs
+/// independently from [HandAudioPlayer.playPreStartPrompt].
+class _PreStartOverlay extends StatelessWidget {
+  final int? secondsRemaining;
+  const _PreStartOverlay({required this.secondsRemaining});
+
+  @override
+  Widget build(BuildContext context) {
+    final showDigit = secondsRemaining != null;
+    return IgnorePointer(
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFF14C9A8).withValues(alpha: 0.55),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'PLACE HANDS IN VIEW',
+                style: DCText.mono(
+                  size: 11,
+                  weight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  letterSpacing: 1.6,
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (showDigit)
+                Text(
+                  '$secondsRemaining',
+                  style: DCText.mono(
+                    size: 64,
+                    weight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -1,
+                  ),
+                )
+              else
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: const Color(0xFF14C9A8),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -978,24 +1141,21 @@ class _RecordingPillState extends State<_RecordingPill>
 
 class _ExpandedHud extends StatelessWidget {
   final String taskTitle;
-  final String poseSource;
-  const _ExpandedHud({required this.taskTitle, required this.poseSource});
+  final String lensType;
+  const _ExpandedHud({required this.taskTitle, required this.lensType});
 
   @override
   Widget build(BuildContext context) {
-    final poseLabel = switch (poseSource) {
-      'arkit' => 'ARKIT',
-      'arcore' => 'ARCORE',
-      'imu_raw' => 'IMU',
-      _ => 'NONE',
-    };
+    // Display the chosen lens type uppercased ("ULTRAWIDE" / "WIDE"). Per
+    // v1.2 spec §3 these are the only two values the schema accepts.
+    final lensLabel = lensType.toUpperCase();
     final stats = [
       const ['FPS', '30'],
       const ['CODEC', 'HEVC'],
-      const ['LENS', 'Ultrawide'],
+      ['LENS', lensLabel],
       const ['BITRATE', '15 Mb/s'],
       const ['STAB', 'OFF'],
-      ['POSE', poseLabel],
+      const ['SCHEMA', '1.2'],
     ];
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1034,7 +1194,7 @@ class _ExpandedHud extends StatelessWidget {
                     style: DCText.mono(
                       size: 13,
                       weight: FontWeight.w600,
-                      color: (s[0] == 'POSE' && s[1] != 'NONE')
+                      color: (s[0] == 'LENS' && s[1] == 'ULTRAWIDE')
                           ? const Color(0xFF14C9A8)
                           : Colors.white,
                     ),

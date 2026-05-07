@@ -31,13 +31,26 @@ class ValidationError(Exception):
 class RecordingValidator:
     """Validates egocentric video recording packages."""
 
-    SUPPORTED_SCHEMA_VERSIONS = ("1.0", "1.1")
+    SUPPORTED_SCHEMA_VERSIONS = ("1.0", "1.1", "1.2")
     VALID_OS = ["ios", "android"]
     VALID_LENS_TYPES = ["ultrawide", "wide", "telephoto", "unknown"]
     VALID_INTRINSICS_SOURCES = ["per_frame", "static", "estimated_fallback", "none"]
+    # "opencv5" was a v1.0/v1.1 writer-side typo for Brown-Conrady (the
+    # OpenCV 5-coefficient distortion model is exactly Brown-Conrady).
+    # v1.2 rejects it; we still accept it for v1.0/v1.1 captures so old
+    # bundles validate cleanly.
     VALID_DISTORTION_MODELS = ["brown_conrady", "kannala_brandt", "opencv5"]
     VALID_POSE_SOURCES = ["arkit", "arcore", "imu_raw", "none"]
     VALID_CLOCK_ORIGINS = ["unix_epoch", "session_start"]
+    # v1.2 tightening (RECORDING_DATA_STRUCTURE_V1.2.md):
+    # widest-lens + raw-IMU + static-K only.
+    V1_2_VALID_LENS_TYPES = ["ultrawide", "wide"]
+    V1_2_VALID_INTRINSICS_SOURCES = ["static"]
+    V1_2_VALID_DISTORTION_MODELS = ["brown_conrady", "kannala_brandt"]
+    V1_2_VALID_POSE_SOURCES = ["imu_raw"]
+    V1_2_VALID_EXTRINSICS_SOURCES = [
+        "platform_api", "model_calibration_table", "factory", "online_estimated",
+    ]
 
     def __init__(self, recording_dir: str):
         self.recording_dir = Path(recording_dir)
@@ -131,7 +144,87 @@ class RecordingValidator:
         self._validate_video_info(self.metadata["video"])
         self._validate_intrinsics_info(self.metadata["intrinsics"])
 
+        # v1.2 tightening — applied after the per-block checks so each
+        # block has already loaded.
+        if version == "1.2":
+            self._validate_v1_2_extras()
+
         print(f"✅ metadata.json schema is valid (version {version})")
+
+    def _validate_v1_2_extras(self):
+        # session_clock_origin required.
+        if "session_clock_origin" not in self.metadata:
+            raise ValidationError("v1.2 metadata missing session_clock_origin")
+        if self.metadata["session_clock_origin"] not in self.VALID_CLOCK_ORIGINS:
+            raise ValidationError(
+                f"Invalid session_clock_origin: {self.metadata['session_clock_origin']}"
+            )
+
+        # camera.lens_type tightened.
+        lens_type = self.metadata["camera"].get("lens_type")
+        if lens_type not in self.V1_2_VALID_LENS_TYPES:
+            raise ValidationError(
+                f"v1.2 camera.lens_type must be one of {self.V1_2_VALID_LENS_TYPES} "
+                f"(got {lens_type!r})"
+            )
+
+        # intrinsics.source tightened.
+        intr_source = self.metadata["intrinsics"].get("source")
+        if intr_source not in self.V1_2_VALID_INTRINSICS_SOURCES:
+            raise ValidationError(
+                f"v1.2 intrinsics.source must be 'static' (got {intr_source!r})"
+            )
+        if "static_matrix" not in self.metadata["intrinsics"] or \
+                self.metadata["intrinsics"].get("static_matrix") is None:
+            raise ValidationError("v1.2 requires intrinsics.static_matrix")
+        d_model = self.metadata["intrinsics"].get("distortion_model")
+        if d_model is not None and d_model not in self.V1_2_VALID_DISTORTION_MODELS:
+            raise ValidationError(
+                f"v1.2 intrinsics.distortion_model must be one of "
+                f"{self.V1_2_VALID_DISTORTION_MODELS} or null (got {d_model!r})"
+            )
+
+        # poses.jsonl and frames.jsonl are forbidden under v1.2.
+        if (self.recording_dir / "frames.jsonl").exists():
+            raise ValidationError("v1.2 forbids frames.jsonl (intrinsics are static)")
+        if (self.recording_dir / "poses.jsonl").exists():
+            raise ValidationError("v1.2 forbids poses.jsonl (no ARKit/ARCore path)")
+
+        # If a pose block is present at all, source must be imu_raw.
+        pose = self.metadata.get("pose")
+        if pose is not None:
+            src = pose.get("source")
+            if src not in self.V1_2_VALID_POSE_SOURCES:
+                raise ValidationError(
+                    f"v1.2 pose.source must be 'imu_raw' if present (got {src!r}); "
+                    f"prefer omitting the pose block entirely"
+                )
+
+        # motion block: required, non-empty file.
+        motion = self.metadata.get("motion")
+        if motion is None or not motion.get("recorded"):
+            raise ValidationError("v1.2 requires motion.recorded=true")
+        motion_path = self.recording_dir / "motion.jsonl"
+        if not motion_path.exists() or motion_path.stat().st_size == 0:
+            raise ValidationError("v1.2 requires motion.jsonl present and non-empty")
+
+        # If extrinsics block present, validate it.
+        extr = self.metadata.get("extrinsics")
+        if extr is not None:
+            t = extr.get("T_cam_imu")
+            if not isinstance(t, list) or len(t) != 4 or any(
+                not isinstance(row, list) or len(row) != 4 for row in t
+            ):
+                raise ValidationError("extrinsics.T_cam_imu must be 4x4")
+            br = t[3]
+            if any(abs(br[i]) > 1e-6 for i in range(3)) or abs(br[3] - 1.0) > 1e-6:
+                raise ValidationError("extrinsics.T_cam_imu bottom row must be [0,0,0,1]")
+            src = extr.get("source")
+            if src not in self.V1_2_VALID_EXTRINSICS_SOURCES:
+                raise ValidationError(
+                    f"extrinsics.source must be one of {self.V1_2_VALID_EXTRINSICS_SOURCES} "
+                    f"(got {src!r})"
+                )
 
     def _validate_v1_1_extras(self):
         # session_clock_origin required.

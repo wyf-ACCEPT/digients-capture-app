@@ -12,18 +12,11 @@
     <!-- Hardware features -->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-    <!-- ARCore (Shared Camera mode) provides 6DOF pose. Optional — devices without
-         ARCore still install and fall back to the imu_raw tier per spec §4. -->
-    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
 
     <application
         android:label="Digients Capture"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
-
-        <!-- ARCore optional: app runs everywhere; fall back to imu_raw when ARCore
-             isn't installed or the device isn't ARCore-supported. -->
-        <meta-data android:name="com.google.ar.core" android:value="optional" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:archive/archive_io.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import '../models/recording.dart';
 
 /// Top-level so it can run inside the isolate spawned by [compute]. Builds
@@ -16,10 +17,14 @@ import '../models/recording.dart';
 /// 1. `TarFileEncoder` walks the recording dir and writes each file
 ///    straight to a temp `.tar` (per-file `readAsBytesSync` is used by the
 ///    encoder, so peak memory is bounded by the largest single file —
-///    `video.mp4` — and not multiples thereof).
+///    `video.mp4` — and not multiples thereof). The output archive lives
+///    inside the recording directory, so we skip any `.tar.gz` and
+///    `.tmp.tar` siblings when walking — otherwise the build would either
+///    pull the previous archive into the new one or crash on its own
+///    in-flight temp.
 /// 2. The temp `.tar` is then piped through `dart:io`'s streaming
 ///    `GZipCodec` encoder into the final `.tar.gz`. Level 1 keeps
-///    `metadata.json` / `frames.jsonl` compressed but stays cheap on the
+///    `metadata.json` / `motion.jsonl` compressed but stays cheap on the
 ///    already-compressed HEVC video where higher levels would just burn
 ///    CPU for ~1 % gain.
 /// 3. Temp `.tar` is removed.
@@ -36,10 +41,16 @@ Future<String> _runExportInIsolate(Map<String, String> params) async {
     final entities = root.listSync(recursive: true);
     entities.sort((a, b) => a.path.compareTo(b.path));
     for (final entity in entities) {
-      if (entity is File) {
-        final relative = path.relative(entity.path, from: root.path);
-        encoder.addFile(entity, relative);
-      }
+      if (entity is! File) continue;
+      // Skip any tar.gz / tmp.tar siblings so the archive never includes
+      // itself or a stale prior one. Recording bundles only ever contain
+      // metadata.json / video.mp4 / motion.jsonl, so excluding all
+      // `.tar.gz` / `.tmp.tar` files is safe and resilient to renames
+      // (e.g. a slug change between two builds).
+      final base = path.basename(entity.path);
+      if (base.endsWith('.tar.gz') || base.endsWith('.tmp.tar')) continue;
+      final relative = path.relative(entity.path, from: root.path);
+      encoder.addFile(entity, relative);
     }
   } finally {
     encoder.close();
@@ -165,18 +176,226 @@ class RecordingManager {
         return null;
       }
 
+      // Don't double-count the cached archive — the size shown to the user
+      // is the recording payload (metadata + video + motion), not the
+      // tar.gz we built from it. Skip any `.tar.gz` / `.tmp.tar` siblings.
       int totalSize = 0;
       await for (final FileSystemEntity entity
           in recordingDir.list(recursive: true)) {
-        if (entity is File) {
-          final FileStat stat = await entity.stat();
-          totalSize += stat.size;
-        }
+        if (entity is! File) continue;
+        final base = path.basename(entity.path);
+        if (base.endsWith('.tar.gz') || base.endsWith('.tmp.tar')) continue;
+        final FileStat stat = await entity.stat();
+        totalSize += stat.size;
       }
 
       return (totalSize / (1024 * 1024)).round(); // Convert to MB
     } catch (e) {
       debugPrint('Error calculating recording size: $e');
+      return null;
+    }
+  }
+
+  /// Canonical on-disk location of the cached tar.gz for a recording. Lives
+  /// inside the recording directory so deletion of the recording removes
+  /// the archive automatically. The filename is the slug
+  /// (`<category>-<subSlug>-<sid>.tar.gz`) so any share sheet — even ones
+  /// that read by file path and ignore XFile.name — displays the right
+  /// name. Build runs once after capture stops; later shares reuse this
+  /// file rather than re-tarring on every share.
+  Future<String> archivePathFor(String sessionId,
+      {String? categoryId, String? taskId}) async {
+    final Directory recordingsDir = await _getRecordingsDirectory();
+    _cachedRecordingsDir = recordingsDir;
+    final slug = await shareSlugFor(
+      sessionId,
+      categoryId: categoryId,
+      taskId: taskId,
+    );
+    return path.join(
+      recordingsDir.path,
+      'recording_$sessionId',
+      '$slug.tar.gz',
+    );
+  }
+
+  /// Synchronously locate any cached archive for a recording. We don't
+  /// recompute the slug here — instead we list the recording directory
+  /// and return the first `.tar.gz` file (a recording bundle only ever
+  /// contains one). Returns null when the documents dir hasn't been
+  /// resolved yet (path_provider is async on first call) or when no
+  /// archive exists.
+  String? findArchivePathSync(String sessionId) {
+    final dir = _cachedRecordingsDir;
+    if (dir == null) return null;
+    final recDir =
+        Directory(path.join(dir.path, 'recording_$sessionId'));
+    if (!recDir.existsSync()) return null;
+    try {
+      for (final entity in recDir.listSync()) {
+        if (entity is File && entity.path.endsWith('.tar.gz')) {
+          return entity.path;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Async variant for callers that already await elsewhere. Same logic
+  /// as [findArchivePathSync] but resolves the recordings directory first.
+  Future<String?> findArchivePath(String sessionId) async {
+    final dir = await _getRecordingsDirectory();
+    _cachedRecordingsDir = dir;
+    final recDir = Directory(path.join(dir.path, 'recording_$sessionId'));
+    if (!await recDir.exists()) return null;
+    await for (final entity in recDir.list()) {
+      if (entity is File && entity.path.endsWith('.tar.gz')) {
+        return entity.path;
+      }
+    }
+    return null;
+  }
+
+  // Static so it's shared across every fresh RecordingManager() instance.
+  // Many call sites (UI cards, services) construct a new instance on each
+  // use because the class is stateless apart from this cache; without
+  // `static` the *first* sync lookup from a freshly-built widget always
+  // returned null and the lazy thumbnail rebuild never landed.
+  static Directory? _cachedRecordingsDir;
+
+  // Thumbnail = first frame of video.mp4 saved alongside metadata. ~10–30 KB
+  // and survives the post-compression cleanup of the raw video, so the
+  // submissions list always has a preview to render.
+  static const String _thumbnailFilename = 'thumbnail.jpg';
+
+  Future<String> thumbnailPathFor(String sessionId) async {
+    final Directory recordingsDir = await _getRecordingsDirectory();
+    _cachedRecordingsDir = recordingsDir;
+    return path.join(
+      recordingsDir.path,
+      'recording_$sessionId',
+      _thumbnailFilename,
+    );
+  }
+
+  /// Synchronous existence check + path. Returns null when the thumbnail
+  /// hasn't been generated yet (or when path_provider hasn't been awaited
+  /// once at app start). Submissions list uses this in build() so cards
+  /// can decide between Image.file and a placeholder without an async hop.
+  String? thumbnailPathSync(String sessionId) {
+    final dir = _cachedRecordingsDir;
+    if (dir == null) return null;
+    final p = path.join(dir.path, 'recording_$sessionId', _thumbnailFilename);
+    return File(p).existsSync() ? p : null;
+  }
+
+  /// Extract the first frame of video.mp4 to a JPEG. Idempotent — returns
+  /// the existing path if a thumbnail is already on disk. Returns null if
+  /// the source video isn't available (e.g. compression cleanup ran first
+  /// in some edge case, or the recording was deleted).
+  Future<String?> ensureThumbnail(String sessionId) async {
+    final Directory recordingsDir = await _getRecordingsDirectory();
+    _cachedRecordingsDir = recordingsDir;
+    final recDir =
+        Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+    if (!await recDir.exists()) return null;
+    final thumbPath = path.join(recDir.path, _thumbnailFilename);
+    if (await File(thumbPath).exists()) return thumbPath;
+    final videoPath = path.join(recDir.path, 'video.mp4');
+    if (!await File(videoPath).exists()) return null;
+    try {
+      // 320 px wide max keeps the file small (~10–30 KB) and the platform
+      // call fast (~100 ms). The list cards downsample further; quality
+      // beyond this is wasted bytes.
+      final result = await VideoThumbnail.thumbnailFile(
+        video: videoPath,
+        thumbnailPath: thumbPath,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 320,
+        timeMs: 0,
+        quality: 75,
+      );
+      if (result == null) return null;
+      return result;
+    } catch (e) {
+      print('Error generating thumbnail for $sessionId: $e');
+      return null;
+    }
+  }
+
+  /// After a successful compression, remove the loose `metadata.json`,
+  /// `video.mp4`, and `motion.jsonl` so the recording dir holds only the
+  /// archive (sharable payload) and the thumbnail (UI preview). Halves
+  /// disk usage per recording.
+  ///
+  /// Defensive: only runs when both the archive AND a thumbnail are
+  /// confirmed on disk. If either is missing we keep the raw files so a
+  /// retry build can still find them.
+  Future<void> cleanupOriginalsAfterCompression(String sessionId) async {
+    try {
+      final archive = await findArchivePath(sessionId);
+      if (archive == null) return;
+      final thumb = await thumbnailPathFor(sessionId);
+      if (!await File(thumb).exists()) return;
+      final Directory recordingsDir = await _getRecordingsDirectory();
+      final recDir =
+          Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+      if (!await recDir.exists()) return;
+      for (final name in const ['metadata.json', 'video.mp4', 'motion.jsonl']) {
+        final f = File(path.join(recDir.path, name));
+        if (await f.exists()) {
+          try { await f.delete(); } catch (_) {}
+        }
+      }
+    } catch (e) {
+      print('Error cleaning up originals for $sessionId: $e');
+    }
+  }
+
+  /// If any tar.gz already exists for this recording (e.g. one named
+  /// `archive.tar.gz` from a pre-rename build, or one with a stale slug
+  /// after the slug logic changed), rename it to the current canonical
+  /// slug name so the share sheet reads the right filename. Returns the
+  /// canonical path on success, or the un-renamed existing path if the
+  /// rename failed, or null if no archive exists at all.
+  Future<String?> _canonicalizeExistingArchive(String sessionId) async {
+    final existing = await findArchivePath(sessionId);
+    if (existing == null) return null;
+    final desired = await archivePathFor(sessionId);
+    if (existing == desired) return existing;
+    try {
+      final renamed = await File(existing).rename(desired);
+      return renamed.path;
+    } catch (_) {
+      return existing;
+    }
+  }
+
+  /// Run the tar.gz build once, writing to a slug-named file inside the
+  /// recording's own directory. Idempotent — if any tar.gz already exists
+  /// in the recording dir this canonicalizes its name and returns it
+  /// without rebuilding. The compression queue serializes builds across
+  /// recordings; this method assumes no concurrent build for the same sid.
+  Future<String?> buildArchive(String sessionId) async {
+    try {
+      final Directory recordingsDir = await _getRecordingsDirectory();
+      _cachedRecordingsDir = recordingsDir;
+      final Directory recordingDir =
+          Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
+      if (!await recordingDir.exists()) {
+        // Recording was deleted before its compression got scheduled —
+        // not an error, just nothing to do.
+        return null;
+      }
+      final canonical = await _canonicalizeExistingArchive(sessionId);
+      if (canonical != null) return canonical;
+      final String archivePath = await archivePathFor(sessionId);
+      return await compute(_runExportInIsolate, <String, String>{
+        'recordingDir': recordingDir.path,
+        'tarGzPath': archivePath,
+      });
+    } catch (e) {
+      print('Error building archive for $sessionId: $e');
       return null;
     }
   }
@@ -218,73 +437,69 @@ class RecordingManager {
     return sessionId;
   }
 
+  /// Public export entry point. Returns the cached archive path immediately
+  /// if it already exists on disk; otherwise builds it now (legacy
+  /// recordings made before auto-compression landed). Callers wanting to
+  /// participate in queue ordering (so concurrent shares serialize behind
+  /// pending compressions) should go through [CompressionQueue.waitForReady]
+  /// instead.
   Future<String?> exportRecording(String sessionId,
       {String? categoryId, String? taskId}) async {
     try {
-      // If caller didn't pass categoryId / taskId, look them up from the
-      // persisted recordings list. This keeps export call sites simple.
-      String? resolvedCategoryId = categoryId;
-      String? resolvedTaskId = taskId;
-      if (resolvedCategoryId == null || resolvedTaskId == null) {
-        final List<Recording> all = await loadRecordings();
-        for (final r in all) {
-          if (r.sessionId == sessionId) {
-            resolvedCategoryId ??= r.categoryId;
-            resolvedTaskId ??= r.taskId;
-            break;
-          }
-        }
-      }
-
-      final Directory recordingsDir = await _getRecordingsDirectory();
-      final Directory recordingDir =
-          Directory(path.join(recordingsDir.path, 'recording_$sessionId'));
-
-      if (!await recordingDir.exists()) {
-        debugPrint('Recording directory does not exist: $sessionId');
-        return null;
-      }
-
-      final String slug =
-          _exportSlug(sessionId, resolvedCategoryId, resolvedTaskId);
-
-      final Directory tempDir = await getTemporaryDirectory();
-      final String archivePath = path.join(tempDir.path, '$slug.tar.gz');
-
-      // Only the outer archive name encodes the category — the inner layout
-      // (video.mp4 / metadata.json / frames.jsonl) stays unchanged so the
-      // ego-pose-post-process pipeline and validator (which both hard-code
-      // "video.mp4") keep working.
-      //
-      // The actual archive build runs on a background isolate so the UI
-      // thread doesn't freeze for tens of seconds on long recordings — a
-      // 240 s bathroom clip is ~450 MB, large enough that the previous
-      // in-memory tar+gzip pipeline could OOM the app on mid-tier phones.
-      return await compute(_runExportInIsolate, <String, String>{
-        'recordingDir': recordingDir.path,
-        'tarGzPath': archivePath,
-      });
+      // Migrate any older `archive.tar.gz` / stale-slug file in place so
+      // the share sheet shows the current slug. If nothing's there yet,
+      // fall through to a full build.
+      final canonical = await _canonicalizeExistingArchive(sessionId);
+      if (canonical != null) return canonical;
+      return await buildArchive(sessionId);
     } catch (e) {
       debugPrint('Error exporting recording: $e');
       return null;
     }
   }
 
-  Future<void> shareRecording(String sessionId,
-      {Rect? sharePositionOrigin, String? categoryId, String? taskId}) async {
-    try {
-      final String? archivePath = await exportRecording(sessionId,
-          categoryId: categoryId, taskId: taskId);
+  /// Build the slug used as the share-displayed filename, given a recording
+  /// id. Looks up category/taskId from the persisted recordings list when
+  /// not passed in.
+  Future<String> shareSlugFor(
+    String sessionId, {
+    String? categoryId,
+    String? taskId,
+  }) async {
+    String? resolvedCategoryId = categoryId;
+    String? resolvedTaskId = taskId;
+    if (resolvedCategoryId == null || resolvedTaskId == null) {
+      final List<Recording> all = await loadRecordings();
+      for (final r in all) {
+        if (r.sessionId == sessionId) {
+          resolvedCategoryId ??= r.categoryId;
+          resolvedTaskId ??= r.taskId;
+          break;
+        }
+      }
+    }
+    return _exportSlug(sessionId, resolvedCategoryId, resolvedTaskId);
+  }
 
+  Future<void> shareRecording(
+    String sessionId, {
+    Rect? sharePositionOrigin,
+    String? categoryId,
+    String? taskId,
+  }) async {
+    try {
+      final String? archivePath =
+          await exportRecording(sessionId, categoryId: categoryId, taskId: taskId);
       if (archivePath == null) {
         throw Exception('Failed to export recording');
       }
-
-      // Strip both ".gz" and ".tar" so the share subject reads `<slug>` not
-      // `<slug>.tar`.
+      // The on-disk file is already named with the slug, so the share
+      // sheet picks up the right filename without an XFile.name override.
       final String archiveBase =
-          path.basename(archivePath).replaceAll(RegExp(r'\.tar\.gz$'), '');
-
+          path.basenameWithoutExtension(archivePath).replaceAll(
+                RegExp(r'\.tar$'),
+                '',
+              );
       final XFile file = XFile(archivePath);
       await Share.shareXFiles(
         [file],

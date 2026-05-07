@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
 import 'services/auth_service.dart';
+import 'services/compression_queue.dart';
+import 'services/recording_manager.dart';
 import 'services/token_storage.dart';
 import 'state/auth_controller.dart';
 import 'state/hand_presence_settings_controller.dart';
@@ -32,11 +34,23 @@ void main() async {
   // frame so the router never flashes the auth screen for a logged-in user.
   await authController.bootstrap();
 
+  // Background compressor for recordings. We construct it up front + scan
+  // for legacy recordings without an archive *after* the first frame ships
+  // (don't block app startup on it — large legacy backlogs would delay
+  // launch otherwise).
+  final compressionQueue = CompressionQueue(RecordingManager());
+  // Fire-and-forget: enqueueAllMissing only walks the recordings list; the
+  // actual compression happens on a worker isolate.
+  // ignore: unawaited_futures
+  Future<void>.delayed(const Duration(seconds: 1))
+      .then((_) => compressionQueue.enqueueAllMissing());
+
   runApp(DigientsApp(
     themeController: themeController,
     localeController: localeController,
     authController: authController,
     handPresenceSettings: handPresenceSettings,
+    compressionQueue: compressionQueue,
   ));
 }
 
@@ -45,6 +59,7 @@ class DigientsApp extends StatelessWidget {
   final LocaleController localeController;
   final AuthController authController;
   final HandPresenceSettingsController handPresenceSettings;
+  final CompressionQueue compressionQueue;
 
   const DigientsApp({
     super.key,
@@ -52,6 +67,7 @@ class DigientsApp extends StatelessWidget {
     required this.localeController,
     required this.authController,
     required this.handPresenceSettings,
+    required this.compressionQueue,
   });
 
   @override
@@ -63,6 +79,7 @@ class DigientsApp extends StatelessWidget {
         ChangeNotifierProvider<AuthController>.value(value: authController),
         ChangeNotifierProvider<HandPresenceSettingsController>.value(
             value: handPresenceSettings),
+        ChangeNotifierProvider<CompressionQueue>.value(value: compressionQueue),
       ],
       child: Consumer2<ThemeController, LocaleController>(
         builder: (context, themeCtl, localeCtl, _) {
