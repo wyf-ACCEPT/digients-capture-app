@@ -976,7 +976,7 @@ class _PreStartOverlay extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'PLACE HANDS IN VIEW',
+                l10n.preStartPrompt,
                 style: DCText.mono(
                   size: 11,
                   weight: FontWeight.w500,

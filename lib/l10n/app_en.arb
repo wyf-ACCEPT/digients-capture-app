@@ -125,6 +125,7 @@
   "failedToStartRecording": "Failed to start recording",
   "tapToStop": "TAP TO STOP",
   "tapToStart": "TAP TO START",
+  "preStartPrompt": "PLACE HANDS IN VIEW",
   "pressVolumeButtonToStart": "PRESS VOLUME BUTTON TO START",
   "mountCaptionPhone": "Place your phone horizontally with arrow pointing upward",
   "mountCaptionHeadband": "Mount on headband for data collection",

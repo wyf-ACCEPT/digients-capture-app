@@ -308,6 +308,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tapToStart => '点击开始';
 
   @override
+  String get preStartPrompt => '将双手放在画面内';
+
+  @override
   String get pressVolumeButtonToStart => '按音量键开始';
 
   @override

@@ -680,6 +680,12 @@ abstract class AppLocalizations {
   /// **'点击开始'**
   String get tapToStart;
 
+  /// No description provided for @preStartPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'将双手放在画面内'**
+  String get preStartPrompt;
+
   /// No description provided for @pressVolumeButtonToStart.
   ///
   /// In zh, this message translates to:

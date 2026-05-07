@@ -125,6 +125,7 @@
   "failedToStartRecording": "录制启动失败",
   "tapToStop": "点击停止",
   "tapToStart": "点击开始",
+  "preStartPrompt": "将双手放在画面内",
   "pressVolumeButtonToStart": "按音量键开始",
   "mountCaptionPhone": "横向放置手机，并让箭头朝上",
   "mountCaptionHeadband": "固定到头戴绑带上进行采集",

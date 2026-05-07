@@ -114,8 +114,6 @@ class HandAudioPlayer {
           .setAsset('assets/audio/session/submission_success.wav'),
       // Pinned to English for now — only one rendition shipped today.
       // Re-fetch via _voiceAssetLoaders() once a zh variant is added.
-      _preStartPromptPlayer
-          .setAsset('assets/audio/session_voice/pre_start_prompt.wav'),
     ]);
   }
 
@@ -322,6 +320,7 @@ class HandAudioPlayer {
       for (final entry in _sideVoicePlayers.entries)
         entry.value.setAsset(_sideVoiceAssetFor(entry.key)),
       _armedPromptPlayer.setAsset(_armedPromptAsset),
+      _preStartPromptPlayer.setAsset(_preStartPromptAsset),
     ];
   }
 
@@ -334,6 +333,7 @@ class HandAudioPlayer {
       : 'assets/audio/session_voice';
 
   String get _armedPromptAsset => '$_sessionVoiceDir/armed_prompt.wav';
+  String get _preStartPromptAsset => '$_sessionVoiceDir/pre_start_prompt.wav';
 
   String _stateVoiceAssetFor(HandPresenceState s) =>
       '$_voiceDir/${_baseName(s)}.wav';
