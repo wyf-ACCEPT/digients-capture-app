@@ -307,7 +307,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tapToStart => 'TAP TO START';
-  
+
   @override
   String get preStartPrompt => 'PLACE HANDS IN VIEW';
 
