@@ -70,9 +70,16 @@ class HandPresenceDetector(private val context: Context) : EventChannel.StreamHa
                     .setBaseOptions(baseOptions)
                     .setRunningMode(RunningMode.IMAGE)
                     .setNumHands(2)
-                    .setMinHandDetectionConfidence(0.5f)
-                    .setMinHandPresenceConfidence(0.5f)
-                    .setMinTrackingConfidence(0.5f)
+                    // Lowered from 0.5 → 0.2 (matching iOS) so MediaPipe
+                    // emits more raw detections; the controller layer's
+                    // minScore + spatial-handedness + bbox-proximity
+                    // guards then filter the actual decisions. Helps
+                    // false-negative behavior reported on the 13 Pro Max
+                    // ultrawide periphery; small effect on the OnePlus 5
+                    // wide where confidence rarely dips this low.
+                    .setMinHandDetectionConfidence(0.2f)
+                    .setMinHandPresenceConfidence(0.2f)
+                    .setMinTrackingConfidence(0.2f)
                     .build()
                 landmarker = HandLandmarker.createFromOptions(context, options)
                 Log.i(TAG, "HandLandmarker loaded from asset $key")

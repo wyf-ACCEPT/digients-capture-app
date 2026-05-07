@@ -24,7 +24,11 @@ class HandPresenceController extends ChangeNotifier {
     this.enterThreshold = 3,
     this.exitThreshold = 1,
     this.warmupTicks = 3,
-    this.minScore = 0.6,
+    // Lowered from 0.6 to 0.4 so legitimate hands whose MediaPipe
+    // confidence dips into the 0.4–0.55 band on the 13 Pro Max ultrawide
+    // (periphery distortion) still register. The spatial-handedness +
+    // bbox-proximity guards downstream keep false positives bounded.
+    this.minScore = 0.4,
     this.maxOutsideMargin = 0.05,
     this.spatialHandednessMargin = 0.15,
     this.oppositeHandMislabelProximity = 0.18,

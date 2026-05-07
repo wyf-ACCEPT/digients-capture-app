@@ -33,6 +33,14 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
+            // R8 trips on transitive AutoValue references inside MediaPipe
+            // Tasks Vision (javax.lang.model.* — annotation-processor APIs
+            // not present at runtime). Disabling minification skips the
+            // R8 pass entirely. APK is ~3× larger but ships cleanly. If
+            // size becomes a concern we can add proguard-rules.pro with
+            // -dontwarn javax.lang.model.** and friends.
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
