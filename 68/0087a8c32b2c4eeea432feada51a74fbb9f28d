@@ -1,0 +1,24 @@
+pubspec.yaml
+  s_195e10f2fa5309::t_ffd2e78e2a2523 19
+ios/Runner/Info.plist
+  s_195e10f2fa5309::t_757ea0f5fd6aff 31-32
+CLAUDE.md
+  s_195e10f2fa5309::t_3c0b07a0d8d0f2 108-109
+  s_195e10f2fa5309::t_a939adc7157e5f 113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "680087a8c32b2c4eeea432feada51a74fbb9f28d",
+  "prompts": {},
+  "sessions": {
+    "s_195e10f2fa5309": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3eaa814e-7173-454a-a272-93134a08b987",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
