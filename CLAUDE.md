@@ -121,6 +121,32 @@ All output must validate against `tools/validate_recording.py`. The validator ch
 - Frame count consistency
 - Intrinsics source validation
 
+## iOS Code Signing (Multi-Developer Coordination)
+
+The Capture App is currently shipped through a **personal Apple Developer account** as a bridge until the **Digients Technologies company account** is approved. This creates a multi-developer signing coordination problem because each developer's `DEVELOPMENT_TEAM` and `PRODUCT_BUNDLE_IDENTIFIER` in `ios/Runner.xcodeproj/project.pbxproj` are personal and incompatible across machines.
+
+**During the bridge period — keep pbxproj per-developer**:
+- Each developer uses their own paid Apple Developer team locally
+- Each enables `skip-worktree` on pbxproj so local team/bundle don't enter git history:
+  ```bash
+  git update-index --skip-worktree ios/Runner.xcodeproj/project.pbxproj
+  ```
+- **Do NOT commit pbxproj changes that override `DEVELOPMENT_TEAM` or `PRODUCT_BUNDLE_IDENTIFIER` to `main`** — it forces every other developer to manually re-apply their own team after pulling. If your pbxproj diff shows team/bundle changes when you push, you forgot to enable skip-worktree.
+
+**After the company account is approved — commit a shared team to `main`**:
+1. On a feature branch, set the production values in pbxproj:
+   - `DEVELOPMENT_TEAM = <company team ID>`
+   - `PRODUCT_BUNDLE_IDENTIFIER = com.digients.capture`
+2. PR → merge to `main`
+3. Each developer runs:
+   ```bash
+   git update-index --no-skip-worktree ios/Runner.xcodeproj/project.pbxproj
+   git pull
+   ```
+4. pbxproj becomes a normally-tracked file from then on; the skip-worktree dance is retired
+
+For team size > 20 or App Store release, migrate to `fastlane match` for centralized cert/profile management. Out of scope for the current bridge phase.
+
 ## Development Notes
 
 When modifying video settings, update both:
