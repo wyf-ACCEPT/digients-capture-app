@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
+import '../../l10n/localized_fixtures.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/buttons.dart';
@@ -8,7 +11,6 @@ import '../../widgets/chips.dart';
 import '../../widgets/export_progress.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
-import '../../fixtures/data.dart';
 
 class SubmissionsScreen extends StatefulWidget {
   const SubmissionsScreen({super.key});
@@ -18,8 +20,15 @@ class SubmissionsScreen extends StatefulWidget {
 }
 
 class _SubmissionsScreenState extends State<SubmissionsScreen> {
-  static const _filters = ['All', 'On Device', 'Uploading', 'In Review', 'Approved', 'Rejected'];
-  String _filter = 'All';
+  static const _filters = [
+    _SubmissionFilter.all,
+    _SubmissionFilter.onDevice,
+    _SubmissionFilter.uploading,
+    _SubmissionFilter.inReview,
+    _SubmissionFilter.approved,
+    _SubmissionFilter.rejected,
+  ];
+  _SubmissionFilter _filter = _SubmissionFilter.all;
   final _manager = RecordingManager();
   List<Recording> _recordings = [];
   bool _loading = true;
@@ -87,6 +96,7 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     final totalMb = _recordings.fold<int>(0, (s, r) => s + (r.fileSizeMB ?? 0));
     final totalGb = (totalMb / 1024).toStringAsFixed(2);
 
@@ -106,10 +116,11 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
                 SizedBox(
                   height: 48,
                   child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     scrollDirection: Axis.horizontal,
                     itemBuilder: (_, i) => DCChip(
-                      label: _filters[i],
+                      label: _filters[i].label(l10n),
                       active: _filter == _filters[i],
                       onTap: () => setState(() => _filter = _filters[i]),
                     ),
@@ -127,12 +138,16 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
                             color: c.accent,
                             child: ListView.builder(
                               padding: EdgeInsets.fromLTRB(
-                                16, 4, 16, _selectionMode ? 110 : 24,
+                                16,
+                                4,
+                                16,
+                                _selectionMode ? 110 : 24,
                               ),
                               itemCount: _recordings.length,
                               itemBuilder: (_, i) {
                                 final r = _recordings[i];
-                                final selected = _selectedIds.contains(r.sessionId);
+                                final selected =
+                                    _selectedIds.contains(r.sessionId);
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 10),
                                   child: _RecordingRow(
@@ -145,7 +160,8 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
                                       if (_selectionMode) {
                                         _toggleSelected(r.sessionId);
                                       } else {
-                                        context.push('/submissions/${r.sessionId}');
+                                        context.push(
+                                            '/submissions/${r.sessionId}');
                                       }
                                     },
                                     onLongPress: () {
@@ -177,6 +193,7 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   }
 
   Widget _buildDefaultHeader(DCColors c, String totalGb) {
+    final l10n = context.l10n;
     return Row(
       children: [
         Expanded(
@@ -184,13 +201,18 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Submissions',
-                style: DCText.inter(size: 28, weight: FontWeight.w700, color: c.text, letterSpacing: -0.56),
+                l10n.submissionsTitle,
+                style: DCText.inter(
+                    size: 28,
+                    weight: FontWeight.w700,
+                    color: c.text,
+                    letterSpacing: -0.56),
               ),
               const SizedBox(height: 4),
               Text(
-                '${_recordings.length} total · $totalGb GB on device',
-                style: DCText.mono(size: 12, weight: FontWeight.w500, color: c.textDim),
+                l10n.submissionsTotal(_recordings.length, totalGb),
+                style: DCText.mono(
+                    size: 12, weight: FontWeight.w500, color: c.textDim),
               ),
             ],
           ),
@@ -198,7 +220,7 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
         if (_recordings.isNotEmpty)
           IconButton(
             icon: Icon(Icons.checklist_rounded, color: c.text, size: 22),
-            tooltip: 'Select multiple',
+            tooltip: l10n.selectMultiple,
             onPressed: () => _enterSelection(),
           ),
         IconButton(
@@ -210,6 +232,7 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   }
 
   Widget _buildSelectionHeader(DCColors c) {
+    final l10n = context.l10n;
     final allSelected =
         _recordings.isNotEmpty && _selectedIds.length == _recordings.length;
     return Row(
@@ -220,14 +243,19 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
             children: [
               Text(
                 _selectedIds.isEmpty
-                    ? 'Select recordings'
-                    : '${_selectedIds.length} selected',
-                style: DCText.inter(size: 24, weight: FontWeight.w700, color: c.text, letterSpacing: -0.48),
+                    ? l10n.selectRecordings
+                    : l10n.selectedCount(_selectedIds.length),
+                style: DCText.inter(
+                    size: 24,
+                    weight: FontWeight.w700,
+                    color: c.text,
+                    letterSpacing: -0.48),
               ),
               const SizedBox(height: 4),
               Text(
-                'Tap to toggle · long-press a row to start',
-                style: DCText.mono(size: 12, weight: FontWeight.w500, color: c.textDim),
+                l10n.selectionHint,
+                style: DCText.mono(
+                    size: 12, weight: FontWeight.w500, color: c.textDim),
               ),
             ],
           ),
@@ -235,15 +263,23 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
         TextButton(
           onPressed: _toggleSelectAll,
           child: Text(
-            allSelected ? 'Clear' : 'Select all',
-            style: DCText.mono(size: 12, weight: FontWeight.w600, color: c.accent, letterSpacing: 1.2),
+            allSelected ? l10n.clear : l10n.selectAll,
+            style: DCText.mono(
+                size: 12,
+                weight: FontWeight.w600,
+                color: c.accent,
+                letterSpacing: 1.2),
           ),
         ),
         TextButton(
           onPressed: _exitSelection,
           child: Text(
-            'Done',
-            style: DCText.mono(size: 12, weight: FontWeight.w600, color: c.text, letterSpacing: 1.2),
+            l10n.done,
+            style: DCText.mono(
+                size: 12,
+                weight: FontWeight.w600,
+                color: c.text,
+                letterSpacing: 1.2),
           ),
         ),
       ],
@@ -251,18 +287,21 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   }
 
   Widget _buildEmpty(DCColors c) {
+    final l10n = context.l10n;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('NO ITEMS', style: DCText.eyebrow(color: c.textDim, size: 11)),
+            Text(l10n.noItems,
+                style: DCText.eyebrow(color: c.textDim, size: 11)),
             const SizedBox(height: 8),
             Text(
-              'Tap a category from Home to start recording.',
+              l10n.noItemsPrompt,
               textAlign: TextAlign.center,
-              style: DCText.inter(size: 13, weight: FontWeight.w500, color: c.textFaint),
+              style: DCText.inter(
+                  size: 13, weight: FontWeight.w500, color: c.textFaint),
             ),
           ],
         ),
@@ -271,45 +310,49 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   }
 
   Future<void> _share(Recording r) async {
+    final l10n = context.l10n;
     final RenderBox? box = context.findRenderObject() as RenderBox?;
-    final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final origin =
+        box != null ? box.localToGlobal(Offset.zero) & box.size : null;
     try {
       final archivePath = await withExportProgress<String?>(
         context,
-        initialMessage: 'Compressing recording…',
+        initialMessage: l10n.compressingRecording,
         work: (_) => _manager.exportRecording(r.sessionId),
       );
       if (archivePath == null || !mounted) return;
       await Share.shareXFiles(
         [XFile(archivePath)],
-        subject: 'Egocentric Video Recording',
-        text: 'Egocentric video recording data package',
+        subject: l10n.shareSubjectRecording,
+        text: l10n.shareTextRecording,
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.exportFailed(e.toString()))));
     }
   }
 
   Future<void> _bulkShare() async {
     if (_selectedIds.isEmpty) return;
+    final l10n = context.l10n;
     // Snapshot the selection at click-time so updates while we're packing
     // don't affect the in-flight batch.
-    final selected = _recordings
-        .where((r) => _selectedIds.contains(r.sessionId))
-        .toList();
+    final selected =
+        _recordings.where((r) => _selectedIds.contains(r.sessionId)).toList();
     final RenderBox? box = context.findRenderObject() as RenderBox?;
-    final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final origin =
+        box != null ? box.localToGlobal(Offset.zero) & box.size : null;
 
     try {
       final paths = await withExportProgress<List<String>>(
         context,
-        initialMessage: 'Compressing 1 of ${selected.length}…',
+        initialMessage: l10n.compressingProgress(1, selected.length),
         work: (progress) async {
           final results = <String>[];
           for (int i = 0; i < selected.length; i++) {
-            progress.update('Compressing ${i + 1} of ${selected.length}…');
+            progress.update(l10n.compressingProgress(i + 1, selected.length));
             final p = await _manager.exportRecording(selected[i].sessionId);
             if (p != null) results.add(p);
           }
@@ -319,28 +362,33 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
       if (paths.isEmpty || !mounted) return;
       await Share.shareXFiles(
         paths.map((p) => XFile(p)).toList(),
-        subject: 'Egocentric Video Recordings (${paths.length})',
-        text: 'Egocentric video recording data packages',
+        subject: l10n.shareSubjectRecordings(paths.length),
+        text: l10n.shareTextRecordings,
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       );
       if (mounted) _exitSelection();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.exportFailed(e.toString()))));
     }
   }
 
   Future<void> _delete(Recording r) async {
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete recording?'),
-        content: Text('This removes the local copy of recording ${r.sessionId.substring(0, 8)}.'),
+        title: Text(l10n.deleteRecordingTitle),
+        content: Text(l10n.deleteRecordingContent(r.sessionId.substring(0, 8))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Color(0xFFFF453A))),
+            child: Text(l10n.delete,
+                style: const TextStyle(color: Color(0xFFFF453A))),
           ),
         ],
       ),
@@ -360,6 +408,7 @@ class _SelectionActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     final disabled = count == 0;
     return Container(
       decoration: BoxDecoration(
@@ -387,9 +436,13 @@ class _SelectionActionBar extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       count == 0
-                          ? 'EXPORT SELECTED'
-                          : 'EXPORT $count RECORDING${count > 1 ? 'S' : ''}',
-                      style: DCText.mono(size: 13, weight: FontWeight.w700, color: Colors.black, letterSpacing: 1.4),
+                          ? l10n.exportSelected
+                          : l10n.exportRecordingCount(count),
+                      style: DCText.mono(
+                          size: 13,
+                          weight: FontWeight.w700,
+                          color: Colors.black,
+                          letterSpacing: 1.4),
                     ),
                   ],
                 ),
@@ -424,6 +477,7 @@ class _RecordingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -454,14 +508,18 @@ class _RecordingRow extends StatelessWidget {
                       bottom: 4,
                       right: 4,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           _formatDuration(recording.durationSeconds),
-                          style: DCText.mono(size: 9, weight: FontWeight.w500, color: Colors.white),
+                          style: DCText.mono(
+                              size: 9,
+                              weight: FontWeight.w500,
+                              color: Colors.white),
                         ),
                       ),
                     ),
@@ -474,12 +532,17 @@ class _RecordingRow extends StatelessWidget {
                           width: 22,
                           height: 22,
                           decoration: BoxDecoration(
-                            color: selected ? c.accent : Colors.black.withValues(alpha: 0.55),
+                            color: selected
+                                ? c.accent
+                                : Colors.black.withValues(alpha: 0.55),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                width: 1.5),
                           ),
                           child: selected
-                              ? const Icon(Icons.check, size: 14, color: Colors.black)
+                              ? const Icon(Icons.check,
+                                  size: 14, color: Colors.black)
                               : null,
                         ),
                       ),
@@ -494,15 +557,20 @@ class _RecordingRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    recordingDisplayTitle(recording),
+                    localizedRecordingDisplayTitle(recording, l10n),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: DCText.inter(size: 14, weight: FontWeight.w600, color: c.text, height: 1.3),
+                    style: DCText.inter(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: c.text,
+                        height: 1.3),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${_formatDate(recording.capturedAt)} · ${recording.fileSizeMB ?? 0} MB',
-                    style: DCText.mono(size: 10, weight: FontWeight.w500, color: c.textFaint),
+                    style: DCText.mono(
+                        size: 10, weight: FontWeight.w500, color: c.textFaint),
                   ),
                   const SizedBox(height: 6),
                   const DCStatusBadge(status: SubmissionStatus.ondevice),
@@ -518,7 +586,7 @@ class _RecordingRow extends StatelessWidget {
                     color: c.accent,
                     bg: c.accentTint,
                     onPressed: onShare,
-                    semanticLabel: 'Export',
+                    semanticLabel: l10n.export,
                   ),
                   const SizedBox(height: 6),
                   DCIconButton(
@@ -526,7 +594,7 @@ class _RecordingRow extends StatelessWidget {
                     color: c.danger,
                     bg: c.danger.withValues(alpha: 0.12),
                     onPressed: onDelete,
-                    semanticLabel: 'Delete',
+                    semanticLabel: l10n.delete,
                   ),
                 ],
               ),
@@ -546,5 +614,27 @@ class _RecordingRow extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  }
+}
+
+enum _SubmissionFilter {
+  all,
+  onDevice,
+  uploading,
+  inReview,
+  approved,
+  rejected
+}
+
+extension _SubmissionFilterLabel on _SubmissionFilter {
+  String label(AppLocalizations l10n) {
+    return switch (this) {
+      _SubmissionFilter.all => l10n.filterAll,
+      _SubmissionFilter.onDevice => l10n.statusOnDevice,
+      _SubmissionFilter.uploading => l10n.statusUploading,
+      _SubmissionFilter.inReview => l10n.statusInReview,
+      _SubmissionFilter.approved => l10n.statusApproved,
+      _SubmissionFilter.rejected => l10n.statusRejected,
+    };
   }
 }

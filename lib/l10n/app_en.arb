@@ -1,0 +1,474 @@
+{
+  "@@locale": "en",
+  "appTitle": "Digients Capture",
+  "navHome": "Home",
+  "navSubmissions": "Submissions",
+  "navMe": "Me",
+  "settingsTitle": "Settings",
+  "settingsAccount": "ACCOUNT",
+  "settingsUploads": "UPLOADS",
+  "settingsRecordingFeedback": "RECORDING FEEDBACK",
+  "settingsNotifications": "NOTIFICATIONS",
+  "settingsAppearance": "APPEARANCE",
+  "settingsAbout": "ABOUT",
+  "settingsEmail": "Email",
+  "settingsPhone": "Phone",
+  "settingsUid": "UID",
+  "settingsWifiOnly": "Wi-Fi only",
+  "settingsAutoUpload": "Auto-upload after capture",
+  "settingsBackgroundUploads": "Background uploads",
+  "settingsHandVoiceCues": "Hand-presence voice cues",
+  "settingsBorderIndicator": "Border indicator",
+  "settingsVibrateOnNoHands": "Vibrate on no hands",
+  "settingsApprovalResults": "Approval results",
+  "settingsPointsCredited": "Points credited",
+  "settingsTheme": "Theme",
+  "settingsLanguage": "Language",
+  "settingsVersion": "Version",
+  "settingsPrivacyPolicy": "Privacy Policy",
+  "settingsTermsOfService": "Terms of Service",
+  "settingsOpenSourceLicenses": "Open-source licenses",
+  "settingsSignOut": "Sign Out",
+  "settingsDeleteAccount": "Delete account",
+  "languageChinese": "中文",
+  "languageEnglish": "English",
+  "themeAuto": "Auto",
+  "themeDark": "Dark",
+  "themeLight": "Light",
+  "authEnterPhoneFirst": "Enter a phone number first.",
+  "authEnterEmailFirst": "Enter an email first.",
+  "authEnterSixDigitCode": "Enter the 6-digit code.",
+  "authInvalidCode": "Invalid code.",
+  "authSomethingWentWrong": "Something went wrong: {error}",
+  "@authSomethingWentWrong": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "authCreateAccount": "Create account",
+  "authWelcomeBack": "Welcome back",
+  "authSignUpSubtitle": "Sign up to start contributing recordings.",
+  "authSignInSubtitle": "Sign in to continue capturing.",
+  "authPhone": "Phone",
+  "authEmail": "Email",
+  "authMockBackendCode": "Mock backend · the code is 123456",
+  "authAgreementPrefix": "By creating an account you agree to our ",
+  "authTerms": "Terms",
+  "authAgreementMiddle": " and ",
+  "authPrivacyPolicy": "Privacy Policy",
+  "authAgreementSuffix": ".",
+  "authSending": "Sending...",
+  "authSendVerificationCode": "Send verification code",
+  "authVerifying": "Verifying...",
+  "authSignIn": "Sign in",
+  "authApple": "Apple",
+  "authGoogle": "Google",
+  "authOr": "or",
+  "authAlreadyHaveAccount": "Already have an account? ",
+  "authDontHaveAccount": "Don't have an account? ",
+  "authRegister": "Register",
+  "homeWelcomeBack": "WELCOME BACK",
+  "balance": "BALANCE",
+  "pending": "PENDING",
+  "pointsSuffix": "pts",
+  "chooseCategory": "Choose a category",
+  "tasksCount": "{count} tasks",
+  "@tasksCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "comingSoon": "SOON",
+  "upToPoints": "up to +{points}",
+  "@upToPoints": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      }
+    }
+  },
+  "digientsTasks": "Digients Tasks",
+  "tasksTitle": "Tasks",
+  "poolSortedByReward": "{count} tasks · sorted by reward",
+  "@poolSortedByReward": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filterAll": "All",
+  "filterHighReward": "High Reward",
+  "filterQuick": "Quick (<3 min)",
+  "filterBeginner": "Beginner",
+  "filterVerified": "Verified",
+  "noTasks": "NO TASKS",
+  "taskNotFound": "Task not found",
+  "taskDetails": "Task Details",
+  "demoCaption": "DEMO · 0:08",
+  "pointsOnApproval": "points on approval",
+  "duration": "Duration",
+  "difficulty": "Difficulty",
+  "lighting": "Lighting",
+  "surface": "Surface",
+  "steps": "STEPS",
+  "headsUp": "HEADS UP",
+  "storageWarning": "Recording will auto-stop at 5% remaining storage. Phone will buzz to alert you.",
+  "storageAvailability": "Storage · 2h 35m available · 18.0 GB free",
+  "record": "Record",
+  "cameraPermissionRequired": "Camera permission required",
+  "failedToInitializeCamera": "Failed to initialize camera",
+  "failedToStartRecording": "Failed to start recording",
+  "tapToStop": "TAP TO STOP",
+  "tapToStart": "TAP TO START",
+  "pressVolumeButtonToStart": "PRESS VOLUME BUTTON TO START",
+  "mountCaptionPhone": "Place your phone horizontally with arrow pointing upward",
+  "mountCaptionHeadband": "Mount on headband for data collection",
+  "instructionsEndIn": "INSTRUCTIONS END IN {seconds}s",
+  "@instructionsEndIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "skip": "SKIP",
+  "thisSideUp": "THIS SIDE UP",
+  "submittedTitle": "Submitted!",
+  "successCopyUploading": "Data is uploading and will be under review.",
+  "successCopyKeepConnection": "Please keep internet connection.",
+  "successCopyPointsSoon": "Points will be credited within approximately 48 hours.",
+  "pendingReview": "pending review",
+  "goToSubmissions": "Go To Submissions",
+  "submissionSaved": "Submission saved",
+  "takePoints": "Take {takeNumber} · +{points} points",
+  "@takePoints": {
+    "placeholders": {
+      "takeNumber": {
+        "type": "int"
+      },
+      "points": {
+        "type": "int"
+      }
+    }
+  },
+  "pressVolumeAnotherTake": "PRESS VOLUME BUTTON\nFOR ANOTHER TAKE",
+  "submissionsTitle": "Submissions",
+  "submissionsTotal": "{count} total · {totalGb} GB on device",
+  "@submissionsTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "totalGb": {
+        "type": "String"
+      }
+    }
+  },
+  "selectMultiple": "Select multiple",
+  "selectRecordings": "Select recordings",
+  "selectedCount": "{count} selected",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectionHint": "Tap to toggle · long-press a row to start",
+  "clear": "Clear",
+  "selectAll": "Select all",
+  "done": "Done",
+  "noItems": "NO ITEMS",
+  "noItemsPrompt": "Tap a category from Home to start recording.",
+  "compressingRecording": "Compressing recording...",
+  "compressingProgress": "Compressing {current} of {total}...",
+  "@compressingProgress": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "exportFailed": "Export failed: {error}",
+  "@exportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "shareSubjectRecording": "Egocentric Video Recording",
+  "shareTextRecording": "Egocentric video recording data package",
+  "shareSubjectRecordings": "Egocentric Video Recordings ({count})",
+  "@shareSubjectRecordings": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareTextRecordings": "Egocentric video recording data packages",
+  "deleteRecordingTitle": "Delete recording?",
+  "deleteRecordingContent": "This removes the local copy of recording {idPrefix}.",
+  "@deleteRecordingContent": {
+    "placeholders": {
+      "idPrefix": {
+        "type": "String"
+      }
+    }
+  },
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "export": "Export",
+  "exportSelected": "EXPORT SELECTED",
+  "exportRecordingCount": "EXPORT {count} RECORDING(S)",
+  "@exportRecordingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "savedOnDevice": "SAVED ON DEVICE",
+  "notUploadedYet": "Not uploaded yet. Use Export to share the recording package via the share sheet.",
+  "sessionId": "Session ID",
+  "captured": "Captured",
+  "size": "Size",
+  "codec": "Codec",
+  "resolution": "Resolution",
+  "intrinsics": "Intrinsics",
+  "perFrame": "Per-frame",
+  "keepAppOpen": "KEEP THE APP OPEN",
+  "statusOnDevice": "On Device",
+  "statusUploading": "Uploading",
+  "statusInReview": "In Review",
+  "statusApproved": "Approved",
+  "statusRejected": "Rejected",
+  "recordingTitle": "Recording {idPrefix}",
+  "@recordingTitle": {
+    "placeholders": {
+      "idPrefix": {
+        "type": "String"
+      }
+    }
+  },
+  "recordingInCategory": "{category} · {idPrefix}",
+  "@recordingInCategory": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      },
+      "idPrefix": {
+        "type": "String"
+      }
+    }
+  },
+  "profileHours": "HOURS",
+  "profileSubmitted": "SUBMITTED",
+  "profileApproval": "APPROVAL",
+  "profileCapability": "CAPABILITY",
+  "capabilityHousehold": "Household",
+  "capabilityIndustrial": "Industrial",
+  "capabilitySports": "Sports",
+  "capabilityVariety": "Variety",
+  "capabilitySpeed": "Speed",
+  "capabilityApproval": "Approval",
+  "leaderboardGlobal": "LEADERBOARD · GLOBAL",
+  "rankNumber": "Rank #{rank}",
+  "@rankNumber": {
+    "placeholders": {
+      "rank": {
+        "type": "int"
+      }
+    }
+  },
+  "categoryLivingRoom": "Living Room",
+  "categoryKitchen": "Kitchen",
+  "categoryBedroom": "Bedroom",
+  "categoryConvenienceStore": "Convenience Store",
+  "categoryBathroom": "Bathroom",
+  "taskTagPickPlace": "Pick & Place",
+  "taskTagSwitch": "Switch",
+  "taskTagFolding": "Folding",
+  "taskTagCutting": "Cutting",
+  "taskTagTableware": "Tableware",
+  "taskTagPouring": "Pouring",
+  "taskTagCleaning": "Cleaning",
+  "taskTagHandover": "Handover",
+  "difficultyEasy": "Easy",
+  "difficultyMedium": "Medium",
+  "lightingBrightIndoor": "Bright indoor",
+  "lightingMixed": "Mixed",
+  "lightingEvenOverhead": "Even overhead",
+  "duration10To20": "10-20 s",
+  "duration15To30": "15-30 s",
+  "duration30To60": "30-60 s",
+  "duration30To90": "30-90 s",
+  "duration45To90": "45-90 s",
+  "duration60To120": "60-120 s",
+  "duration60To180": "60-180 s",
+  "duration120To240": "120-240 s",
+  "slots0Of30": "0 / 30 slots",
+  "slots0Of40": "0 / 40 slots",
+  "slots0Of50": "0 / 50 slots",
+  "surfaceCoffeeTable": "Coffee table",
+  "surfaceWallSwitch": "Wall switch",
+  "surfaceLivingRoomDrawer": "Living-room drawer",
+  "surfaceWindow": "Window",
+  "surfaceLivingRoom": "Living room",
+  "surfaceBed": "Bed",
+  "surfaceCuttingBoard": "Cutting board",
+  "surfaceKitchenCounter": "Kitchen counter",
+  "surfaceToilet": "Toilet",
+  "surfaceBasin": "Basin",
+  "surfaceStoreShelf": "Store shelf",
+  "surfaceCounter": "Counter",
+  "taskLrPickRemoteTitle": "Pick up and place the remote control",
+  "taskLrPickRemoteStep1": "Place the remote control on the living room table.",
+  "taskLrPickRemoteStep2": "Pick it up, move it to a different spot on the table, sofa, or chair, and pause for 1 second.",
+  "taskLrPickRemoteStep3": "Pick it up again and return it to its original spot, then pause for 1 second.",
+  "taskLrPickRemoteStep4": "Vary the destination spot across attempts; keep both hands in frame.",
+  "taskLrPickPhoneTitle": "Pick up and place a phone",
+  "taskLrPickPhoneStep1": "Place the phone on the living room table.",
+  "taskLrPickPhoneStep2": "Pick it up, move it to a different spot on the table, sofa, or chair, and pause for 1 second.",
+  "taskLrPickPhoneStep3": "Pick it up again and return it to its original spot, then pause for 1 second.",
+  "taskLrPickPhoneStep4": "Vary the destination spot across attempts; keep both hands in frame.",
+  "taskLrPickPowerbankTitle": "Pick up and place a power bank",
+  "taskLrPickPowerbankStep1": "Place the power bank on the living room table.",
+  "taskLrPickPowerbankStep2": "Pick it up, move it to a different spot on the table, sofa, or chair, and pause for 1 second.",
+  "taskLrPickPowerbankStep3": "Pick it up again and return it to its original spot, then pause for 1 second.",
+  "taskLrPickPowerbankStep4": "Vary the destination spot across attempts; keep both hands in frame.",
+  "taskLrPickComboTitle": "Pick & place - remote + phone + power bank",
+  "taskLrPickComboStep1": "Place the remote control, phone, and power bank on the table together.",
+  "taskLrPickComboStep2": "Pick up the remote, move it to a new spot on the table / sofa / chair, pause 1 s, then return it.",
+  "taskLrPickComboStep3": "Repeat the same routine for the phone, then for the power bank.",
+  "taskLrPickComboStep4": "Vary destinations across items; keep the full motion in frame.",
+  "taskLrSwitchLightTitle": "Toggle a wall light switch",
+  "taskLrSwitchLightStep1": "Walk up to the wall switch.",
+  "taskLrSwitchLightStep2": "Press it once to turn the light on; pause 2 s so the camera catches the light coming on.",
+  "taskLrSwitchLightStep3": "Press it again to turn the light off; pause 2 s so the camera catches it going off.",
+  "taskLrSwitchLightStep4": "Press fully each time - no half-presses; keep your hand visible.",
+  "taskLrSwitchDrawerTitle": "Open and close a drawer",
+  "taskLrSwitchDrawerStep1": "Walk up to the drawer.",
+  "taskLrSwitchDrawerStep2": "Grip the handle and pull it fully open; pause 2 s.",
+  "taskLrSwitchDrawerStep3": "Push it fully closed; pause 2 s.",
+  "taskLrSwitchDrawerStep4": "Pull / push all the way each time - no half motions.",
+  "taskLrSwitchCurtainTitle": "Open and close a curtain",
+  "taskLrSwitchCurtainStep1": "Walk up to the curtain.",
+  "taskLrSwitchCurtainStep2": "Grab the cord or fabric and pull it fully open to let light in; pause 2 s.",
+  "taskLrSwitchCurtainStep3": "Pull it fully closed again; pause 2 s.",
+  "taskLrSwitchCurtainStep4": "Always go from end to end - no half motions.",
+  "taskLrSwitchComboTitle": "Light + drawer + curtain combo",
+  "taskLrSwitchComboStep1": "Toggle the wall light on, pause 2 s, then off, pause 2 s.",
+  "taskLrSwitchComboStep2": "Pull the drawer fully open, pause 2 s, then push it fully closed, pause 2 s.",
+  "taskLrSwitchComboStep3": "Pull the curtain fully open, pause 2 s, then close it, pause 2 s.",
+  "taskLrSwitchComboStep4": "Run all three in sequence; keep your hand in frame the whole time.",
+  "taskBrFoldClothesSingleTitle": "Fold a single piece of clothing",
+  "taskBrFoldClothesSingleStep1": "Lay one clean t-shirt, shirt, or pair of trousers flat on the bed.",
+  "taskBrFoldClothesSingleStep2": "Fold both sides toward the centre, then roll or fold up from the bottom.",
+  "taskBrFoldClothesSingleStep3": "Place the folded item on the headboard or wardrobe shelf and pause 1 s.",
+  "taskBrFoldClothesSingleStep4": "Keep both hands visible - do not hold the garment up in front of the camera.",
+  "taskBrFoldClothesMultiTitle": "Fold 2-3 pieces of clothing",
+  "taskBrFoldClothesMultiStep1": "Lay 2-3 clean garments flat on the bed.",
+  "taskBrFoldClothesMultiStep2": "Fold each one in turn - sides to centre, then bottom up - and stack on the shelf.",
+  "taskBrFoldClothesMultiStep3": "Finish each garment fully before starting the next.",
+  "taskBrFoldClothesMultiStep4": "Use a natural pace; keep hands in frame throughout.",
+  "taskBrFoldTowelSingleTitle": "Fold a single towel",
+  "taskBrFoldTowelSingleStep1": "Lay one clean towel (face / bath) flat on the bed.",
+  "taskBrFoldTowelSingleStep2": "Fold it in half along the long edge, then in half along the short edge into a square.",
+  "taskBrFoldTowelSingleStep3": "Place it on the wash counter or wardrobe shelf.",
+  "taskBrFoldTowelSingleStep4": "Hands stay in frame; do not block the camera with the towel.",
+  "taskBrFoldTowelMultiTitle": "Fold 2-3 towels",
+  "taskBrFoldTowelMultiStep1": "Lay 2-3 clean towels flat on the bed.",
+  "taskBrFoldTowelMultiStep2": "Fold each one - long edge in half, then short edge in half - and stack.",
+  "taskBrFoldTowelMultiStep3": "Finish each towel before moving to the next.",
+  "taskBrFoldTowelMultiStep4": "Natural pace; keep hands in frame.",
+  "taskKtCutFruitSingleTitle": "Cut a single piece of fruit",
+  "taskKtCutFruitSingleStep1": "Wash one apple, orange, banana, or similar fruit.",
+  "taskKtCutFruitSingleStep2": "Place the fruit on the board and chop into pieces with the knife.",
+  "taskKtCutFruitSingleStep3": "Transfer the pieces to a plate.",
+  "taskKtCutFruitSingleStep4": "Mind the knife - do not raise it high enough that your hand leaves the frame.",
+  "taskKtCutFruitMultiTitle": "Cut 2-3 different fruits",
+  "taskKtCutFruitMultiStep1": "Wash 2-3 different fruits (e.g. apple, orange, banana).",
+  "taskKtCutFruitMultiStep2": "Cut each one in turn on the board, transferring pieces to the plate after each.",
+  "taskKtCutFruitMultiStep3": "Pin the fruit with one hand, cut with the other; keep both visible.",
+  "taskKtCutFruitMultiStep4": "Upload as one clip - do not split per fruit.",
+  "taskKtTablewareSingleTitle": "Set out a single piece of tableware",
+  "taskKtTablewareSingleStep1": "Pick one item (plate, bowl, chopsticks, fork, or spoon) and set it neatly on the counter or stovetop.",
+  "taskKtTablewareSingleStep2": "After placing, pick it back up and return it to its original spot.",
+  "taskKtTablewareSingleStep3": "Use the full reach-grasp-place motion; do not rush.",
+  "taskKtTablewareSingleStep4": "Different items count as separate clips.",
+  "taskKtTablewareMultiTitle": "Set out multiple pieces of tableware",
+  "taskKtTablewareMultiStep1": "Place each item (plate, bowl, chopsticks, fork, spoon) on the counter one by one, neatly arranged.",
+  "taskKtTablewareMultiStep2": "Optionally collect them back to their original spot one by one.",
+  "taskKtTablewareMultiStep3": "Budget about 15-30 s per item; upload as one combined clip.",
+  "taskKtTablewareMultiStep4": "Light grip; do not drop bowls.",
+  "taskKtPourWaterTitle": "Pour water from a kettle into a cup",
+  "taskKtPourWaterStep1": "Fill the kettle with water; place a cup on the counter.",
+  "taskKtPourWaterStep2": "Pick up the kettle, aim at the cup, and pour to about 70-80% full.",
+  "taskKtPourWaterStep3": "Set the kettle back on the counter.",
+  "taskKtPourWaterStep4": "Try different cups (glass, ceramic) across attempts; one pour = one clip.",
+  "taskKtPourCoffeeTitle": "Pour coffee from a kettle into a cup",
+  "taskKtPourCoffeeStep1": "Fill the kettle with coffee; place a cup on the counter.",
+  "taskKtPourCoffeeStep2": "Pick up the kettle, aim at the cup, and pour to about 70-80% full.",
+  "taskKtPourCoffeeStep3": "Set the kettle back on the counter.",
+  "taskKtPourCoffeeStep4": "Try different cups (glass, ceramic) across attempts; one pour = one clip.",
+  "taskKtPourTeaTitle": "Pour tea from a kettle into a cup",
+  "taskKtPourTeaStep1": "Fill the kettle with tea; place a cup on the counter.",
+  "taskKtPourTeaStep2": "Pick up the kettle, aim at the cup, and pour to about 70-80% full.",
+  "taskKtPourTeaStep3": "Set the kettle back on the counter.",
+  "taskKtPourTeaStep4": "Try different cups (glass, ceramic) across attempts; one pour = one clip.",
+  "taskKtPourComboTitle": "Pour water + coffee + tea",
+  "taskKtPourComboStep1": "Prepare the kettle and cups (use water, tea, or coffee).",
+  "taskKtPourComboStep2": "Pour 2-3 cups in sequence, swapping cup styles where possible.",
+  "taskKtPourComboStep3": "After each pour, set the kettle down.",
+  "taskKtPourComboStep4": "Upload as one clip - pouring multiple cups is a single task.",
+  "taskBtWipeToiletTitle": "Wipe down the outside of the toilet",
+  "taskBtWipeToiletStep1": "Take a clean cloth and spritz a little cleaner (a damp cloth is fine).",
+  "taskBtWipeToiletStep2": "Wipe the tank, lid, and outer body of the toilet, going back and forth.",
+  "taskBtWipeToiletStep3": "Cover all outside surfaces; keep your hand visible - do not let your body block the toilet.",
+  "taskBtWipeToiletStep4": "Return the cloth when finished.",
+  "taskBtCleanToiletSeatTitle": "Clean the toilet seat ring",
+  "taskBtCleanToiletSeatStep1": "Lift the toilet seat ring up; record the lift motion.",
+  "taskBtCleanToiletSeatStep2": "Wipe the underside, then flip and wipe the top so both sides are clean.",
+  "taskBtCleanToiletSeatStep3": "Lower the seat back into place; put the cloth away.",
+  "taskBtCleanToiletSeatStep4": "Mind hygiene - do not splash on yourself.",
+  "taskBtCleanBasinTitle": "Clean the wash basin",
+  "taskBtCleanBasinStep1": "Wipe the inside of the basin, then the surrounding counter, then the tap.",
+  "taskBtCleanBasinStep2": "Make sure every wipe motion is captured; do not skip regions.",
+  "taskBtCleanBasinStep3": "Avoid splashing water around - clean as you would normally.",
+  "taskBtCleanBasinStep4": "Return the cloth.",
+  "taskCsPickShelfSingleTitle": "Take a single product off the shelf",
+  "taskCsPickShelfSingleStep1": "Set up a shelf with everyday convenience-store items (water, biscuits, toothpaste, etc.).",
+  "taskCsPickShelfSingleStep2": "Take one item off the shelf and place it in the basket in front of you; pause 1 s.",
+  "taskCsPickShelfSingleStep3": "Pick it back out of the basket and return it to its original shelf spot.",
+  "taskCsPickShelfSingleStep4": "Use different shelf heights across attempts but stay reachable - one item = one clip.",
+  "taskCsPickShelfMultiTitle": "Take 2-3 products off the shelf",
+  "taskCsPickShelfMultiStep1": "Stock the shelf with assorted convenience items.",
+  "taskCsPickShelfMultiStep2": "For each of 2-3 items: take it off the shelf, place in the basket, pause 1 s, then return it.",
+  "taskCsPickShelfMultiStep3": "Vary which shelves you pull from (top, middle, bottom).",
+  "taskCsPickShelfMultiStep4": "Upload as a single clip - multiple items is one task.",
+  "taskCsWipeCounterTitle": "Wipe down the counter / shelf surface",
+  "taskCsWipeCounterStep1": "Take a damp cloth.",
+  "taskCsWipeCounterStep2": "Wipe the cashier counter or shelf surface left to right, covering the whole top.",
+  "taskCsWipeCounterStep3": "Keep your hand visible throughout the wipe.",
+  "taskCsWipeCounterStep4": "Return the cloth when done.",
+  "taskCsHandoverSingleTitle": "Hand a single product to a customer",
+  "taskCsHandoverSingleStep1": "Stock a shelf with items; have a friend or family member stand in front of you as the customer.",
+  "taskCsHandoverSingleStep2": "Take one item (e.g. a bottle of water) off the shelf and hand it to the customer.",
+  "taskCsHandoverSingleStep3": "The customer takes it; pause 1 s.",
+  "taskCsHandoverSingleStep4": "Both your hand and the customer's hand can be in frame - natural handover motion.",
+  "taskCsHandoverMultiTitle": "Hand 2-3 products to a customer",
+  "taskCsHandoverMultiStep1": "Stock a shelf and have a customer stand opposite you.",
+  "taskCsHandoverMultiStep2": "Take an item off the shelf and hand it over; pause 1 s.",
+  "taskCsHandoverMultiStep3": "Repeat for 2-3 different items.",
+  "taskCsHandoverMultiStep4": "Upload as one clip - multiple handovers is a single task."
+}

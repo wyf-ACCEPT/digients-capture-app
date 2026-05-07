@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../l10n/l10n.dart';
 import '../theme/text_styles.dart';
 
 /// Onboarding overlay shown over the live camera preview before recording
@@ -101,9 +102,9 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final caption = _step == 0
-        ? 'Place your phone horizontally with arrow pointing upward'
-        : 'Mount on headband for data collection';
+    final l10n = context.l10n;
+    final caption =
+        _step == 0 ? l10n.mountCaptionPhone : l10n.mountCaptionHeadband;
 
     return Stack(
       children: [
@@ -125,11 +126,14 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                 right: 0,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF14C9A8).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: const Color(0xFF14C9A8).withValues(alpha: 0.5)),
+                      border: Border.all(
+                          color:
+                              const Color(0xFF14C9A8).withValues(alpha: 0.5)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -144,7 +148,7 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'INSTRUCTIONS END IN ${_secondsLeft}s',
+                          l10n.instructionsEndIn(_secondsLeft),
                           style: DCText.mono(
                             size: 11,
                             weight: FontWeight.w600,
@@ -166,15 +170,21 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                 child: GestureDetector(
                   onTap: widget.onComplete,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18)),
                     ),
                     child: Text(
-                      'SKIP',
-                      style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white70, letterSpacing: 1.4),
+                      l10n.skip,
+                      style: DCText.mono(
+                          size: 11,
+                          weight: FontWeight.w500,
+                          color: Colors.white70,
+                          letterSpacing: 1.4),
                     ),
                   ),
                 ),
@@ -193,44 +203,46 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                       curve: Curves.easeOut,
                       opacity: _visible ? 1.0 : 0.0,
                       child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            height: 220,
-                            width: 280,
-                            child: _step == 0
-                                ? const _PhoneArrowIllustration()
-                                : const _HeadbandIllustration(),
-                          ),
-                          const SizedBox(height: 36),
-                          // Subtle scrim under the caption so it stays
-                          // legible even when the preview behind happens
-                          // to be bright (e.g. pointed at a window).
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.45),
-                              borderRadius: BorderRadius.circular(12),
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              height: 220,
+                              width: 280,
+                              child: _step == 0
+                                  ? _PhoneArrowIllustration(
+                                      label: l10n.thisSideUp)
+                                  : const _HeadbandIllustration(),
                             ),
-                            child: Text(
-                              caption,
-                              textAlign: TextAlign.center,
-                              style: DCText.inter(
-                                size: 22,
-                                weight: FontWeight.w600,
-                                color: Colors.white,
-                                height: 1.35,
-                                letterSpacing: -0.44,
+                            const SizedBox(height: 36),
+                            // Subtle scrim under the caption so it stays
+                            // legible even when the preview behind happens
+                            // to be bright (e.g. pointed at a window).
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                caption,
+                                textAlign: TextAlign.center,
+                                style: DCText.inter(
+                                  size: 22,
+                                  weight: FontWeight.w600,
+                                  color: Colors.white,
+                                  height: 1.35,
+                                  letterSpacing: -0.44,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
                 ),
               ),
               Positioned(
@@ -253,7 +265,8 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
                           height: 5,
                           width: active ? 18 : 5,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: active ? 0.95 : 0.25),
+                            color: Colors.white
+                                .withValues(alpha: active ? 0.95 : 0.25),
                             borderRadius: BorderRadius.circular(3),
                           ),
                         );
@@ -271,10 +284,12 @@ class _MountInstructionsOverlayState extends State<MountInstructionsOverlay> {
 }
 
 class _PhoneArrowIllustration extends StatefulWidget {
-  const _PhoneArrowIllustration();
+  final String label;
+  const _PhoneArrowIllustration({required this.label});
 
   @override
-  State<_PhoneArrowIllustration> createState() => _PhoneArrowIllustrationState();
+  State<_PhoneArrowIllustration> createState() =>
+      _PhoneArrowIllustrationState();
 }
 
 class _PhoneArrowIllustrationState extends State<_PhoneArrowIllustration>
@@ -284,7 +299,8 @@ class _PhoneArrowIllustrationState extends State<_PhoneArrowIllustration>
   @override
   void initState() {
     super.initState();
-    _ctl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
+    _ctl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1600))
       ..repeat(reverse: true);
   }
 
@@ -299,7 +315,10 @@ class _PhoneArrowIllustrationState extends State<_PhoneArrowIllustration>
     return AnimatedBuilder(
       animation: _ctl,
       builder: (_, __) => CustomPaint(
-        painter: _PhoneArrowPainter(arrowOffsetY: _ctl.value * -6),
+        painter: _PhoneArrowPainter(
+          arrowOffsetY: _ctl.value * -6,
+          label: widget.label,
+        ),
       ),
     );
   }
@@ -307,7 +326,8 @@ class _PhoneArrowIllustrationState extends State<_PhoneArrowIllustration>
 
 class _PhoneArrowPainter extends CustomPainter {
   final double arrowOffsetY;
-  _PhoneArrowPainter({required this.arrowOffsetY});
+  final String label;
+  _PhoneArrowPainter({required this.arrowOffsetY, required this.label});
 
   // Maps mockup 280×220 viewBox onto provided canvas size.
   Offset _m(double x, double y, Size size) =>
@@ -316,7 +336,7 @@ class _PhoneArrowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final accent = const Color(0xFF14C9A8);
+    const accent = Color(0xFF14C9A8);
     final whiteFaint = Colors.white.withValues(alpha: 0.18);
 
     final accentStroke = Paint()
@@ -336,15 +356,17 @@ class _PhoneArrowPainter extends CustomPainter {
     final shaftBottom = _m(140, 62 + arrowOffsetY, size);
     canvas.drawLine(shaftTop, shaftBottom, accentStroke);
     final chevron = Path()
-      ..moveTo(_m(130, 32 + arrowOffsetY, size).dx, _m(130, 32 + arrowOffsetY, size).dy)
+      ..moveTo(_m(130, 32 + arrowOffsetY, size).dx,
+          _m(130, 32 + arrowOffsetY, size).dy)
       ..lineTo(shaftTop.dx, shaftTop.dy)
-      ..lineTo(_m(150, 32 + arrowOffsetY, size).dx, _m(150, 32 + arrowOffsetY, size).dy);
+      ..lineTo(_m(150, 32 + arrowOffsetY, size).dx,
+          _m(150, 32 + arrowOffsetY, size).dy);
     canvas.drawPath(chevron, accentStroke);
 
     // "THIS SIDE UP" label
     final tp = TextPainter(
       text: TextSpan(
-        text: 'THIS SIDE UP',
+        text: label,
         style: DCText.mono(
           size: _ms(10, size),
           weight: FontWeight.w500,
@@ -358,8 +380,10 @@ class _PhoneArrowPainter extends CustomPainter {
 
     // Phone in landscape (translate(40, 80), 200×100)
     final phoneOrigin = _m(40, 80, size);
-    final phoneRect = Rect.fromLTWH(phoneOrigin.dx, phoneOrigin.dy, _ms(200, size), _ms(100, size));
-    final phoneRRect = RRect.fromRectAndRadius(phoneRect, Radius.circular(_ms(14, size)));
+    final phoneRect = Rect.fromLTWH(
+        phoneOrigin.dx, phoneOrigin.dy, _ms(200, size), _ms(100, size));
+    final phoneRRect =
+        RRect.fromRectAndRadius(phoneRect, Radius.circular(_ms(14, size)));
     canvas.drawRRect(phoneRRect, Paint()..color = const Color(0xFF1C1C20));
     canvas.drawRRect(phoneRRect, whiteStroke);
 
@@ -388,8 +412,10 @@ class _PhoneArrowPainter extends CustomPainter {
     );
 
     // Rear camera bump on LEFT short edge
-    final bumpOrigin = Offset(phoneOrigin.dx + _ms(14, size), phoneOrigin.dy + _ms(30, size));
-    final bumpRect = Rect.fromLTWH(bumpOrigin.dx, bumpOrigin.dy, _ms(28, size), _ms(40, size));
+    final bumpOrigin =
+        Offset(phoneOrigin.dx + _ms(14, size), phoneOrigin.dy + _ms(30, size));
+    final bumpRect = Rect.fromLTWH(
+        bumpOrigin.dx, bumpOrigin.dy, _ms(28, size), _ms(40, size));
     canvas.drawRRect(
       RRect.fromRectAndRadius(bumpRect, Radius.circular(_ms(6, size))),
       Paint()..color = const Color(0xFF0A0A0A),
@@ -403,8 +429,10 @@ class _PhoneArrowPainter extends CustomPainter {
     );
 
     // Lens 1 (top)
-    final lens1Center = Offset(bumpOrigin.dx + _ms(14, size), bumpOrigin.dy + _ms(13, size));
-    canvas.drawCircle(lens1Center, _ms(6, size), Paint()..color = const Color(0xFF1C1C20));
+    final lens1Center =
+        Offset(bumpOrigin.dx + _ms(14, size), bumpOrigin.dy + _ms(13, size));
+    canvas.drawCircle(
+        lens1Center, _ms(6, size), Paint()..color = const Color(0xFF1C1C20));
     canvas.drawCircle(
       lens1Center,
       _ms(6, size),
@@ -413,11 +441,14 @@ class _PhoneArrowPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.8,
     );
-    canvas.drawCircle(lens1Center, _ms(3.5, size), Paint()..color = accent.withValues(alpha: 0.3));
+    canvas.drawCircle(lens1Center, _ms(3.5, size),
+        Paint()..color = accent.withValues(alpha: 0.3));
 
     // Lens 2 (bottom)
-    final lens2Center = Offset(bumpOrigin.dx + _ms(14, size), bumpOrigin.dy + _ms(28, size));
-    canvas.drawCircle(lens2Center, _ms(4, size), Paint()..color = const Color(0xFF1C1C20));
+    final lens2Center =
+        Offset(bumpOrigin.dx + _ms(14, size), bumpOrigin.dy + _ms(28, size));
+    canvas.drawCircle(
+        lens2Center, _ms(4, size), Paint()..color = const Color(0xFF1C1C20));
     canvas.drawCircle(
       lens2Center,
       _ms(4, size),
@@ -445,7 +476,8 @@ class _PhoneArrowPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_PhoneArrowPainter old) => old.arrowOffsetY != arrowOffsetY;
+  bool shouldRepaint(_PhoneArrowPainter old) =>
+      old.arrowOffsetY != arrowOffsetY || old.label != label;
 }
 
 class _HeadbandIllustration extends StatefulWidget {
@@ -462,7 +494,8 @@ class _HeadbandIllustrationState extends State<_HeadbandIllustration>
   @override
   void initState() {
     super.initState();
-    _ctl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))
+    _ctl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1500))
       ..repeat(reverse: true);
   }
 
@@ -476,7 +509,8 @@ class _HeadbandIllustrationState extends State<_HeadbandIllustration>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctl,
-      builder: (_, __) => CustomPaint(painter: _HeadbandPainter(blink: 1.0 - 0.7 * _ctl.value)),
+      builder: (_, __) =>
+          CustomPaint(painter: _HeadbandPainter(blink: 1.0 - 0.7 * _ctl.value)),
     );
   }
 }
@@ -491,7 +525,7 @@ class _HeadbandPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final accent = const Color(0xFF14C9A8);
+    const accent = Color(0xFF14C9A8);
     final whiteFaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.18)
       ..style = PaintingStyle.stroke
@@ -518,7 +552,8 @@ class _HeadbandPainter extends CustomPainter {
     // Headband strap (curve from 78,110 through 140,85 to 202,110)
     final strapPath = Path()
       ..moveTo(_m(78, 110, size).dx, _m(78, 110, size).dy)
-      ..quadraticBezierTo(_m(140, 85, size).dx, _m(140, 85, size).dy, _m(202, 110, size).dx, _m(202, 110, size).dy);
+      ..quadraticBezierTo(_m(140, 85, size).dx, _m(140, 85, size).dy,
+          _m(202, 110, size).dx, _m(202, 110, size).dy);
     canvas.drawPath(
       strapPath,
       Paint()
@@ -538,7 +573,8 @@ class _HeadbandPainter extends CustomPainter {
     // Stitching (subtle inner curve)
     final stitchPath = Path()
       ..moveTo(_m(90, 102, size).dx, _m(90, 102, size).dy)
-      ..quadraticBezierTo(_m(140, 81, size).dx, _m(140, 81, size).dy, _m(190, 102, size).dx, _m(190, 102, size).dy);
+      ..quadraticBezierTo(_m(140, 81, size).dx, _m(140, 81, size).dy,
+          _m(190, 102, size).dx, _m(190, 102, size).dy);
     final dashPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
@@ -548,7 +584,8 @@ class _HeadbandPainter extends CustomPainter {
 
     // Phone mounted on forehead (translate(102, 75), 76×38)
     final phoneOrigin = _m(102, 75, size);
-    final phoneRect = Rect.fromLTWH(phoneOrigin.dx, phoneOrigin.dy, _ms(76, size), _ms(38, size));
+    final phoneRect = Rect.fromLTWH(
+        phoneOrigin.dx, phoneOrigin.dy, _ms(76, size), _ms(38, size));
     canvas.drawRRect(
       RRect.fromRectAndRadius(phoneRect, Radius.circular(_ms(6, size))),
       Paint()..color = const Color(0xFF0A0A0A),
@@ -574,8 +611,10 @@ class _HeadbandPainter extends CustomPainter {
     );
 
     // Camera bump on phone (translate +8, +10): 14×18 rect, then concentric circles
-    final bumpOrigin = Offset(phoneOrigin.dx + _ms(8, size), phoneOrigin.dy + _ms(10, size));
-    final bumpRect = Rect.fromLTWH(bumpOrigin.dx, bumpOrigin.dy, _ms(14, size), _ms(18, size));
+    final bumpOrigin =
+        Offset(phoneOrigin.dx + _ms(8, size), phoneOrigin.dy + _ms(10, size));
+    final bumpRect = Rect.fromLTWH(
+        bumpOrigin.dx, bumpOrigin.dy, _ms(14, size), _ms(18, size));
     canvas.drawRRect(
       RRect.fromRectAndRadius(bumpRect, Radius.circular(_ms(3, size))),
       Paint()..color = const Color(0xFF1C1C20),
@@ -587,8 +626,10 @@ class _HeadbandPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.5,
     );
-    final lensCenter = Offset(bumpOrigin.dx + _ms(7, size), bumpOrigin.dy + _ms(6, size));
-    canvas.drawCircle(lensCenter, _ms(3, size), Paint()..color = const Color(0xFF0A0A0A));
+    final lensCenter =
+        Offset(bumpOrigin.dx + _ms(7, size), bumpOrigin.dy + _ms(6, size));
+    canvas.drawCircle(
+        lensCenter, _ms(3, size), Paint()..color = const Color(0xFF0A0A0A));
     canvas.drawCircle(
       lensCenter,
       _ms(3, size),
@@ -600,13 +641,17 @@ class _HeadbandPainter extends CustomPainter {
     canvas.drawCircle(lensCenter, _ms(1.5, size), Paint()..color = accent);
 
     // Recording indicator (blinking)
-    final recCenter = Offset(phoneOrigin.dx + _ms(62, size), phoneOrigin.dy + _ms(8, size));
-    canvas.drawCircle(recCenter, _ms(2.5, size), Paint()..color = accent.withValues(alpha: blink));
+    final recCenter =
+        Offset(phoneOrigin.dx + _ms(62, size), phoneOrigin.dy + _ms(8, size));
+    canvas.drawCircle(recCenter, _ms(2.5, size),
+        Paint()..color = accent.withValues(alpha: blink));
 
     // Subtle eyes peek
     final eyePaint = Paint()..color = Colors.white.withValues(alpha: 0.08);
-    final eye1 = Rect.fromCenter(center: _m(118, 140, size), width: _ms(10, size), height: _ms(6, size));
-    final eye2 = Rect.fromCenter(center: _m(162, 140, size), width: _ms(10, size), height: _ms(6, size));
+    final eye1 = Rect.fromCenter(
+        center: _m(118, 140, size), width: _ms(10, size), height: _ms(6, size));
+    final eye2 = Rect.fromCenter(
+        center: _m(162, 140, size), width: _ms(10, size), height: _ms(6, size));
     canvas.drawOval(eye1, eyePaint);
     canvas.drawOval(eye2, eyePaint);
   }

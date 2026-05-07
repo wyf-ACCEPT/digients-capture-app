@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
+import '../../l10n/localized_fixtures.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/cards.dart';
@@ -17,21 +20,28 @@ class PoolScreen extends StatefulWidget {
 }
 
 class _PoolScreenState extends State<PoolScreen> {
-  static const _filters = ['All', 'High Reward', 'Quick (<3 min)', 'Beginner', 'Verified'];
-  String _activeFilter = 'All';
+  static const _filters = [
+    _PoolFilter.all,
+    _PoolFilter.highReward,
+    _PoolFilter.quick,
+    _PoolFilter.beginner,
+    _PoolFilter.verified,
+  ];
+  _PoolFilter _activeFilter = _PoolFilter.all;
 
   @override
   Widget build(BuildContext context) {
     final cat = findCategory(widget.categoryId);
     final tasks = tasksForCategory(widget.categoryId);
     final c = context.dc;
+    final l10n = context.l10n;
     return Scaffold(
       backgroundColor: c.bg,
       body: Column(
         children: [
           DCNavBar(
-            title: cat?.title ?? 'Tasks',
-            subtitle: '${tasks.length} tasks · sorted by reward',
+            title: cat?.localizedTitle(l10n) ?? l10n.tasksTitle,
+            subtitle: l10n.poolSortedByReward(tasks.length),
             onBack: () => context.pop(),
           ),
           SizedBox(
@@ -40,7 +50,7 @@ class _PoolScreenState extends State<PoolScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               scrollDirection: Axis.horizontal,
               itemBuilder: (_, i) => DCChip(
-                label: _filters[i],
+                label: _filters[i].label(l10n),
                 active: _filters[i] == _activeFilter,
                 onTap: () => setState(() => _activeFilter = _filters[i]),
               ),
@@ -52,7 +62,7 @@ class _PoolScreenState extends State<PoolScreen> {
             child: tasks.isEmpty
                 ? Center(
                     child: Text(
-                      'NO TASKS',
+                      l10n.noTasks,
                       style: DCText.eyebrow(color: c.textDim, size: 11),
                     ),
                   )
@@ -76,6 +86,7 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     return GestureDetector(
       onTap: () => context.push('/task/${task.id}'),
       child: ClipRRect(
@@ -91,21 +102,26 @@ class _TaskCard extends StatelessWidget {
             children: [
               DCImagePlaceholder(
                 height: 160,
-                caption: task.tag.toUpperCase(),
+                caption: task.localizedTag(l10n).toUpperCase(),
                 radius: 0,
                 overlays: [
                   Positioned(
                     top: 12,
                     left: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        task.tag.toUpperCase(),
-                        style: DCText.mono(size: 10, weight: FontWeight.w500, color: Colors.white, letterSpacing: 1.4),
+                        task.localizedTag(l10n).toUpperCase(),
+                        style: DCText.mono(
+                            size: 10,
+                            weight: FontWeight.w500,
+                            color: Colors.white,
+                            letterSpacing: 1.4),
                       ),
                     ),
                   ),
@@ -122,22 +138,35 @@ class _TaskCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      task.title,
-                      style: DCText.inter(size: 16, weight: FontWeight.w600, color: c.text, height: 1.3),
+                      task.localizedTitle(l10n),
+                      style: DCText.inter(
+                          size: 16,
+                          weight: FontWeight.w600,
+                          color: c.text,
+                          height: 1.3),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      task.publisher,
-                      style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim),
+                      task.localizedPublisher(l10n),
+                      style: DCText.mono(
+                          size: 11, weight: FontWeight.w500, color: c.textDim),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Icon(Icons.access_time, size: 13, color: c.textDim),
                         const SizedBox(width: 4),
-                        Text(task.duration, style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.textDim)),
+                        Text(task.localizedDuration(l10n),
+                            style: DCText.mono(
+                                size: 11,
+                                weight: FontWeight.w500,
+                                color: c.textDim)),
                         const Spacer(),
-                        Text(task.slots, style: DCText.mono(size: 11, weight: FontWeight.w500, color: c.success)),
+                        Text(task.localizedSlots(l10n),
+                            style: DCText.mono(
+                                size: 11,
+                                weight: FontWeight.w500,
+                                color: c.success)),
                       ],
                     ),
                   ],
@@ -148,5 +177,19 @@ class _TaskCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+enum _PoolFilter { all, highReward, quick, beginner, verified }
+
+extension _PoolFilterLabel on _PoolFilter {
+  String label(AppLocalizations l10n) {
+    return switch (this) {
+      _PoolFilter.all => l10n.filterAll,
+      _PoolFilter.highReward => l10n.filterHighReward,
+      _PoolFilter.quick => l10n.filterQuick,
+      _PoolFilter.beginner => l10n.filterBeginner,
+      _PoolFilter.verified => l10n.filterVerified,
+    };
   }
 }

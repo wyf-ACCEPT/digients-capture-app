@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../l10n/l10n.dart';
 import '../theme/text_styles.dart';
 import '../theme/tokens.dart';
 
@@ -64,6 +65,7 @@ class _ExportProgressDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     return Dialog(
       backgroundColor: c.surface,
       shape: RoundedRectangleBorder(
@@ -86,14 +88,19 @@ class _ExportProgressDialog extends StatelessWidget {
               builder: (_, msg, __) => Text(
                 msg,
                 textAlign: TextAlign.center,
-                style: DCText.inter(size: 14, weight: FontWeight.w500, color: c.text),
+                style: DCText.inter(
+                    size: 14, weight: FontWeight.w500, color: c.text),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'KEEP THE APP OPEN',
+              l10n.keepAppOpen,
               textAlign: TextAlign.center,
-              style: DCText.mono(size: 10, weight: FontWeight.w500, color: c.textDim, letterSpacing: 1.4),
+              style: DCText.mono(
+                  size: 10,
+                  weight: FontWeight.w500,
+                  color: c.textDim,
+                  letterSpacing: 1.4),
             ),
           ],
         ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 enum RecordingState {
@@ -24,7 +25,7 @@ class CameraService {
       final bool result = await _channel.invokeMethod('initializeCamera');
       return result;
     } catch (e) {
-      print('Error initializing camera: $e');
+      debugPrint('Error initializing camera: $e');
       return false;
     }
   }
@@ -34,27 +35,29 @@ class CameraService {
       final bool result = await _channel.invokeMethod('requestPermissions');
       return result;
     } catch (e) {
-      print('Error requesting permissions: $e');
+      debugPrint('Error requesting permissions: $e');
       return false;
     }
   }
 
   Future<Map<String, dynamic>?> getCameraInfo() async {
     try {
-      final Map<dynamic, dynamic>? result = await _channel.invokeMethod('getCameraInfo');
+      final Map<dynamic, dynamic>? result =
+          await _channel.invokeMethod('getCameraInfo');
       return result?.cast<String, dynamic>();
     } catch (e) {
-      print('Error getting camera info: $e');
+      debugPrint('Error getting camera info: $e');
       return null;
     }
   }
 
   Future<Map<String, dynamic>?> getDeviceInfo() async {
     try {
-      final Map<dynamic, dynamic>? result = await _channel.invokeMethod('getDeviceInfo');
+      final Map<dynamic, dynamic>? result =
+          await _channel.invokeMethod('getDeviceInfo');
       return result?.cast<String, dynamic>();
     } catch (e) {
-      print('Error getting device info: $e');
+      debugPrint('Error getting device info: $e');
       return null;
     }
   }
@@ -80,7 +83,7 @@ class CameraService {
 
       return result;
     } catch (e) {
-      print('Error starting recording: $e');
+      debugPrint('Error starting recording: $e');
       _recordingState = RecordingState.error;
       _currentSessionId = null;
       return false;
@@ -95,14 +98,15 @@ class CameraService {
     try {
       _recordingState = RecordingState.stopping;
 
-      final Map<dynamic, dynamic>? result = await _channel.invokeMethod('stopRecording');
+      final Map<dynamic, dynamic>? result =
+          await _channel.invokeMethod('stopRecording');
 
       _recordingState = RecordingState.idle;
       _currentSessionId = null;
 
       return result?.cast<String, dynamic>();
     } catch (e) {
-      print('Error stopping recording: $e');
+      debugPrint('Error stopping recording: $e');
       _recordingState = RecordingState.error;
       return null;
     }
@@ -110,20 +114,22 @@ class CameraService {
 
   Future<List<String>> getAvailableCameras() async {
     try {
-      final List<dynamic>? result = await _channel.invokeMethod('getAvailableCameras');
+      final List<dynamic>? result =
+          await _channel.invokeMethod('getAvailableCameras');
       return result?.cast<String>() ?? [];
     } catch (e) {
-      print('Error getting available cameras: $e');
+      debugPrint('Error getting available cameras: $e');
       return [];
     }
   }
 
   Future<bool> switchCamera(String cameraId) async {
     try {
-      final bool result = await _channel.invokeMethod('switchCamera', {'cameraId': cameraId});
+      final bool result =
+          await _channel.invokeMethod('switchCamera', {'cameraId': cameraId});
       return result;
     } catch (e) {
-      print('Error switching camera: $e');
+      debugPrint('Error switching camera: $e');
       return false;
     }
   }

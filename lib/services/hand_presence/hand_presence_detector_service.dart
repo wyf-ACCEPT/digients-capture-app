@@ -20,15 +20,19 @@ class HandPresenceDetectorService extends ChangeNotifier {
 
   /// Total ticks received from the native detector since [start] was called.
   int get ticksReceived => _ticksReceived;
+
   /// Highest hand count seen on a single tick — useful diagnostic to confirm
   /// MediaPipe is finding hands at all (independent of the smoothing layer).
   int get maxHandsSeen => _maxHandsSeen;
+
   /// Best (highest) score seen on any detection so far.
   double get maxScoreSeen => _maxScoreSeen;
+
   /// Highest raw hand count returned directly by MediaPipe (before our
   /// filtering). Useful for telling apart "MediaPipe found nothing" vs.
   /// "MediaPipe found something but our filter rejected it".
   int get maxRawHandCount => _maxRawHandCount;
+
   /// Whether the most recent event reported the model as loaded.
   bool get lastModelLoaded => _lastModelLoaded;
 
@@ -104,8 +108,7 @@ class HandPresenceDetectorService extends ChangeNotifier {
     if (rawCount > _maxRawHandCount) _maxRawHandCount = rawCount;
     _lastModelLoaded = (raw['modelLoaded'] as bool?) ?? _lastModelLoaded;
     if (kDebugMode && (_ticksReceived <= 5 || _ticksReceived % 30 == 0)) {
-      debugPrint(
-          '[HandPresence] tick $_ticksReceived: ${hands.length} hand(s)'
+      debugPrint('[HandPresence] tick $_ticksReceived: ${hands.length} hand(s)'
           '${hands.isNotEmpty ? " [${hands.map((h) => "${h.isLeftHand ? "L" : "R"}@${h.score.toStringAsFixed(2)}").join(",")}]" : ""}'
           ' | controller.state=${controller.state}');
     }
@@ -113,8 +116,10 @@ class HandPresenceDetectorService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> dispose() async {
-    await _sub?.cancel();
+  @override
+  void dispose() {
+    unawaited(_sub?.cancel());
     _sub = null;
+    super.dispose();
   }
 }

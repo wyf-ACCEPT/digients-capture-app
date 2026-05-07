@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../l10n/l10n.dart';
+import '../../l10n/localized_fixtures.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
 import '../../widgets/buttons.dart';
@@ -9,7 +11,6 @@ import '../../widgets/nav.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
-import '../../fixtures/data.dart';
 import '../../widgets/export_progress.dart';
 
 class SubmissionDetailScreen extends StatefulWidget {
@@ -35,7 +36,10 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
     final all = await _manager.loadRecordings();
     final r = all.firstWhere(
       (r) => r.sessionId == widget.sessionId,
-      orElse: () => Recording(sessionId: widget.sessionId, capturedAt: DateTime.now(), directoryPath: ''),
+      orElse: () => Recording(
+          sessionId: widget.sessionId,
+          capturedAt: DateTime.now(),
+          directoryPath: ''),
     );
     if (!mounted) return;
     setState(() {
@@ -46,42 +50,50 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
 
   Future<void> _share() async {
     if (_recording == null) return;
+    final l10n = context.l10n;
     final RenderBox? box = context.findRenderObject() as RenderBox?;
-    final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+    final origin =
+        box != null ? box.localToGlobal(Offset.zero) & box.size : null;
     try {
       // Build the archive while the progress modal is up so the user has
       // a clear "I'm working on it" signal even on long recordings; then
       // hand off to the system share sheet only after compression is done.
       final archivePath = await withExportProgress<String?>(
         context,
-        initialMessage: 'Compressing recording…',
+        initialMessage: l10n.compressingRecording,
         work: (_) => _manager.exportRecording(_recording!.sessionId),
       );
       if (archivePath == null || !mounted) return;
       await Share.shareXFiles(
         [XFile(archivePath)],
-        subject: 'Egocentric Video Recording',
-        text: 'Egocentric video recording data package',
+        subject: l10n.shareSubjectRecording,
+        text: l10n.shareTextRecording,
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.exportFailed(e.toString()))));
     }
   }
 
   Future<void> _delete() async {
     if (_recording == null) return;
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete recording?'),
-        content: Text('This removes the local copy of recording ${_recording!.sessionId.substring(0, 8)}.'),
+        title: Text(l10n.deleteRecordingTitle),
+        content: Text(
+            l10n.deleteRecordingContent(_recording!.sessionId.substring(0, 8))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Color(0xFFFF453A))),
+            child: Text(l10n.delete,
+                style: const TextStyle(color: Color(0xFFFF453A))),
           ),
         ],
       ),
@@ -95,15 +107,18 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.dc;
+    final l10n = context.l10n;
     if (_loading) {
-      return Scaffold(backgroundColor: c.bg, body: Center(child: CircularProgressIndicator(color: c.accent)));
+      return Scaffold(
+          backgroundColor: c.bg,
+          body: Center(child: CircularProgressIndicator(color: c.accent)));
     }
     final r = _recording!;
     return Scaffold(
       backgroundColor: c.bg,
       body: Column(
         children: [
-          DCNavBar(title: 'Submissions', onBack: () => context.pop()),
+          DCNavBar(title: l10n.submissionsTitle, onBack: () => context.pop()),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
@@ -116,14 +131,18 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                       bottom: 12,
                       right: 12,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           _formatDuration(r.durationSeconds),
-                          style: DCText.mono(size: 11, weight: FontWeight.w500, color: Colors.white),
+                          style: DCText.mono(
+                              size: 11,
+                              weight: FontWeight.w500,
+                              color: Colors.white),
                         ),
                       ),
                     ),
@@ -133,8 +152,12 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                 const DCStatusBadge(status: SubmissionStatus.ondevice),
                 const SizedBox(height: 14),
                 Text(
-                  recordingDisplayTitle(r),
-                  style: DCText.inter(size: 22, weight: FontWeight.w700, color: c.text, letterSpacing: -0.44),
+                  localizedRecordingDisplayTitle(r, l10n),
+                  style: DCText.inter(
+                      size: 22,
+                      weight: FontWeight.w700,
+                      color: c.text,
+                      letterSpacing: -0.44),
                 ),
                 const SizedBox(height: 18),
                 DCCard(
@@ -142,11 +165,16 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('SAVED ON DEVICE', style: DCText.eyebrow(color: c.textDim, size: 10)),
+                      Text(l10n.savedOnDevice,
+                          style: DCText.eyebrow(color: c.textDim, size: 10)),
                       const SizedBox(height: 6),
                       Text(
-                        'Not uploaded yet. Use Export to share the recording package via the share sheet.',
-                        style: DCText.inter(size: 13, weight: FontWeight.w500, color: c.textDim, height: 1.5),
+                        l10n.notUploadedYet,
+                        style: DCText.inter(
+                            size: 13,
+                            weight: FontWeight.w500,
+                            color: c.textDim,
+                            height: 1.5),
                       ),
                     ],
                   ),
@@ -160,18 +188,26 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                   mainAxisSpacing: 8,
                   childAspectRatio: 2.6,
                   children: [
-                    DCKVTile(label: 'Session ID', value: r.sessionId.substring(0, 12)),
-                    DCKVTile(label: 'Captured', value: _formatDate(r.capturedAt)),
-                    DCKVTile(label: 'Size', value: '${r.fileSizeMB ?? 0} MB'),
-                    DCKVTile(label: 'Codec', value: 'HEVC'),
-                    const DCKVTile(label: 'Resolution', value: '1920×1080'),
-                    const DCKVTile(label: 'Intrinsics', value: 'Per-frame'),
+                    DCKVTile(
+                        label: l10n.sessionId,
+                        value: r.sessionId.substring(0, 12)),
+                    DCKVTile(
+                        label: l10n.captured, value: _formatDate(r.capturedAt)),
+                    DCKVTile(
+                        label: l10n.size, value: '${r.fileSizeMB ?? 0} MB'),
+                    DCKVTile(label: l10n.codec, value: 'HEVC'),
+                    DCKVTile(label: l10n.resolution, value: '1920×1080'),
+                    DCKVTile(label: l10n.intrinsics, value: l10n.perFrame),
                   ],
                 ),
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    Expanded(child: DCButton(label: 'Export', leadingIcon: Icons.upload, onPressed: _share)),
+                    Expanded(
+                        child: DCButton(
+                            label: l10n.export,
+                            leadingIcon: Icons.upload,
+                            onPressed: _share)),
                     const SizedBox(width: 10),
                     DCIconButton(
                       icon: Icons.delete_outline,
@@ -179,7 +215,7 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                       bg: c.danger.withValues(alpha: 0.12),
                       size: 56,
                       onPressed: _delete,
-                      semanticLabel: 'Delete',
+                      semanticLabel: l10n.delete,
                     ),
                   ],
                 ),
