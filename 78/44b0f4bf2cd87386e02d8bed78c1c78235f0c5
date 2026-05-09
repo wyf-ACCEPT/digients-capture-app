@@ -1,0 +1,19 @@
+ios/Runner/Info.plist
+  s_6cf0c340776fb7::t_a6d1fada0eca5a 27-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "7844b0f4bf2cd87386e02d8bed78c1c78235f0c5",
+  "prompts": {},
+  "sessions": {
+    "s_6cf0c340776fb7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c1dbd428-cf0f-4ac2-81c2-71ca90c0df4a",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
