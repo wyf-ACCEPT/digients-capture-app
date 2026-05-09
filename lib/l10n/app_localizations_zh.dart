@@ -149,9 +149,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authEmail => '邮箱';
 
   @override
-  String get authMockBackendCode => '模拟后端 · 验证码是 123456';
-
-  @override
   String get authAgreementPrefix => '创建账号即表示你同意我们的';
 
   @override

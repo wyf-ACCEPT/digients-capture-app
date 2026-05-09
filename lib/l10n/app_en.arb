@@ -53,7 +53,6 @@
   "authSignInSubtitle": "Sign in to continue capturing.",
   "authPhone": "Phone",
   "authEmail": "Email",
-  "authMockBackendCode": "Mock backend · the code is 123456",
   "authAgreementPrefix": "By creating an account you agree to our ",
   "authTerms": "Terms",
   "authAgreementMiddle": " and ",

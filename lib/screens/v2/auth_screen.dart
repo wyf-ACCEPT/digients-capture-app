@@ -195,12 +195,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   maxLength: 6,
                   mono: true,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.authMockBackendCode,
-                  style: DCText.mono(
-                      size: 11, weight: FontWeight.w500, color: c.textDim),
-                ),
               ],
               if (isRegister) ...[
                 const SizedBox(height: 12),

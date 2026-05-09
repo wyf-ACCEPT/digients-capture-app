@@ -25,15 +25,27 @@ class AuthController extends ChangeNotifier {
 
   // Restore a session from a previously stored refresh token. Call on app start
   // before showing any routed UI so the router can decide auth vs. anon path.
+  // Must NEVER throw — it is awaited in main() before runApp(), so any escape
+  // would crash the app at launch.
   Future<void> bootstrap() async {
-    final refresh = await _tokens.readRefreshToken();
+    String? refresh;
+    try {
+      refresh = await _tokens.readRefreshToken();
+    } catch (e) {
+      debugPrint('[AuthController] Token read failed on bootstrap: $e');
+      return;
+    }
     if (refresh == null) return;
     try {
       final res = await _service.refresh(refreshToken: refresh);
       await _adopt(res);
     } catch (e) {
       debugPrint('[AuthController] Refresh failed on bootstrap: $e');
-      await _tokens.deleteRefreshToken();
+      try {
+        await _tokens.deleteRefreshToken();
+      } catch (e2) {
+        debugPrint('[AuthController] Token delete also failed (ignored): $e2');
+      }
     }
   }
 

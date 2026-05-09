@@ -374,12 +374,6 @@ abstract class AppLocalizations {
   /// **'邮箱'**
   String get authEmail;
 
-  /// No description provided for @authMockBackendCode.
-  ///
-  /// In zh, this message translates to:
-  /// **'模拟后端 · 验证码是 123456'**
-  String get authMockBackendCode;
-
   /// No description provided for @authAgreementPrefix.
   ///
   /// In zh, this message translates to:

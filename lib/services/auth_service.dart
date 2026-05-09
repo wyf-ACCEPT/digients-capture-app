@@ -186,11 +186,18 @@ class HttpAuthService implements AuthService {
     throw _toException(res, fallbackCode: 'verify_failed');
   }
 
+  // The four stubs below are `async` (not bare-Future-returning) on purpose:
+  // an `async` throw is wrapped in Future.error and is reliably caught by
+  // try/catch around `await`. A sync throw inside a Future-returning function
+  // can short-circuit the await mechanism in some Dart frames and bubble up
+  // as an unhandled exception — almost certainly what crashed the app on
+  // relaunch (bootstrap → refresh → sync throw escapes the catch).
+
   @override
   Future<AuthVerifyResponse> signInWithApple({
     required String identityToken,
     required String nonce,
-  }) {
+  }) async {
     throw AuthException(
       'Apple Sign-In server endpoint not yet implemented (M4).',
       code: 'not_implemented',
@@ -198,7 +205,7 @@ class HttpAuthService implements AuthService {
   }
 
   @override
-  Future<AuthVerifyResponse> signInWithGoogle({required String idToken}) {
+  Future<AuthVerifyResponse> signInWithGoogle({required String idToken}) async {
     throw AuthException(
       'Google Sign-In server endpoint not yet implemented (M5).',
       code: 'not_implemented',
@@ -206,7 +213,7 @@ class HttpAuthService implements AuthService {
   }
 
   @override
-  Future<AuthVerifyResponse> refresh({required String refreshToken}) {
+  Future<AuthVerifyResponse> refresh({required String refreshToken}) async {
     throw AuthException(
       'Refresh server endpoint not yet implemented (M3).',
       code: 'not_implemented',
@@ -214,7 +221,7 @@ class HttpAuthService implements AuthService {
   }
 
   @override
-  Future<void> logout({required String refreshToken}) {
+  Future<void> logout({required String refreshToken}) async {
     throw AuthException(
       'Logout server endpoint not yet implemented (M3).',
       code: 'not_implemented',

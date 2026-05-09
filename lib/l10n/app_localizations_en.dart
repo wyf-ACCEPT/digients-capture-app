@@ -149,9 +149,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authEmail => 'Email';
 
   @override
-  String get authMockBackendCode => 'Mock backend · the code is 123456';
-
-  @override
   String get authAgreementPrefix => 'By creating an account you agree to our ';
 
   @override
@@ -307,7 +304,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tapToStart => 'TAP TO START';
-  
+
   @override
   String get preStartPrompt => 'PLACE HANDS IN VIEW';
 
