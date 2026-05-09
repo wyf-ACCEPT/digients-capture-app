@@ -1,0 +1,23 @@
+lib/l10n/app_localizations_en.dart
+  s_9ef2ddc08c5bdd::t_411d644b5cb6bc 307
+lib/services/auth_service.dart
+  s_9ef2ddc08c5bdd::t_907af0cdc19e21 189-195,200,208,216,224
+lib/state/auth_controller.dart
+  s_9ef2ddc08c5bdd::t_bd7b7599a6a433 28-29,31-37,44-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "cd3fc98fe2c5af7d5d0a50405a818179cfc2c569",
+  "prompts": {},
+  "sessions": {
+    "s_9ef2ddc08c5bdd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "246af42d-8f6c-4e6c-9330-f59fe98553ea",
+        "model": "unknown"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
