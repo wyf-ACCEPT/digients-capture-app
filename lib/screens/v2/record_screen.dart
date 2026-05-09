@@ -959,6 +959,7 @@ class _PreStartOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final showDigit = secondsRemaining != null;
     return IgnorePointer(
       child: Center(
