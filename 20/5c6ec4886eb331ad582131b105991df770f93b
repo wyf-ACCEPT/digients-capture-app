@@ -1,0 +1,19 @@
+lib/screens/v2/record_screen.dart
+  s_9ef2ddc08c5bdd::t_2ff6c18ed6b848 962
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "205c6ec4886eb331ad582131b105991df770f93b",
+  "prompts": {},
+  "sessions": {
+    "s_9ef2ddc08c5bdd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "246af42d-8f6c-4e6c-9330-f59fe98553ea",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
