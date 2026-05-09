@@ -26,8 +26,24 @@ void main() async {
   final handPresenceSettings = HandPresenceSettingsController();
   await handPresenceSettings.load();
 
+  // Default to the deployed prod backend; override via:
+  //   flutter run --dart-define=AUTH_BACKEND=mock
+  //   flutter run --dart-define=API_BASE=http://localhost:8787
+  // The prod URL is the team's Cloudflare Workers deployment (root CLAUDE.md
+  // §5.1). M3-M5 server endpoints aren't live yet, so refresh / logout / OAuth
+  // throw `not_implemented`; AuthController already swallows refresh/logout
+  // failures as best-effort.
+  const backend = String.fromEnvironment('AUTH_BACKEND', defaultValue: 'http');
+  const apiBase = String.fromEnvironment(
+    'API_BASE',
+    defaultValue: 'https://digients-api.digients.workers.dev',
+  );
+  final AuthService authService = backend == 'mock'
+      ? MockAuthService()
+      : HttpAuthService(baseUrl: apiBase);
+
   final authController = AuthController(
-    service: MockAuthService(),
+    service: authService,
     tokens: TokenStorage(),
   );
   // Restore session from a stored refresh token if one exists. Blocks first
