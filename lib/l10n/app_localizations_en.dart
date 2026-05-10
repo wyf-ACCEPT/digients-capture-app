@@ -194,6 +194,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authRegister => 'Register';
 
   @override
+  String get authPhoneComingSoonTitle => 'Phone sign-in is coming later';
+
+  @override
+  String get authPhoneComingSoonBody =>
+      'We\'re still working on SMS verification. Please use Email or Apple / Google to sign in for now.';
+
+  @override
   String get homeWelcomeBack => 'WELCOME BACK';
 
   @override

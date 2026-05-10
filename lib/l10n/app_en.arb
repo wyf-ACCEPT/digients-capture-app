@@ -68,6 +68,8 @@
   "authAlreadyHaveAccount": "Already have an account? ",
   "authDontHaveAccount": "Don't have an account? ",
   "authRegister": "Register",
+  "authPhoneComingSoonTitle": "Phone sign-in is coming later",
+  "authPhoneComingSoonBody": "We're still working on SMS verification. Please use Email or Apple / Google to sign in for now.",
   "homeWelcomeBack": "WELCOME BACK",
   "balance": "BALANCE",
   "pending": "PENDING",

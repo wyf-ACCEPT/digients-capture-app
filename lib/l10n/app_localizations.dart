@@ -464,6 +464,18 @@ abstract class AppLocalizations {
   /// **'注册'**
   String get authRegister;
 
+  /// No description provided for @authPhoneComingSoonTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机号登录暂未开放'**
+  String get authPhoneComingSoonTitle;
+
+  /// No description provided for @authPhoneComingSoonBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'短信验证还在开发中，请先使用邮箱或 Apple / Google 登录。'**
+  String get authPhoneComingSoonBody;
+
   /// No description provided for @homeWelcomeBack.
   ///
   /// In zh, this message translates to:

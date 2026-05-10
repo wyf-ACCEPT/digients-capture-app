@@ -68,6 +68,8 @@
   "authAlreadyHaveAccount": "已有账号？",
   "authDontHaveAccount": "还没有账号？",
   "authRegister": "注册",
+  "authPhoneComingSoonTitle": "手机号登录暂未开放",
+  "authPhoneComingSoonBody": "短信验证还在开发中，请先使用邮箱或 Apple / Google 登录。",
   "homeWelcomeBack": "欢迎回来",
   "balance": "余额",
   "pending": "待入账",

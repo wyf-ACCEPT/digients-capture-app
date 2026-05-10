@@ -21,7 +21,9 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   AuthMode _mode = AuthMode.signIn;
-  AuthIdentifierType _method = AuthIdentifierType.phone;
+  // Email is the default until phone OTP (SMS) is implemented; the phone
+  // segment renders a "coming soon" notice instead of an input field.
+  AuthIdentifierType _method = AuthIdentifierType.email;
   bool _otpSent = false;
   final _idController = TextEditingController();
   final _otpController = TextEditingController();
@@ -177,57 +179,63 @@ class _AuthScreenState extends State<AuthScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              DCInputField(
-                controller: _idController,
-                hint: _method == AuthIdentifierType.phone
-                    ? '+1 555 0100'
-                    : 'you@example.com',
-                keyboardType: _method == AuthIdentifierType.phone
-                    ? TextInputType.phone
-                    : TextInputType.emailAddress,
-              ),
-              if (_otpSent) ...[
-                const SizedBox(height: 12),
+              if (_method == AuthIdentifierType.phone)
+                _PhoneComingSoonNotice(
+                  title: l10n.authPhoneComingSoonTitle,
+                  body: l10n.authPhoneComingSoonBody,
+                )
+              else ...[
                 DCInputField(
-                  controller: _otpController,
-                  hint: '000000',
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  mono: true,
+                  controller: _idController,
+                  hint: 'you@example.com',
+                  keyboardType: TextInputType.emailAddress,
                 ),
-              ],
-              if (isRegister) ...[
-                const SizedBox(height: 12),
-                Text.rich(
-                  TextSpan(
-                    style: DCText.inter(
-                        size: 12, weight: FontWeight.w500, color: c.textDim),
-                    children: [
-                      TextSpan(text: l10n.authAgreementPrefix),
-                      TextSpan(
-                          text: l10n.authTerms,
-                          style: TextStyle(color: c.accent)),
-                      TextSpan(text: l10n.authAgreementMiddle),
-                      TextSpan(
-                          text: l10n.authPrivacyPolicy,
-                          style: TextStyle(color: c.accent)),
-                      TextSpan(text: l10n.authAgreementSuffix),
-                    ],
+                if (_otpSent) ...[
+                  const SizedBox(height: 12),
+                  DCInputField(
+                    controller: _otpController,
+                    hint: '000000',
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    mono: true,
                   ),
+                ],
+                if (isRegister) ...[
+                  const SizedBox(height: 12),
+                  Text.rich(
+                    TextSpan(
+                      style: DCText.inter(
+                          size: 12, weight: FontWeight.w500, color: c.textDim),
+                      children: [
+                        TextSpan(text: l10n.authAgreementPrefix),
+                        TextSpan(
+                            text: l10n.authTerms,
+                            style: TextStyle(color: c.accent)),
+                        TextSpan(text: l10n.authAgreementMiddle),
+                        TextSpan(
+                            text: l10n.authPrivacyPolicy,
+                            style: TextStyle(color: c.accent)),
+                        TextSpan(text: l10n.authAgreementSuffix),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                DCButton(
+                  label: !_otpSent
+                      ? (busy
+                          ? l10n.authSending
+                          : l10n.authSendVerificationCode)
+                      : (busy
+                          ? l10n.authVerifying
+                          : (isRegister
+                              ? l10n.authCreateAccount
+                              : l10n.authSignIn)),
+                  onPressed: busy ? null : (!_otpSent ? _sendOtp : _verifyOtp),
                 ),
               ],
-              const SizedBox(height: 18),
-              DCButton(
-                label: !_otpSent
-                    ? (busy ? l10n.authSending : l10n.authSendVerificationCode)
-                    : (busy
-                        ? l10n.authVerifying
-                        : (isRegister
-                            ? l10n.authCreateAccount
-                            : l10n.authSignIn)),
-                onPressed: busy ? null : (!_otpSent ? _sendOtp : _verifyOtp),
-              ),
-              const SizedBox(height: 20),
+              SizedBox(
+                  height: _method == AuthIdentifierType.phone ? 18 : 20),
               Row(
                 children: [
                   Expanded(child: Divider(color: c.border)),
@@ -297,6 +305,50 @@ class _AuthScreenState extends State<AuthScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PhoneComingSoonNotice extends StatelessWidget {
+  const _PhoneComingSoonNotice({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.dc;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface2,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hourglass_empty, size: 18, color: c.textDim),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: DCText.inter(
+                      size: 14, weight: FontWeight.w600, color: c.text),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: DCText.inter(
+                size: 13, weight: FontWeight.w500, color: c.textDim),
+          ),
+        ],
       ),
     );
   }
