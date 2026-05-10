@@ -186,34 +186,44 @@ class HttpAuthService implements AuthService {
     throw _toException(res, fallbackCode: 'verify_failed');
   }
 
-  // The four stubs below are `async` (not bare-Future-returning) on purpose:
-  // an `async` throw is wrapped in Future.error and is reliably caught by
-  // try/catch around `await`. A sync throw inside a Future-returning function
-  // can short-circuit the await mechanism in some Dart frames and bubble up
-  // as an unhandled exception — almost certainly what crashed the app on
-  // relaunch (bootstrap → refresh → sync throw escapes the catch).
+  // Apple/Google sign-in are implemented as a local-only "demo bypass" while
+  // M4/M5 (real OAuth via Sign in with Apple + Google Identity Services) and
+  // M2 (Twilio SMS) are still being built. Tapping Apple or Google mints a
+  // synthetic session that lets the user proceed past the auth wall without
+  // contacting any server. This serves three concurrent needs:
+  //   - lets Apple Beta App Review log in (reviewers can't access a real
+  //     email to receive an OTP)
+  //   - lets factory-side data-collection workers skip OTP while M2 still has
+  //     edges and they may not have stable email/phone access
+  //   - keeps team members unblocked through real OTP/refresh bugs
+  // Synthetic refresh tokens carry a `demo:` prefix so the refresh/logout
+  // stubs below recognize and renew them locally without a server roundtrip.
+  // Real OAuth (M4/M5) replaces this once native providers + server-side
+  // identity-token validation are wired.
 
   @override
   Future<AuthVerifyResponse> signInWithApple({
     required String identityToken,
     required String nonce,
-  }) async {
-    throw AuthException(
-      'Apple Sign-In server endpoint not yet implemented (M4).',
-      code: 'not_implemented',
-    );
-  }
+  }) async =>
+      _mintDemoSession(provider: 'apple');
 
   @override
-  Future<AuthVerifyResponse> signInWithGoogle({required String idToken}) async {
-    throw AuthException(
-      'Google Sign-In server endpoint not yet implemented (M5).',
-      code: 'not_implemented',
-    );
-  }
+  Future<AuthVerifyResponse> signInWithGoogle({required String idToken}) async =>
+      _mintDemoSession(provider: 'google');
+
+  // refresh and logout still wrap their bodies as `async`: a sync throw inside
+  // a Future-returning function can short-circuit the await mechanism in some
+  // Dart frames and bubble up as unhandled — previously crashed the app on
+  // relaunch via bootstrap → refresh → sync throw escaping the catch. For demo
+  // sessions (refresh token prefixed `demo:`), refresh re-mints locally and
+  // logout no-ops; nothing to talk to a server about.
 
   @override
   Future<AuthVerifyResponse> refresh({required String refreshToken}) async {
+    if (refreshToken.startsWith('demo:')) {
+      return _mintDemoSession(provider: 'demo');
+    }
     throw AuthException(
       'Refresh server endpoint not yet implemented (M3).',
       code: 'not_implemented',
@@ -222,9 +232,28 @@ class HttpAuthService implements AuthService {
 
   @override
   Future<void> logout({required String refreshToken}) async {
+    if (refreshToken.startsWith('demo:')) return;
     throw AuthException(
       'Logout server endpoint not yet implemented (M3).',
       code: 'not_implemented',
+    );
+  }
+
+  AuthVerifyResponse _mintDemoSession({required String provider}) {
+    final rng = Random();
+    String pick(int n, String alphabet) => List.generate(
+        n, (_) => alphabet[rng.nextInt(alphabet.length)]).join();
+    const tokenChars =
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const uidChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    return AuthVerifyResponse(
+      accessToken: pick(32, tokenChars),
+      refreshToken: 'demo:${pick(40, tokenChars)}',
+      profile: Profile(
+        uid: 'DGT-${pick(8, uidChars)}',
+        displayName: 'Demo User',
+        email: '$provider-demo@digients.tech',
+      ),
     );
   }
 
