@@ -1,0 +1,26 @@
+lib/l10n/app_en.arb
+  s_c00665927e6936::t_123cfc416ae4c4 71-72
+lib/l10n/app_zh.arb
+  s_c00665927e6936::t_0914f8ad777f99 71-72
+lib/screens/v2/auth_screen.dart
+  s_c00665927e6936::t_b6b2b052eb96bb 237-238
+  s_c00665927e6936::t_684dec86c030f9 24-26
+  s_c00665927e6936::t_cc975b9c69b163 312-355
+  s_c00665927e6936::t_3c4eb7d689c598 182-187,189-191,193-200,202-234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "9ef6e5d39bb233fd721250d92d1f1ae1d4699b46",
+  "prompts": {},
+  "sessions": {
+    "s_c00665927e6936": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2005b9c8-2732-47c5-a009-749e74f05fbf",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
