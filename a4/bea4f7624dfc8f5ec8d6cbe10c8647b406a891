@@ -1,0 +1,33 @@
+lib/screens/v2/auth_screen.dart
+  s_c00665927e6936::t_237f4a70321976 238-241
+  s_c00665927e6936::t_50619ad303427e 77,79
+lib/l10n/app_en.arb
+  s_c00665927e6936::t_536e26e33d1f04 72-73
+lib/l10n/app_zh.arb
+  s_c00665927e6936::t_ab54ca5145d4bf 72-73
+lib/services/auth_service.dart
+  s_c00665927e6936::t_2082c1005a1e63 33-40
+  s_c00665927e6936::t_1669ee1b7dbaf0 203-207,213-218,221-233
+  s_c00665927e6936::t_44eb72714d7b42 245,247-252,258-260,263,276
+  s_c00665927e6936::t_eb49d00c339318 107-111
+lib/state/auth_controller.dart
+  s_c00665927e6936::t_470bddddb72958 92-98
+pubspec.yaml
+  s_c00665927e6936::t_72ed05759a4209 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "a4bea4f7624dfc8f5ec8d6cbe10c8647b406a891",
+  "prompts": {},
+  "sessions": {
+    "s_c00665927e6936": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2005b9c8-2732-47c5-a009-749e74f05fbf",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
