@@ -473,8 +473,14 @@ abstract class AppLocalizations {
   /// No description provided for @authPhoneComingSoonBody.
   ///
   /// In zh, this message translates to:
-  /// **'短信验证还在开发中，请先使用邮箱或 Apple / Google 登录。'**
+  /// **'短信验证还在开发中，请先使用邮箱或下方免登录入口。'**
   String get authPhoneComingSoonBody;
+
+  /// No description provided for @authSkipSignIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'免登录（演示）'**
+  String get authSkipSignIn;
 
   /// No description provided for @homeWelcomeBack.
   ///

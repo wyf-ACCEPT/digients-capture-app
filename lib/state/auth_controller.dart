@@ -89,6 +89,13 @@ class AuthController extends ChangeNotifier {
     });
   }
 
+  Future<void> signInAsDemo() {
+    return _withBusy(() async {
+      final res = await _service.signInAsDemo();
+      await _adopt(res);
+    });
+  }
+
   Future<void> logout() async {
     final refresh = await _tokens.readRefreshToken();
     await _tokens.deleteRefreshToken();

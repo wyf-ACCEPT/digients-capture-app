@@ -74,25 +74,9 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Future<void> _signInWithApple() async {
+  Future<void> _skipSignIn() async {
     try {
-      // Real Apple Sign-In is not wired yet; the mock returns a synthetic
-      // session so the rest of the flow stays testable end-to-end.
-      await context.read<AuthController>().signInWithApple(
-            identityToken: 'mock-identity-token',
-            nonce: 'mock-nonce',
-          );
-    } catch (e) {
-      if (!mounted) return;
-      _showError(_describe(e));
-    }
-  }
-
-  Future<void> _signInWithGoogle() async {
-    try {
-      await context
-          .read<AuthController>()
-          .signInWithGoogle(idToken: 'mock-id-token');
+      await context.read<AuthController>().signInAsDemo();
     } catch (e) {
       if (!mounted) return;
       _showError(_describe(e));
@@ -251,24 +235,10 @@ class _AuthScreenState extends State<AuthScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: DCButton.secondary(
-                      label: l10n.authApple,
-                      leadingIcon: Icons.apple,
-                      onPressed: busy ? null : _signInWithApple,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DCButton.secondary(
-                      label: l10n.authGoogle,
-                      leadingIcon: Icons.g_mobiledata,
-                      onPressed: busy ? null : _signInWithGoogle,
-                    ),
-                  ),
-                ],
+              DCButton.secondary(
+                label: l10n.authSkipSignIn,
+                leadingIcon: Icons.science,
+                onPressed: busy ? null : _skipSignIn,
               ),
               const SizedBox(height: 24),
               Center(

@@ -197,7 +197,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authPhoneComingSoonTitle => '手机号登录暂未开放';
 
   @override
-  String get authPhoneComingSoonBody => '短信验证还在开发中，请先使用邮箱或 Apple / Google 登录。';
+  String get authPhoneComingSoonBody => '短信验证还在开发中，请先使用邮箱或下方免登录入口。';
+
+  @override
+  String get authSkipSignIn => '免登录（演示）';
 
   @override
   String get homeWelcomeBack => '欢迎回来';

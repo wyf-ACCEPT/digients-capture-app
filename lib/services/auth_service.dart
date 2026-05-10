@@ -30,6 +30,14 @@ abstract class AuthService {
     required String idToken,
   });
 
+  // Mints a synthetic local session, no server / OAuth provider involved.
+  // Exposed so the UI can offer a "skip sign-in" path for App Review reviewers,
+  // factory-side workers without stable email access, and team members hitting
+  // bugs in the real OTP/refresh path. The returned refresh token is prefixed
+  // `demo:` so HttpAuthService.refresh / .logout recognize it and stay local
+  // instead of round-tripping the server.
+  Future<AuthVerifyResponse> signInAsDemo();
+
   Future<AuthVerifyResponse> refresh({required String refreshToken});
 
   Future<void> logout({required String refreshToken});
@@ -93,6 +101,12 @@ class MockAuthService implements AuthService {
   }) async {
     await Future.delayed(_networkLatency);
     return _mintResponse(email: 'mock-google@example.com');
+  }
+
+  @override
+  Future<AuthVerifyResponse> signInAsDemo() async {
+    await Future.delayed(_networkLatency);
+    return _mintResponse(email: 'demo@example.com');
   }
 
   @override
@@ -186,31 +200,37 @@ class HttpAuthService implements AuthService {
     throw _toException(res, fallbackCode: 'verify_failed');
   }
 
-  // Apple/Google sign-in are implemented as a local-only "demo bypass" while
-  // M4/M5 (real OAuth via Sign in with Apple + Google Identity Services) and
-  // M2 (Twilio SMS) are still being built. Tapping Apple or Google mints a
-  // synthetic session that lets the user proceed past the auth wall without
-  // contacting any server. This serves three concurrent needs:
-  //   - lets Apple Beta App Review log in (reviewers can't access a real
-  //     email to receive an OTP)
-  //   - lets factory-side data-collection workers skip OTP while M2 still has
-  //     edges and they may not have stable email/phone access
-  //   - keeps team members unblocked through real OTP/refresh bugs
-  // Synthetic refresh tokens carry a `demo:` prefix so the refresh/logout
-  // stubs below recognize and renew them locally without a server roundtrip.
-  // Real OAuth (M4/M5) replaces this once native providers + server-side
-  // identity-token validation are wired.
+  // Real Sign in with Apple / Google Sign-In are M4 — wiring the native SDKs
+  // and server-side identity-token validation. Until then these methods throw
+  // `not_implemented`. The auth screen does not surface buttons that call them
+  // (the visible "skip sign-in" path goes through signInAsDemo instead), so
+  // the throw is a defensive guard that should never fire in normal flow.
 
   @override
   Future<AuthVerifyResponse> signInWithApple({
     required String identityToken,
     required String nonce,
-  }) async =>
-      _mintDemoSession(provider: 'apple');
+  }) async {
+    throw AuthException(
+      'Sign in with Apple not yet implemented (M4).',
+      code: 'not_implemented',
+    );
+  }
 
   @override
-  Future<AuthVerifyResponse> signInWithGoogle({required String idToken}) async =>
-      _mintDemoSession(provider: 'google');
+  Future<AuthVerifyResponse> signInWithGoogle({required String idToken}) async {
+    throw AuthException(
+      'Google sign-in not yet implemented (M4).',
+      code: 'not_implemented',
+    );
+  }
+
+  // Mints a local "demo" session for the skip-sign-in path. No server roundtrip
+  // and no OAuth provider involved. The refresh token is prefixed `demo:` so
+  // refresh / logout below recognize it and stay local — see those handlers
+  // for why this matters at app relaunch.
+  @override
+  Future<AuthVerifyResponse> signInAsDemo() async => _mintDemoSession();
 
   // refresh and logout still wrap their bodies as `async`: a sync throw inside
   // a Future-returning function can short-circuit the await mechanism in some
@@ -222,24 +242,25 @@ class HttpAuthService implements AuthService {
   @override
   Future<AuthVerifyResponse> refresh({required String refreshToken}) async {
     if (refreshToken.startsWith('demo:')) {
-      return _mintDemoSession(provider: 'demo');
+      return _mintDemoSession();
     }
-    throw AuthException(
-      'Refresh server endpoint not yet implemented (M3).',
-      code: 'not_implemented',
-    );
+    final res = await _post('/v1/auth/refresh', {'refreshToken': refreshToken});
+    if (res.statusCode == 200) {
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      return AuthVerifyResponse.fromJson(json);
+    }
+    throw _toException(res, fallbackCode: 'refresh_failed');
   }
 
   @override
   Future<void> logout({required String refreshToken}) async {
     if (refreshToken.startsWith('demo:')) return;
-    throw AuthException(
-      'Logout server endpoint not yet implemented (M3).',
-      code: 'not_implemented',
-    );
+    final res = await _post('/v1/auth/logout', {'refreshToken': refreshToken});
+    if (res.statusCode == 204) return;
+    throw _toException(res, fallbackCode: 'logout_failed');
   }
 
-  AuthVerifyResponse _mintDemoSession({required String provider}) {
+  AuthVerifyResponse _mintDemoSession() {
     final rng = Random();
     String pick(int n, String alphabet) => List.generate(
         n, (_) => alphabet[rng.nextInt(alphabet.length)]).join();
@@ -252,7 +273,7 @@ class HttpAuthService implements AuthService {
       profile: Profile(
         uid: 'DGT-${pick(8, uidChars)}',
         displayName: 'Demo User',
-        email: '$provider-demo@digients.tech',
+        email: 'demo@digients.tech',
       ),
     );
   }

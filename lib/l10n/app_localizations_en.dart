@@ -198,7 +198,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authPhoneComingSoonBody =>
-      'We\'re still working on SMS verification. Please use Email or Apple / Google to sign in for now.';
+      'We\'re still working on SMS verification. Please use Email or the demo sign-in below for now.';
+
+  @override
+  String get authSkipSignIn => 'Skip sign-in (demo)';
 
   @override
   String get homeWelcomeBack => 'WELCOME BACK';
