@@ -968,6 +968,18 @@ abstract class AppLocalizations {
   /// **'已上传'**
   String get uploadedLabel;
 
+  /// No description provided for @uploadShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传'**
+  String get uploadShort;
+
+  /// No description provided for @uploadRetryShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get uploadRetryShort;
+
   /// No description provided for @uploadFailedRetry.
   ///
   /// In zh, this message translates to:

@@ -474,6 +474,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uploadedLabel => '已上传';
 
   @override
+  String get uploadShort => '上传';
+
+  @override
+  String get uploadRetryShort => '重试';
+
+  @override
   String get uploadFailedRetry => '上传失败 — 点击重试';
 
   @override

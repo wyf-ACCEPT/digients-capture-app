@@ -259,6 +259,8 @@
   },
   "uploadQueuedLabel": "Queued",
   "uploadedLabel": "Uploaded",
+  "uploadShort": "Upload",
+  "uploadRetryShort": "Retry",
   "uploadFailedRetry": "Upload failed — tap to retry",
   "uploadFailedSnack": "Upload failed: {error}",
   "@uploadFailedSnack": {
