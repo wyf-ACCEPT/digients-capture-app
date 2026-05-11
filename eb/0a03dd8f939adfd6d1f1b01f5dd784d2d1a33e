@@ -1,0 +1,53 @@
+lib/main.dart
+  s_6dc58ae6903eff::t_4fef5f94d02209 46
+lib/l10n/app_en.arb
+  s_6dc58ae6903eff::t_5c6f8c545516ee 74-85
+lib/screens/v2/submission_detail_screen.dart
+  s_6dc58ae6903eff::t_124920f0a231f1 282-283,298,302-308
+  s_6dc58ae6903eff::t_e4131bd40b2348 17,20
+lib/services/auth_service.dart
+  s_6dc58ae6903eff::t_d41a9a8353b5c0 244-249,251
+  s_6dc58ae6903eff::t_d95ded9f6b44c1 119-127
+  s_6dc58ae6903eff::t_57c50a29760672 253-258,260
+  s_6dc58ae6903eff::t_eba9824da80a2e 34-38,41-45
+lib/l10n/app_localizations_zh.dart
+  s_6dc58ae6903eff::t_3d9a72385a51dd 206-240
+lib/state/auth_controller.dart
+  s_6dc58ae6903eff::t_1e15a9dd1955e5 188-194
+  s_6dc58ae6903eff::t_78f38f934e5c5d 38-48
+lib/screens/v2/auth_screen.dart
+  s_6dc58ae6903eff::t_cf0cca4073712c 86-185
+  s_6dc58ae6903eff::t_eec4d3ac1782c0 339-343,349-358
+lib/l10n/app_localizations.dart
+  s_6dc58ae6903eff::t_76725c4b5776a3 485-520
+lib/screens/v2/submissions_screen.dart
+  s_6dc58ae6903eff::t_7ef446e176e2ca 960,963-964
+  s_6dc58ae6903eff::t_e6255916de7cd1 914-916,923-925
+  s_6dc58ae6903eff::t_0e5759cee5ead2 977
+  s_6dc58ae6903eff::t_9608197f402b2b 888,890,892-897,910-913,917-922
+  s_6dc58ae6903eff::t_50015d6c248274 840-880
+  s_6dc58ae6903eff::t_f05830b22c30fd 17
+  s_6dc58ae6903eff::t_520a8dfbfd245e 717
+  s_6dc58ae6903eff::t_cc24cc7a0f4c88 404-408
+  s_6dc58ae6903eff::t_f4287c2c9dbe85 699-700,714,716
+lib/l10n/app_zh.arb
+  s_6dc58ae6903eff::t_ac9596006725d9 74-85
+lib/l10n/app_localizations_en.dart
+  s_6dc58ae6903eff::t_9f95d5e5a4197a 207-243
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "eb0a03dd8f939adfd6d1f1b01f5dd784d2d1a33e",
+  "prompts": {},
+  "sessions": {
+    "s_6dc58ae6903eff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73d6b9fe-c1c5-46d2-b833-9dd773cc7a12",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
