@@ -240,6 +240,34 @@
       }
     }
   },
+  "uploadToCloud": "Upload to Cloud",
+  "uploadToCloudCount": "UPLOAD {count} TO CLOUD",
+  "@uploadToCloudCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadingPercent": "Uploading {percent}%",
+  "@uploadingPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadQueuedLabel": "Queued",
+  "uploadedLabel": "Uploaded",
+  "uploadFailedRetry": "Upload failed — tap to retry",
+  "uploadFailedSnack": "Upload failed: {error}",
+  "@uploadFailedSnack": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "savedOnDevice": "SAVED ON DEVICE",
   "notUploadedYet": "Not uploaded yet. Use Export to share the recording package via the share sheet.",
   "sessionId": "Session ID",

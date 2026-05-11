@@ -455,6 +455,33 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get uploadToCloud => '上传到云端';
+
+  @override
+  String uploadToCloudCount(int count) {
+    return '上传 $count 条到云端';
+  }
+
+  @override
+  String uploadingPercent(int percent) {
+    return '上传中 $percent%';
+  }
+
+  @override
+  String get uploadQueuedLabel => '排队中';
+
+  @override
+  String get uploadedLabel => '已上传';
+
+  @override
+  String get uploadFailedRetry => '上传失败 — 点击重试';
+
+  @override
+  String uploadFailedSnack(String error) {
+    return '上传失败：$error';
+  }
+
+  @override
   String get savedOnDevice => '已保存在设备上';
 
   @override

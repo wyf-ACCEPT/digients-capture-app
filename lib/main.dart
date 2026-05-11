@@ -7,10 +7,12 @@ import 'services/auth_service.dart';
 import 'services/compression_queue.dart';
 import 'services/recording_manager.dart';
 import 'services/token_storage.dart';
+import 'services/upload_service.dart';
 import 'state/auth_controller.dart';
 import 'state/hand_presence_settings_controller.dart';
 import 'state/locale_controller.dart';
 import 'state/theme_controller.dart';
+import 'state/upload_controller.dart';
 import 'theme/app_theme.dart';
 import 'theme/tokens.dart';
 
@@ -54,12 +56,31 @@ void main() async {
   // for legacy recordings without an archive *after* the first frame ships
   // (don't block app startup on it — large legacy backlogs would delay
   // launch otherwise).
-  final compressionQueue = CompressionQueue(RecordingManager());
+  final recordingManager = RecordingManager();
+  final compressionQueue = CompressionQueue(recordingManager);
   // Fire-and-forget: enqueueAllMissing only walks the recordings list; the
   // actual compression happens on a worker isolate.
   // ignore: unawaited_futures
   Future<void>.delayed(const Duration(seconds: 1))
       .then((_) => compressionQueue.enqueueAllMissing());
+
+  // Cloud-upload pipeline. Mock by default while Phase C UX is being shaped;
+  // switch to the real digients-api backend with
+  //   flutter run --dart-define=UPLOAD_BACKEND=http
+  // once the HTTP implementation is wired (Phase C, step "wire real backend").
+  const uploadBackend = String.fromEnvironment(
+    'UPLOAD_BACKEND',
+    defaultValue: 'mock',
+  );
+  final UploadService uploadService = uploadBackend == 'http'
+      ? HttpUploadService(baseUrl: apiBase)
+      : MockUploadService();
+  final uploadController = UploadController(
+    service: uploadService,
+    recordings: recordingManager,
+    compression: compressionQueue,
+    auth: authController,
+  );
 
   runApp(DigientsApp(
     themeController: themeController,
@@ -67,6 +88,7 @@ void main() async {
     authController: authController,
     handPresenceSettings: handPresenceSettings,
     compressionQueue: compressionQueue,
+    uploadController: uploadController,
   ));
 }
 
@@ -76,6 +98,7 @@ class DigientsApp extends StatelessWidget {
   final AuthController authController;
   final HandPresenceSettingsController handPresenceSettings;
   final CompressionQueue compressionQueue;
+  final UploadController uploadController;
 
   const DigientsApp({
     super.key,
@@ -84,6 +107,7 @@ class DigientsApp extends StatelessWidget {
     required this.authController,
     required this.handPresenceSettings,
     required this.compressionQueue,
+    required this.uploadController,
   });
 
   @override
@@ -96,6 +120,7 @@ class DigientsApp extends StatelessWidget {
         ChangeNotifierProvider<HandPresenceSettingsController>.value(
             value: handPresenceSettings),
         ChangeNotifierProvider<CompressionQueue>.value(value: compressionQueue),
+        ChangeNotifierProvider<UploadController>.value(value: uploadController),
       ],
       child: Consumer2<ThemeController, LocaleController>(
         builder: (context, themeCtl, localeCtl, _) {

@@ -938,6 +938,49 @@ abstract class AppLocalizations {
   /// **'导出 {count} 条录制'**
   String exportRecordingCount(int count);
 
+  /// Primary CTA on the detail screen that triggers Cloud upload.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传到云端'**
+  String get uploadToCloud;
+
+  /// Primary CTA in the bulk selection bar; shows total count of selected
+  /// recordings that will be uploaded.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传 {count} 条到云端'**
+  String uploadToCloudCount(int count);
+
+  /// Button label while an upload is in flight, e.g. "Uploading 42%".
+  ///
+  /// In zh, this message translates to:
+  /// **'上传中 {percent}%'**
+  String uploadingPercent(int percent);
+
+  /// Short label shown when an upload is queued behind another one in flight.
+  ///
+  /// In zh, this message translates to:
+  /// **'排队中'**
+  String get uploadQueuedLabel;
+
+  /// Status label when an upload has succeeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已上传'**
+  String get uploadedLabel;
+
+  /// Button label after an upload has failed; tap to retry.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传失败 — 点击重试'**
+  String get uploadFailedRetry;
+
+  /// SnackBar message for an upload failure.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传失败：{error}'**
+  String uploadFailedSnack(String error);
+
   /// No description provided for @savedOnDevice.
   ///
   /// In zh, this message translates to:

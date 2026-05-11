@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../state/upload_controller.dart';
 import '../../widgets/export_progress.dart';
 
 class SubmissionDetailScreen extends StatefulWidget {
@@ -220,12 +221,21 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
+                _CloudUploadButton(
+                  recording: r,
+                  onSnack: (msg) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text(msg)));
+                  },
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
-                        child: DCButton(
+                        child: DCButton.secondary(
                             label: l10n.export,
-                            leadingIcon: Icons.upload,
+                            leadingIcon: Icons.ios_share,
                             onPressed: _share)),
                     const SizedBox(width: 10),
                     DCIconButton(
@@ -256,5 +266,160 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
   String _formatDate(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// State-aware primary CTA for uploading a recording to the digients-api S3
+// pipeline. Switches between idle / queued / uploading (with progress bar)
+// / uploaded (✓) / failed (tap to retry) based on UploadController state.
+class _CloudUploadButton extends StatelessWidget {
+  final Recording recording;
+  final void Function(String message) onSnack;
+
+  const _CloudUploadButton({
+    required this.recording,
+    required this.onSnack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final c = context.dc;
+    final controller = context.watch<UploadController>();
+    final entry = controller.entryFor(recording.sessionId);
+    final status = entry.status;
+
+    switch (status) {
+      case UploadStatus.idle:
+      case UploadStatus.queued:
+        final isQueued = status == UploadStatus.queued;
+        return DCButton(
+          label: isQueued ? l10n.uploadQueuedLabel : l10n.uploadToCloud,
+          leadingIcon: Icons.cloud_upload_outlined,
+          onPressed: isQueued ? null : () => controller.enqueue(recording),
+        );
+      case UploadStatus.uploading:
+        return _UploadingProgress(
+          fraction: entry.progress,
+          label: l10n.uploadingPercent((entry.progress * 100).round()),
+          accent: c.accent,
+          bg: c.surface,
+          border: c.borderStrong,
+        );
+      case UploadStatus.uploaded:
+        return _UploadedPill(label: l10n.uploadedLabel, color: c.accent);
+      case UploadStatus.failed:
+        return DCButton(
+          label: l10n.uploadFailedRetry,
+          leadingIcon: Icons.refresh,
+          danger: c.danger,
+          primary: false,
+          onPressed: () {
+            final err = entry.errorMessage;
+            if (err != null) onSnack(l10n.uploadFailedSnack(err));
+            controller.enqueue(recording);
+          },
+        );
+    }
+  }
+}
+
+class _UploadingProgress extends StatelessWidget {
+  final double fraction;
+  final String label;
+  final Color accent;
+  final Color bg;
+  final Color border;
+
+  const _UploadingProgress({
+    required this.fraction,
+    required this.label,
+    required this.accent,
+    required this.bg,
+    required this.border,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: fraction.clamp(0.0, 1.0),
+                child: Container(color: accent.withValues(alpha: 0.18)),
+              ),
+            ),
+          ),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  label,
+                  style: DCText.inter(
+                    size: 17,
+                    weight: FontWeight.w600,
+                    color: accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadedPill extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _UploadedPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.cloud_done_outlined, color: color, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: DCText.inter(
+              size: 17,
+              weight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -240,6 +240,34 @@
       }
     }
   },
+  "uploadToCloud": "上传到云端",
+  "uploadToCloudCount": "上传 {count} 条到云端",
+  "@uploadToCloudCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadingPercent": "上传中 {percent}%",
+  "@uploadingPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadQueuedLabel": "排队中",
+  "uploadedLabel": "已上传",
+  "uploadFailedRetry": "上传失败 — 点击重试",
+  "uploadFailedSnack": "上传失败：{error}",
+  "@uploadFailedSnack": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "savedOnDevice": "已保存在设备上",
   "notUploadedYet": "尚未上传。你可以使用导出，通过系统分享面板发送录制数据包。",
   "sessionId": "会话 ID",

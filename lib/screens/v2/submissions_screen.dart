@@ -14,6 +14,7 @@ import '../../widgets/recording_thumbnail.dart';
 import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../state/upload_controller.dart';
 
 class SubmissionsScreen extends StatefulWidget {
   const SubmissionsScreen({super.key});
@@ -187,6 +188,7 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
               bottom: 0,
               child: _SelectionActionBar(
                 count: _selectedIds.length,
+                onUploadToCloud: _bulkUploadToCloud,
                 onExport: _bulkShare,
               ),
             ),
@@ -395,6 +397,42 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
     }
   }
 
+  Future<void> _bulkUploadToCloud() async {
+    if (_selectedIds.isEmpty) return;
+    final l10n = context.l10n;
+    final upload = context.read<UploadController>();
+    final queue = context.read<CompressionQueue>();
+    final selected =
+        _recordings.where((r) => _selectedIds.contains(r.sessionId)).toList();
+
+    try {
+      // Ensure archives exist before queueing uploads. The UploadController
+      // would fail-fast otherwise; warming the compression queue first means
+      // the user sees a single "compressing…" modal instead of a parade of
+      // per-recording failure SnackBars.
+      final allReady = selected.every((r) => queue.isReady(r.sessionId));
+      if (!allReady) {
+        await withExportProgress<void>(
+          context,
+          initialMessage: l10n.compressingProgress(1, selected.length),
+          work: (progress) async {
+            for (int i = 0; i < selected.length; i++) {
+              progress.update(l10n.compressingProgress(i + 1, selected.length));
+              await queue.waitForReady(selected[i].sessionId);
+            }
+          },
+        );
+      }
+      if (!mounted) return;
+      upload.enqueueAll(selected);
+      _exitSelection();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.uploadFailedSnack(e.toString()))));
+    }
+  }
+
   Future<void> _delete(Recording r) async {
     final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
@@ -422,9 +460,14 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
 
 class _SelectionActionBar extends StatelessWidget {
   final int count;
+  final VoidCallback onUploadToCloud;
   final VoidCallback onExport;
 
-  const _SelectionActionBar({required this.count, required this.onExport});
+  const _SelectionActionBar({
+    required this.count,
+    required this.onUploadToCloud,
+    required this.onExport,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -442,32 +485,72 @@ class _SelectionActionBar extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           child: Opacity(
             opacity: disabled ? 0.4 : 1.0,
-            child: GestureDetector(
-              onTap: disabled ? null : onExport,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: c.accent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.upload, color: Colors.black, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      count == 0
-                          ? l10n.exportSelected
-                          : l10n.exportRecordingCount(count),
-                      style: DCText.mono(
-                          size: 13,
-                          weight: FontWeight.w700,
-                          color: Colors.black,
-                          letterSpacing: 1.4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Primary action: upload to cloud (factory-contractor main path).
+                GestureDetector(
+                  onTap: disabled ? null : onUploadToCloud,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: c.accent,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.cloud_upload_outlined,
+                            color: Colors.black, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          count == 0
+                              ? l10n.uploadToCloud.toUpperCase()
+                              : l10n.uploadToCloudCount(count),
+                          style: DCText.mono(
+                              size: 13,
+                              weight: FontWeight.w700,
+                              color: Colors.black,
+                              letterSpacing: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                // Secondary action: export via system share sheet (existing
+                // flow, kept for users who want to AirDrop / email / Files.app).
+                GestureDetector(
+                  onTap: disabled ? null : onExport,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: c.borderStrong),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.ios_share, color: c.text, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          count == 0
+                              ? l10n.exportSelected
+                              : l10n.exportRecordingCount(count),
+                          style: DCText.mono(
+                              size: 12,
+                              weight: FontWeight.w600,
+                              color: c.text,
+                              letterSpacing: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -648,6 +731,22 @@ class _RecordingRow extends StatelessWidget {
                       }
                     },
                   ),
+                  // Upload status, only when the user has actually engaged the
+                  // cloud-upload flow for this take. Idle = collapse to zero
+                  // height so unrelated rows don't grow.
+                  Consumer<UploadController>(
+                    builder: (_, upload, __) {
+                      final entry = upload.entryFor(recording.sessionId);
+                      final status = entry.status;
+                      if (status == UploadStatus.idle) {
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: _UploadStatusBadge(entry: entry),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -655,10 +754,14 @@ class _RecordingRow extends StatelessWidget {
               const SizedBox(width: 8),
               Column(
                 children: [
+                  // Share / export — opens the system share sheet (AirDrop,
+                  // mail, Files.app). Icon used to be Icons.upload, which
+                  // collided with the new cloud-upload action; ios_share
+                  // matches the actual behavior.
                   DCIconButton(
-                    icon: Icons.upload,
-                    color: c.accent,
-                    bg: c.accentTint,
+                    icon: Icons.ios_share,
+                    color: c.text,
+                    bg: c.surface,
                     onPressed: onShare,
                     semanticLabel: l10n.export,
                   ),
@@ -710,5 +813,92 @@ extension _SubmissionFilterLabel on _SubmissionFilter {
       _SubmissionFilter.approved => l10n.statusApproved,
       _SubmissionFilter.rejected => l10n.statusRejected,
     };
+  }
+}
+
+// Inline upload status indicator rendered under each row's metadata column.
+// Renders compactly so it co-exists with the existing compression-state badge
+// in the same vertical slot.
+class _UploadStatusBadge extends StatelessWidget {
+  final UploadEntry entry;
+
+  const _UploadStatusBadge({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.dc;
+    final l10n = context.l10n;
+    switch (entry.status) {
+      case UploadStatus.idle:
+        return const SizedBox.shrink();
+      case UploadStatus.queued:
+        return Text(
+          l10n.uploadQueuedLabel,
+          style: DCText.mono(
+              size: 9,
+              weight: FontWeight.w500,
+              color: c.textDim,
+              letterSpacing: 1.2),
+        );
+      case UploadStatus.uploading:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: c.accent,
+                value: entry.progress > 0 ? entry.progress : null,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              l10n.uploadingPercent((entry.progress * 100).round()),
+              style: DCText.mono(
+                  size: 9,
+                  weight: FontWeight.w500,
+                  color: c.accent,
+                  letterSpacing: 1.2),
+            ),
+          ],
+        );
+      case UploadStatus.uploaded:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_done_outlined, color: c.accent, size: 12),
+            const SizedBox(width: 4),
+            Text(
+              l10n.uploadedLabel,
+              style: DCText.mono(
+                  size: 9,
+                  weight: FontWeight.w500,
+                  color: c.accent,
+                  letterSpacing: 1.2),
+            ),
+          ],
+        );
+      case UploadStatus.failed:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, color: c.danger, size: 12),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                l10n.uploadFailedRetry,
+                overflow: TextOverflow.ellipsis,
+                style: DCText.mono(
+                    size: 9,
+                    weight: FontWeight.w500,
+                    color: c.danger,
+                    letterSpacing: 1.2),
+              ),
+            ),
+          ],
+        );
+    }
   }
 }

@@ -460,6 +460,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get uploadToCloud => 'Upload to Cloud';
+
+  @override
+  String uploadToCloudCount(int count) {
+    return 'UPLOAD $count TO CLOUD';
+  }
+
+  @override
+  String uploadingPercent(int percent) {
+    return 'Uploading $percent%';
+  }
+
+  @override
+  String get uploadQueuedLabel => 'Queued';
+
+  @override
+  String get uploadedLabel => 'Uploaded';
+
+  @override
+  String get uploadFailedRetry => 'Upload failed — tap to retry';
+
+  @override
+  String uploadFailedSnack(String error) {
+    return 'Upload failed: $error';
+  }
+
+  @override
   String get savedOnDevice => 'SAVED ON DEVICE';
 
   @override
