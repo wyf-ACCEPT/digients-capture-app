@@ -83,6 +83,106 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> _openInviteCodeModal() async {
+    final l10n = context.l10n;
+    final controller = TextEditingController();
+    final auth = context.read<AuthController>();
+    final c = context.dc;
+
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        var error = '';
+        var inProgress = false;
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) => AlertDialog(
+            backgroundColor: c.surface,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(l10n.authInviteCodeModalTitle,
+                style: DCText.inter(
+                    size: 18, weight: FontWeight.w600, color: c.text)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l10n.authInviteCodeModalHint,
+                  style: DCText.inter(
+                      size: 13, weight: FontWeight.w400, color: c.textDim),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  enabled: !inProgress,
+                  textCapitalization: TextCapitalization.characters,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(
+                    labelText: l10n.authInviteCodeInputLabel,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  style: DCText.mono(
+                      size: 16, weight: FontWeight.w500, color: c.text),
+                  onSubmitted: (_) => Navigator.of(ctx).pop(true),
+                ),
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(error,
+                      style: DCText.inter(
+                          size: 12,
+                          weight: FontWeight.w500,
+                          color: c.danger)),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    inProgress ? null : () => Navigator.of(ctx).pop(false),
+                child: Text(l10n.cancel),
+              ),
+              TextButton(
+                onPressed: inProgress
+                    ? null
+                    : () async {
+                        final code = controller.text.trim();
+                        if (code.isEmpty) {
+                          setLocalState(() => error = l10n.authInviteCodeMissing);
+                          return;
+                        }
+                        setLocalState(() {
+                          inProgress = true;
+                          error = '';
+                        });
+                        try {
+                          await auth.redeemInviteCode(code: code);
+                          if (ctx.mounted) Navigator.of(ctx).pop(true);
+                        } catch (e) {
+                          setLocalState(() {
+                            inProgress = false;
+                            error = e is AuthException
+                                ? e.message
+                                : e.toString();
+                          });
+                        }
+                      },
+                child: Text(l10n.authInviteCodeSubmit),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    controller.dispose();
+    if (submitted == true && mounted) {
+      // Router redirect picks up the auth state change and navigates.
+    }
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -236,9 +336,26 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 16),
               DCButton.secondary(
+                label: l10n.authInviteCodeSignIn,
+                leadingIcon: Icons.vpn_key_outlined,
+                onPressed: busy ? null : _openInviteCodeModal,
+              ),
+              const SizedBox(height: 10),
+              DCButton.secondary(
                 label: l10n.authSkipSignIn,
                 leadingIcon: Icons.science,
                 onPressed: busy ? null : _skipSignIn,
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(
+                  l10n.authSkipSignInHint,
+                  style: DCText.mono(
+                      size: 10,
+                      weight: FontWeight.w500,
+                      color: c.textFaint,
+                      letterSpacing: 1.0),
+                ),
               ),
               const SizedBox(height: 24),
               Center(

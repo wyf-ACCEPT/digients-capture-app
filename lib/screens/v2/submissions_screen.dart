@@ -14,6 +14,7 @@ import '../../widgets/recording_thumbnail.dart';
 import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../state/auth_controller.dart';
 import '../../state/upload_controller.dart';
 
 class SubmissionsScreen extends StatefulWidget {
@@ -400,6 +401,11 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
   Future<void> _bulkUploadToCloud() async {
     if (_selectedIds.isEmpty) return;
     final l10n = context.l10n;
+    final auth = context.read<AuthController>();
+    if (!auth.canUpload) {
+      await promptInviteCodeRequired(context, auth);
+      return;
+    }
     final upload = context.read<UploadController>();
     final queue = context.read<CompressionQueue>();
     final selected =
@@ -690,8 +696,8 @@ class _RecordingRow extends StatelessWidget {
                       // "this take has been preserved", so keeping the
                       // ondevice chip alongside it just duplicates ink. Local
                       // copy is still on disk; we just stop announcing it.
-                      Consumer<UploadController>(
-                        builder: (_, upload, __) {
+                      Consumer2<UploadController, AuthController>(
+                        builder: (_, upload, auth, __) {
                           final entry = upload.entryFor(recording.sessionId);
                           final hideOnDeviceBadge =
                               entry.status == UploadStatus.uploaded;
@@ -705,7 +711,10 @@ class _RecordingRow extends StatelessWidget {
                               ],
                               _UploadActionPill(
                                 entry: entry,
+                                locked: !auth.canUpload,
                                 onTap: () => upload.enqueue(recording),
+                                onLockedTap: () =>
+                                    promptInviteCodeRequired(context, auth),
                               ),
                             ],
                           );
@@ -828,6 +837,47 @@ extension _SubmissionFilterLabel on _SubmissionFilter {
   }
 }
 
+// Shared helper: shown when a demo-session user taps a locked upload control.
+// Explains why upload is unavailable and offers a one-tap shortcut to sign
+// out so the user lands back on the auth screen and can redeem an invite
+// code. Used by both list-row pills and the detail-screen cloud button.
+Future<void> promptInviteCodeRequired(
+    BuildContext context, AuthController auth) async {
+  final l10n = context.l10n;
+  final c = context.dc;
+  final action = await showDialog<_LockedDialogAction>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: c.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(l10n.uploadLockedTitle,
+          style: DCText.inter(
+              size: 17, weight: FontWeight.w600, color: c.text)),
+      content: Text(l10n.uploadLockedBody,
+          style: DCText.inter(
+              size: 14, weight: FontWeight.w400, color: c.textDim)),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.of(ctx).pop(_LockedDialogAction.dismiss),
+          child: Text(l10n.uploadLockedDismiss),
+        ),
+        TextButton(
+          onPressed: () =>
+              Navigator.of(ctx).pop(_LockedDialogAction.signOut),
+          child: Text(l10n.uploadLockedSignOut,
+              style: TextStyle(color: c.danger)),
+        ),
+      ],
+    ),
+  );
+  if (action == _LockedDialogAction.signOut) {
+    await auth.logout();
+  }
+}
+
+enum _LockedDialogAction { dismiss, signOut }
+
 // Tappable inline pill that drives Cloud upload from the list row. Visually
 // matches DCStatusBadge (same padding, radius, mono uppercase font, leading
 // glyph) so it reads as a sibling to the "on device" badge it sits next to,
@@ -835,9 +885,16 @@ extension _SubmissionFilterLabel on _SubmissionFilter {
 // progress fill animates the pill background.
 class _UploadActionPill extends StatelessWidget {
   final UploadEntry entry;
+  final bool locked;
   final VoidCallback onTap;
+  final VoidCallback onLockedTap;
 
-  const _UploadActionPill({required this.entry, required this.onTap});
+  const _UploadActionPill({
+    required this.entry,
+    required this.locked,
+    required this.onTap,
+    required this.onLockedTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -850,8 +907,22 @@ class _UploadActionPill extends StatelessWidget {
     late final Color bg;
     VoidCallback? handler;
 
-    switch (entry.status) {
-      case UploadStatus.idle:
+    // Demo sessions (skip-sign-in) can't upload — present a locked variant
+    // that explains why on tap. Always wins over the regular status so the
+    // user sees a consistent "you need to sign in" affordance no matter
+    // what state the underlying upload entry is in.
+    // Demo sessions (skip-sign-in) can't upload — present a locked variant
+    // that explains why on tap. Wins over the regular status so the user
+    // sees a consistent affordance regardless of underlying upload state.
+    if (locked) {
+      icon = Icons.lock_outline;
+      label = l10n.uploadLockedShortLabel;
+      fg = c.textDim;
+      bg = c.surface2;
+      handler = onLockedTap;
+    } else {
+      switch (entry.status) {
+        case UploadStatus.idle:
         icon = Icons.cloud_upload_outlined;
         label = l10n.uploadShort;
         fg = c.accent;
@@ -886,7 +957,11 @@ class _UploadActionPill extends StatelessWidget {
         bg = c.danger.withValues(alpha: 0.12);
         handler = onTap;
         break;
+      }
     }
+
+    final showProgressFill =
+        !locked && entry.status == UploadStatus.uploading;
 
     final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -899,7 +974,7 @@ class _UploadActionPill extends StatelessWidget {
       // only the text/icon row.
       child: Stack(
         children: [
-          if (entry.status == UploadStatus.uploading)
+          if (showProgressFill)
             Positioned.fill(
               child: Align(
                 alignment: Alignment.bottomLeft,

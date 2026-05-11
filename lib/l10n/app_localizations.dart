@@ -482,6 +482,42 @@ abstract class AppLocalizations {
   /// **'免登录（演示）'**
   String get authSkipSignIn;
 
+  /// In zh: '跳过后将无法上传视频'
+  String get authSkipSignInHint;
+
+  /// In zh: '用邀请码登录'
+  String get authInviteCodeSignIn;
+
+  /// In zh: '输入邀请码'
+  String get authInviteCodeModalTitle;
+
+  /// In zh: '向 Digients 团队获取你的邀请码'
+  String get authInviteCodeModalHint;
+
+  /// In zh: '邀请码'
+  String get authInviteCodeInputLabel;
+
+  /// In zh: '登录'
+  String get authInviteCodeSubmit;
+
+  /// In zh: '请输入邀请码'
+  String get authInviteCodeMissing;
+
+  /// In zh: '上传需要登录'
+  String get uploadLockedTitle;
+
+  /// In zh: '退出登录后用邀请码重新进入即可启用视频上传。'
+  String get uploadLockedBody;
+
+  /// In zh: '退出登录'
+  String get uploadLockedSignOut;
+
+  /// In zh: '暂不'
+  String get uploadLockedDismiss;
+
+  /// In zh: '需登录'
+  String get uploadLockedShortLabel;
+
   /// No description provided for @homeWelcomeBack.
   ///
   /// In zh, this message translates to:

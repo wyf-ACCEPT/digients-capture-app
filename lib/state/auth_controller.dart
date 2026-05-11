@@ -35,6 +35,17 @@ class AuthController extends ChangeNotifier {
   bool get isAuthenticated => _session != null;
   bool get isBusy => _isBusy;
 
+  // True iff the current session can talk to the backend in an authenticated
+  // way. Skip-sign-in / demo sessions mint a synthetic access token that
+  // isn't a real JWT, so JWT-decode failure stands in for "this is a demo
+  // session and the server will 401 anything we ask of it". Real OTP and
+  // invite-redeem sessions both mint server-signed JWTs that decode cleanly.
+  bool get canUpload {
+    final s = _session;
+    if (s == null) return false;
+    return _decodeJwtPayload(s.accessToken) != null;
+  }
+
   // Returns a non-expiring-soon access token, refreshing in the background
   // if needed. Single-flight: concurrent callers share the same refresh.
   // Throws AuthException if no session is active or refresh fails.
@@ -170,6 +181,13 @@ class AuthController extends ChangeNotifier {
   Future<void> signInAsDemo() {
     return _withBusy(() async {
       final res = await _service.signInAsDemo();
+      await _adopt(res);
+    });
+  }
+
+  Future<void> redeemInviteCode({required String code}) {
+    return _withBusy(() async {
+      final res = await _service.redeemInviteCode(code: code);
       await _adopt(res);
     });
   }

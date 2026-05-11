@@ -41,18 +41,9 @@ void main() async {
     'API_BASE',
     defaultValue: 'https://digients-api.digients.workers.dev',
   );
-  // DEMO_BYPASS_CODE pairs with DEMO_BYPASS_IDENTIFIER on the server
-  // (wrangler.toml [vars]) to short-circuit OTP for the skip-sign-in path.
-  // Without it the local-mint fallback fires, so dev builds without the
-  // dart-define still get a working skip-sign-in button — they just can't
-  // upload to the backend afterwards.
-  const demoBypassCode = String.fromEnvironment('DEMO_BYPASS_CODE');
   final AuthService authService = backend == 'mock'
       ? MockAuthService()
-      : HttpAuthService(
-          baseUrl: apiBase,
-          demoBypassCode: demoBypassCode.isEmpty ? null : demoBypassCode,
-        );
+      : HttpAuthService(baseUrl: apiBase);
 
   final authController = AuthController(
     service: authService,

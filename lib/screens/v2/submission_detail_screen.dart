@@ -14,8 +14,10 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../state/auth_controller.dart';
 import '../../state/upload_controller.dart';
 import '../../widgets/export_progress.dart';
+import 'submissions_screen.dart' show promptInviteCodeRequired;
 
 class SubmissionDetailScreen extends StatefulWidget {
   final String sessionId;
@@ -277,6 +279,8 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
 // State-aware primary CTA for uploading a recording to the digients-api S3
 // pipeline. Switches between idle / queued / uploading (with progress bar)
 // / uploaded (✓) / failed (tap to retry) based on UploadController state.
+// Demo sessions (skip-sign-in) see a locked variant that explains why
+// upload is unavailable and offers a sign-out shortcut.
 class _CloudUploadButton extends StatelessWidget {
   final Recording recording;
   final void Function(String message) onSnack;
@@ -291,8 +295,17 @@ class _CloudUploadButton extends StatelessWidget {
     final l10n = context.l10n;
     final c = context.dc;
     final controller = context.watch<UploadController>();
+    final auth = context.watch<AuthController>();
     final entry = controller.entryFor(recording.sessionId);
     final status = entry.status;
+
+    if (!auth.canUpload) {
+      return DCButton.secondary(
+        label: l10n.uploadLockedTitle,
+        leadingIcon: Icons.lock_outline,
+        onPressed: () => promptInviteCodeRequired(context, auth),
+      );
+    }
 
     switch (status) {
       case UploadStatus.idle:

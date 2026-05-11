@@ -204,6 +204,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authSkipSignIn => 'Skip sign-in (demo)';
 
   @override
+  String get authSkipSignInHint => 'Skipping will leave video upload disabled';
+
+  @override
+  String get authInviteCodeSignIn => 'Sign in with invite code';
+
+  @override
+  String get authInviteCodeModalTitle => 'Enter Invite Code';
+
+  @override
+  String get authInviteCodeModalHint =>
+      "Ask the Digients team for a code if you don't have one";
+
+  @override
+  String get authInviteCodeInputLabel => 'Invite code';
+
+  @override
+  String get authInviteCodeSubmit => 'Sign in';
+
+  @override
+  String get authInviteCodeMissing => 'Invite code is required';
+
+  @override
+  String get uploadLockedTitle => 'Upload requires sign-in';
+
+  @override
+  String get uploadLockedBody =>
+      'Sign out and use an invite code to enable video upload.';
+
+  @override
+  String get uploadLockedSignOut => 'Sign out';
+
+  @override
+  String get uploadLockedDismiss => 'Not now';
+
+  @override
+  String get uploadLockedShortLabel => 'Locked';
+
+  @override
   String get homeWelcomeBack => 'WELCOME BACK';
 
   @override

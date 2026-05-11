@@ -203,6 +203,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authSkipSignIn => '免登录（演示）';
 
   @override
+  String get authSkipSignInHint => '跳过后将无法上传视频';
+
+  @override
+  String get authInviteCodeSignIn => '用邀请码登录';
+
+  @override
+  String get authInviteCodeModalTitle => '输入邀请码';
+
+  @override
+  String get authInviteCodeModalHint => '向 Digients 团队获取你的邀请码';
+
+  @override
+  String get authInviteCodeInputLabel => '邀请码';
+
+  @override
+  String get authInviteCodeSubmit => '登录';
+
+  @override
+  String get authInviteCodeMissing => '请输入邀请码';
+
+  @override
+  String get uploadLockedTitle => '上传需要登录';
+
+  @override
+  String get uploadLockedBody => '退出登录后用邀请码重新进入即可启用视频上传。';
+
+  @override
+  String get uploadLockedSignOut => '退出登录';
+
+  @override
+  String get uploadLockedDismiss => '暂不';
+
+  @override
+  String get uploadLockedShortLabel => '需登录';
+
+  @override
   String get homeWelcomeBack => '欢迎回来';
 
   @override

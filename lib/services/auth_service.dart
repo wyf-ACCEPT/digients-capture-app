@@ -31,12 +31,18 @@ abstract class AuthService {
   });
 
   // Mints a synthetic local session, no server / OAuth provider involved.
-  // Exposed so the UI can offer a "skip sign-in" path for App Review reviewers,
-  // factory-side workers without stable email access, and team members hitting
-  // bugs in the real OTP/refresh path. The returned refresh token is prefixed
-  // `demo:` so HttpAuthService.refresh / .logout recognize it and stay local
-  // instead of round-tripping the server.
+  // Exposed so the UI can offer a "skip sign-in" path for App Review reviewers
+  // and team members hitting bugs in the real OTP/refresh path. The returned
+  // refresh token is prefixed `demo:` so HttpAuthService.refresh / .logout
+  // recognize it and stay local instead of round-tripping the server. Demo
+  // sessions cannot upload — see AuthController.canUpload.
   Future<AuthVerifyResponse> signInAsDemo();
+
+  // Exchange a server-issued invite code for a real session. Powers the
+  // "我有邀请码 / Use invite code" path for factory contractors who can't
+  // reach Resend email. The returned session is a real backend session
+  // (refresh tokens persisted server-side) and can upload.
+  Future<AuthVerifyResponse> redeemInviteCode({required String code});
 
   Future<AuthVerifyResponse> refresh({required String refreshToken});
 
@@ -110,6 +116,16 @@ class MockAuthService implements AuthService {
   }
 
   @override
+  Future<AuthVerifyResponse> redeemInviteCode({required String code}) async {
+    await Future.delayed(_networkLatency);
+    if (code.trim().isEmpty) {
+      throw AuthException('Invite code is required', code: 'invalid_code');
+    }
+    // Mock accepts any non-empty code so UI work can iterate without server.
+    return _mintResponse(email: 'invite-${code.trim()}@example.com');
+  }
+
+  @override
   Future<AuthVerifyResponse> refresh({required String refreshToken}) async {
     await Future.delayed(_networkLatency);
     return _mintResponse();
@@ -161,23 +177,11 @@ class MockAuthService implements AuthService {
 // only user-visible breakage is OAuth buttons, which the UI can gate later.
 class HttpAuthService implements AuthService {
   final String baseUrl;
-  // Shared-demo bypass identifier (must match wrangler.toml DEMO_BYPASS_IDENTIFIER
-  // on the server) and the bypass code (must match the CF secret of the same
-  // name). When the code is present, signInAsDemo routes through real /verify
-  // with these credentials; the backend short-circuits the OTP check and mints
-  // a real JWT against a shared user. When the code is absent (dev builds
-  // without --dart-define=DEMO_BYPASS_CODE=...), signInAsDemo falls back to
-  // the pure-local mint, which still lets Apple Beta Reviewers tap the button
-  // but produces a session that can't talk to the backend.
-  final String demoIdentifier;
-  final String? demoBypassCode;
   final http.Client _client;
   final Duration _timeout;
 
   HttpAuthService({
     required this.baseUrl,
-    this.demoIdentifier = 'demo@digients.tech',
-    this.demoBypassCode,
     http.Client? client,
     Duration timeout = const Duration(seconds: 15),
   })  : _client = client ?? http.Client(),
@@ -237,24 +241,23 @@ class HttpAuthService implements AuthService {
     );
   }
 
-  // Skip-sign-in path. Two flavors depending on build:
-  //   1. If demoBypassCode is set (--dart-define=DEMO_BYPASS_CODE=...), we hit
-  //      the real /v1/auth/verify with the shared demo identifier and the
-  //      bypass code. The backend short-circuits OTP and mints a real JWT
-  //      against a shared user. The resulting session can upload to the real
-  //      backend, which is what factory contractors and any user who can't
-  //      reach Resend's email needs.
-  //   2. Otherwise we fall back to the pure-local mint (refresh token prefixed
-  //      `demo:`). Apple reviewers building from a dev IPA without the bypass
-  //      code still get a working skip-sign-in button; they just can't talk to
-  //      the backend, which is fine because reviewers don't upload anyway.
+  // Skip-sign-in path. Pure local mint — no server round-trip, refresh token
+  // prefixed `demo:` so refresh / logout below recognize it and stay local.
+  // The session lets users explore the App but is intentionally NOT able to
+  // upload (AuthController.canUpload returns false for these sessions). Users
+  // who want to upload must come back to the auth screen and redeem an
+  // invite code via /v1/auth/invite-redeem.
   @override
-  Future<AuthVerifyResponse> signInAsDemo() async {
-    final code = demoBypassCode;
-    if (code != null && code.isNotEmpty) {
-      return verifyOtp(identifier: demoIdentifier, code: code);
+  Future<AuthVerifyResponse> signInAsDemo() async => _mintDemoSession();
+
+  @override
+  Future<AuthVerifyResponse> redeemInviteCode({required String code}) async {
+    final res = await _post('/v1/auth/invite-redeem', {'code': code.trim()});
+    if (res.statusCode == 200) {
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      return AuthVerifyResponse.fromJson(json);
     }
-    return _mintDemoSession();
+    throw _toException(res, fallbackCode: 'redeem_failed');
   }
 
   // refresh and logout still wrap their bodies as `async`: a sync throw inside
