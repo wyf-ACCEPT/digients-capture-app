@@ -149,8 +149,7 @@ class UploadController extends ChangeNotifier {
       return;
     }
 
-    final token = _auth.session?.accessToken;
-    if (token == null) {
+    if (_auth.session == null) {
       _finishFailure(sid, 'Not signed in');
       return;
     }
@@ -165,7 +164,10 @@ class UploadController extends ChangeNotifier {
             archivePath: archive,
             sizeBytes: sizeBytes,
             durationSec: durationSec,
-            accessToken: token,
+            // The service pulls a fresh JWT immediately before each /init
+            // and /complete, so a long PUT can't strand the upload behind
+            // an expired access token.
+            getAccessToken: _auth.getFreshAccessToken,
           )
           .listen(
             (p) {

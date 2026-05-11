@@ -52,6 +52,13 @@ class UploadException implements Exception {
   String toString() => 'UploadException($code): $message';
 }
 
+// Callback the service uses each time it needs an access token. We don't
+// take a token by value because uploads can run long (10+ min on slow
+// links) — by the time `complete` fires, the 15-minute access token captured
+// at upload-start may have expired. The callback resolves to a fresh token
+// each call, so the implementation can auto-refresh transparently.
+typedef AccessTokenProvider = Future<String> Function();
+
 abstract class UploadService {
   // Streams progress events while the upload is in flight; closes normally
   // on success and emits an [UploadException] via addError on failure.
@@ -60,7 +67,7 @@ abstract class UploadService {
     required String archivePath,
     required int sizeBytes,
     required double durationSec,
-    required String accessToken,
+    required AccessTokenProvider getAccessToken,
   });
 }
 
@@ -92,7 +99,7 @@ class MockUploadService implements UploadService {
     required String archivePath,
     required int sizeBytes,
     required double durationSec,
-    required String accessToken,
+    required AccessTokenProvider getAccessToken,
   }) {
     final controller = StreamController<UploadProgress>();
     final tickInterval = Duration(
@@ -174,7 +181,7 @@ class HttpUploadService implements UploadService {
     required String archivePath,
     required int sizeBytes,
     required double durationSec,
-    required String accessToken,
+    required AccessTokenProvider getAccessToken,
   }) {
     final controller = StreamController<UploadProgress>();
     // ignore: unawaited_futures
@@ -183,7 +190,7 @@ class HttpUploadService implements UploadService {
       sessionId: sessionId,
       archivePath: archivePath,
       durationSec: durationSec,
-      accessToken: accessToken,
+      getAccessToken: getAccessToken,
     );
     return controller.stream;
   }
@@ -193,7 +200,7 @@ class HttpUploadService implements UploadService {
     required String sessionId,
     required String archivePath,
     required double durationSec,
-    required String accessToken,
+    required AccessTokenProvider getAccessToken,
   }) async {
     try {
       final deviceUuid = await _deviceId.getOrCreateUuid();
@@ -209,16 +216,19 @@ class HttpUploadService implements UploadService {
       final fileLength = await file.length();
 
       // Leg 1: init — server issues pre-signed PUT URL + submission row.
+      // Pull a fresh access token immediately before each control-plane call
+      // so an in-flight refresh (long PUT, long backoff) doesn't 401.
       final init = await _postInit(
         sessionId: sessionId,
         deviceUuid: deviceUuid,
         deviceModel: deviceModel,
-        accessToken: accessToken,
+        accessToken: await getAccessToken(),
       );
       final uploadUrl = init['upload_url'] as String;
       final submissionId = init['submission_id'] as String;
 
-      // Leg 2: PUT to S3 with byte-level progress.
+      // Leg 2: PUT to S3 with byte-level progress. The pre-signed URL embeds
+      // its own auth (SigV4), so the access token never reaches AWS.
       await _putToS3(
         controller: controller,
         uploadUrl: uploadUrl,
@@ -226,12 +236,14 @@ class HttpUploadService implements UploadService {
         fileLength: fileLength,
       );
 
-      // Leg 3: complete — flip status uploading -> queued.
+      // Leg 3: complete — flip status uploading -> queued. Re-fetch the
+      // token here in case the PUT ran long enough for the original to
+      // have expired.
       await _postComplete(
         submissionId: submissionId,
         sizeBytes: fileLength,
         durationSec: durationSec,
-        accessToken: accessToken,
+        accessToken: await getAccessToken(),
       );
 
       await controller.close();
