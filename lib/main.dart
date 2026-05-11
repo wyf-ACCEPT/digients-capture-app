@@ -5,6 +5,7 @@ import 'l10n/app_localizations.dart';
 import 'router.dart';
 import 'services/auth_service.dart';
 import 'services/compression_queue.dart';
+import 'services/device_id_service.dart';
 import 'services/recording_manager.dart';
 import 'services/token_storage.dart';
 import 'services/upload_service.dart';
@@ -64,17 +65,17 @@ void main() async {
   Future<void>.delayed(const Duration(seconds: 1))
       .then((_) => compressionQueue.enqueueAllMissing());
 
-  // Cloud-upload pipeline. Mock by default while Phase C UX is being shaped;
-  // switch to the real digients-api backend with
-  //   flutter run --dart-define=UPLOAD_BACKEND=http
-  // once the HTTP implementation is wired (Phase C, step "wire real backend").
+  // Cloud-upload pipeline. HTTP against digients-api by default; flip to the
+  // mock with `flutter run --dart-define=UPLOAD_BACKEND=mock` for UX work
+  // without burning real S3 bytes.
   const uploadBackend = String.fromEnvironment(
     'UPLOAD_BACKEND',
-    defaultValue: 'mock',
+    defaultValue: 'http',
   );
-  final UploadService uploadService = uploadBackend == 'http'
-      ? HttpUploadService(baseUrl: apiBase)
-      : MockUploadService();
+  final deviceIdService = DeviceIdService();
+  final UploadService uploadService = uploadBackend == 'mock'
+      ? MockUploadService()
+      : HttpUploadService(baseUrl: apiBase, deviceId: deviceIdService);
   final uploadController = UploadController(
     service: uploadService,
     recordings: recordingManager,

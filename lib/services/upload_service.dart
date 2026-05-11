@@ -1,5 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import 'device_id_service.dart';
 
 // Client surface for the M-Upload-Lite pipeline (digients-api v1/submissions).
 //
@@ -128,12 +135,38 @@ class MockUploadService implements UploadService {
   }
 }
 
-// Real backend implementation. Stubbed for now — Phase C's first cut is mock-
-// only so Jason can iterate on UX. Wire init/PUT/complete once UX is locked.
+// Real backend implementation. Three-legged flow against digients-api:
+//   1. POST /v1/submissions/init with session/device metadata, get back a
+//      pre-signed PUT URL (TTL ~15min) and the matching submission id.
+//   2. HTTP PUT the tar.gz body to S3 directly via the pre-signed URL.
+//      Body is streamed off disk, not loaded into memory, so a 3 GB take
+//      doesn't OOM the App. Progress events are emitted as bytes flow into
+//      the request sink — the network rate IS the progress rate.
+//   3. POST /v1/submissions/<id>/complete with final size + duration to
+//      flip the submission status uploading -> queued on the backend.
+//
+// Known gap: the access token is captured at call-time and used for both
+// /init and /complete. If the token expires mid-upload (>15 min), /complete
+// will 401 and the take ends up in `failed`. Retrying re-fetches a fresh
+// token via AuthController, so this self-heals on retry. Proper mid-flight
+// refresh is a fast-follow.
 class HttpUploadService implements UploadService {
   final String baseUrl;
+  final DeviceIdService _deviceId;
+  final http.Client _client;
+  final Duration _controlTimeout;
+  final Duration _uploadTimeout;
 
-  HttpUploadService({required this.baseUrl});
+  HttpUploadService({
+    required this.baseUrl,
+    required DeviceIdService deviceId,
+    http.Client? client,
+    Duration controlTimeout = const Duration(seconds: 30),
+    Duration uploadTimeout = const Duration(minutes: 30),
+  })  : _deviceId = deviceId,
+        _client = client ?? http.Client(),
+        _controlTimeout = controlTimeout,
+        _uploadTimeout = uploadTimeout;
 
   @override
   Stream<UploadProgress> upload({
@@ -144,11 +177,191 @@ class HttpUploadService implements UploadService {
     required String accessToken,
   }) {
     final controller = StreamController<UploadProgress>();
-    controller.addError(UploadException(
-      'HttpUploadService not yet wired (Phase C is mock-only).',
-      code: 'not_implemented',
-    ));
-    controller.close();
+    // ignore: unawaited_futures
+    _run(
+      controller: controller,
+      sessionId: sessionId,
+      archivePath: archivePath,
+      durationSec: durationSec,
+      accessToken: accessToken,
+    );
     return controller.stream;
+  }
+
+  Future<void> _run({
+    required StreamController<UploadProgress> controller,
+    required String sessionId,
+    required String archivePath,
+    required double durationSec,
+    required String accessToken,
+  }) async {
+    try {
+      final deviceUuid = await _deviceId.getOrCreateUuid();
+      final deviceModel = await _deviceId.getDeviceModelLabel();
+
+      final file = File(archivePath);
+      if (!await file.exists()) {
+        throw UploadException(
+          'Archive not found at $archivePath',
+          code: 'archive_missing',
+        );
+      }
+      final fileLength = await file.length();
+
+      // Leg 1: init — server issues pre-signed PUT URL + submission row.
+      final init = await _postInit(
+        sessionId: sessionId,
+        deviceUuid: deviceUuid,
+        deviceModel: deviceModel,
+        accessToken: accessToken,
+      );
+      final uploadUrl = init['upload_url'] as String;
+      final submissionId = init['submission_id'] as String;
+
+      // Leg 2: PUT to S3 with byte-level progress.
+      await _putToS3(
+        controller: controller,
+        uploadUrl: uploadUrl,
+        file: file,
+        fileLength: fileLength,
+      );
+
+      // Leg 3: complete — flip status uploading -> queued.
+      await _postComplete(
+        submissionId: submissionId,
+        sizeBytes: fileLength,
+        durationSec: durationSec,
+        accessToken: accessToken,
+      );
+
+      await controller.close();
+    } catch (e, st) {
+      debugPrint('[HttpUploadService] upload failed: $e\n$st');
+      if (!controller.isClosed) {
+        controller.addError(
+          e is UploadException
+              ? e
+              : UploadException(e.toString(), code: 'unexpected'),
+        );
+        await controller.close();
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _postInit({
+    required String sessionId,
+    required String deviceUuid,
+    required String deviceModel,
+    required String accessToken,
+  }) async {
+    final res = await _client
+        .post(
+          Uri.parse('$baseUrl/v1/submissions/init'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+          body: jsonEncode({
+            'session_id': sessionId,
+            'device_uuid': deviceUuid,
+            'device_model': deviceModel,
+            'content_type': 'application/gzip',
+          }),
+        )
+        .timeout(_controlTimeout);
+    if (res.statusCode != 200) {
+      throw _httpException(res, fallbackCode: 'init_failed');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<void> _putToS3({
+    required StreamController<UploadProgress> controller,
+    required String uploadUrl,
+    required File file,
+    required int fileLength,
+  }) async {
+    final request = http.StreamedRequest('PUT', Uri.parse(uploadUrl));
+    request.headers['Content-Type'] = 'application/gzip';
+    request.contentLength = fileLength;
+
+    // Drain the file into the request sink in the background. The http client
+    // pumps the sink as the upload progresses, providing natural backpressure.
+    // Progress events fire as each chunk hits the sink, which approximates
+    // network rate closely enough for a moving progress bar.
+    var sent = 0;
+    final pump = () async {
+      try {
+        await for (final chunk in file.openRead()) {
+          if (controller.isClosed) break;
+          request.sink.add(chunk);
+          sent += chunk.length;
+          if (!controller.isClosed) {
+            controller.add(UploadProgress(
+              fraction: fileLength == 0 ? 0 : sent / fileLength,
+              bytesSent: sent,
+              bytesTotal: fileLength,
+            ));
+          }
+        }
+      } catch (e) {
+        request.sink.addError(e);
+      } finally {
+        await request.sink.close();
+      }
+    }();
+
+    final response =
+        await _client.send(request).timeout(_uploadTimeout);
+    await pump; // ensure file stream completed (or failed)
+    final body = await response.stream.bytesToString();
+    if (response.statusCode != 200) {
+      throw UploadException(
+        'S3 PUT ${response.statusCode}: ${body.isEmpty ? '(empty)' : body}',
+        code: 'put_${response.statusCode}',
+      );
+    }
+  }
+
+  Future<void> _postComplete({
+    required String submissionId,
+    required int sizeBytes,
+    required double durationSec,
+    required String accessToken,
+  }) async {
+    final res = await _client
+        .post(
+          Uri.parse('$baseUrl/v1/submissions/$submissionId/complete'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+          body: jsonEncode({
+            'size_bytes': sizeBytes,
+            'duration_sec': durationSec,
+          }),
+        )
+        .timeout(_controlTimeout);
+    if (res.statusCode != 204) {
+      throw _httpException(res, fallbackCode: 'complete_failed');
+    }
+  }
+
+  UploadException _httpException(
+    http.Response res, {
+    required String fallbackCode,
+  }) {
+    try {
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      final detail = (json['detail'] as String?) ??
+          (json['title'] as String?) ??
+          'HTTP ${res.statusCode}';
+      return UploadException(detail, code: 'http_${res.statusCode}');
+    } catch (_) {
+      return UploadException(
+        'HTTP ${res.statusCode}: ${res.body.isEmpty ? '(empty)' : res.body}',
+        code: fallbackCode,
+      );
+    }
   }
 }
