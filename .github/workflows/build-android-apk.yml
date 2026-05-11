@@ -62,7 +62,6 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p dist
-          # 这里也建议同步改为短哈希，这样文件名和压缩包名就一致了
           cp build/app/outputs/flutter-apk/app-release.apk \
              dist/digients-capture-${{ env.SHORT_SHA }}.apk
           ls -lh dist/
