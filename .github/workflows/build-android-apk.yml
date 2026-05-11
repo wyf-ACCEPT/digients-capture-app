@@ -52,20 +52,25 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+     
+      - name: Set Short SHA
+        run: echo "SHORT_SHA=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
+
       - name: Build release APK (universal)
         run: flutter build apk --release
 
       - name: Rename APK
         run: |
           mkdir -p dist
+          # 这里也建议同步改为短哈希，这样文件名和压缩包名就一致了
           cp build/app/outputs/flutter-apk/app-release.apk \
-             dist/digients-capture-${{ github.sha }}.apk
+             dist/digients-capture-${{ env.SHORT_SHA }}.apk
           ls -lh dist/
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: digients-capture-apk
+          name: digients-capture-apk-${{ env.SHORT_SHA }}
           path: dist/*.apk
           retention-days: 14
           if-no-files-found: error
