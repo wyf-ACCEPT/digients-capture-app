@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/recording.dart';
 import '../services/compression_queue.dart';
@@ -28,19 +30,25 @@ class UploadEntry {
 
 // Orchestrates uploads of completed recordings to the digients-api backend.
 //
-// In-memory only for the mock phase: status is lost when the App is killed.
-// A future revision will persist `uploaded` sessionIds so factory contractors
-// don't accidentally upload the same recording twice across launches.
+// `uploaded` sessionIds are persisted to secure storage so the App can
+// remember across cold launches which recordings already shipped — without
+// this, the row pill flips back to idle after every restart and the user
+// re-triggers an upload that the server then has to dedup. The server-side
+// dedup in /v1/submissions/init is the source of truth; this cache just
+// keeps the UI honest and avoids a wasted round-trip per stale recording.
 //
 // Concurrency: one upload at a time. Bulk requests queue serially. The
 // rationale is bandwidth fairness on a phone tethered to factory Wi-Fi —
 // running two large PUTs in parallel mostly just halves each one's speed
 // while doubling failure surface.
 class UploadController extends ChangeNotifier {
+  static const _persistKey = 'upload_controller.uploaded_session_ids';
+
   final UploadService _service;
   final RecordingManager _recordings;
   final CompressionQueue _compression;
   final AuthController _auth;
+  final FlutterSecureStorage _storage;
 
   final Map<String, UploadEntry> _entries = {};
   final Map<String, Recording> _pending = {};
@@ -53,10 +61,49 @@ class UploadController extends ChangeNotifier {
     required RecordingManager recordings,
     required CompressionQueue compression,
     required AuthController auth,
+    FlutterSecureStorage? storage,
   })  : _service = service,
         _recordings = recordings,
         _compression = compression,
-        _auth = auth;
+        _auth = auth,
+        _storage = storage ?? const FlutterSecureStorage();
+
+  // Restore the persisted "already uploaded" set from secure storage. Call
+  // once at App startup before runApp so the first frame already reflects
+  // remembered state and we don't briefly show idle pills for known-uploaded
+  // recordings.
+  Future<void> hydrate() async {
+    try {
+      final raw = await _storage.read(key: _persistKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      var changed = false;
+      for (final id in decoded) {
+        if (id is! String || id.isEmpty) continue;
+        _entries[id] = const UploadEntry(
+          status: UploadStatus.uploaded,
+          progress: 1.0,
+        );
+        changed = true;
+      }
+      if (changed) notifyListeners();
+    } catch (e) {
+      debugPrint('[UploadController] hydrate failed: $e');
+    }
+  }
+
+  Future<void> _persistUploaded() async {
+    final ids = _entries.entries
+        .where((e) => e.value.status == UploadStatus.uploaded)
+        .map((e) => e.key)
+        .toList(growable: false);
+    try {
+      await _storage.write(key: _persistKey, value: jsonEncode(ids));
+    } catch (e) {
+      debugPrint('[UploadController] persist failed: $e');
+    }
+  }
 
   UploadEntry entryFor(String sessionId) =>
       _entries[sessionId] ?? UploadEntry.idle;
@@ -202,6 +249,8 @@ class UploadController extends ChangeNotifier {
     _activeSub = null;
     _current = null;
     notifyListeners();
+    // ignore: unawaited_futures
+    _persistUploaded();
     _pump();
   }
 

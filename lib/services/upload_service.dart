@@ -224,6 +224,22 @@ class HttpUploadService implements UploadService {
         deviceModel: deviceModel,
         accessToken: await getAccessToken(),
       );
+
+      // Server-side dedup: if this (user, session) already finished, the
+      // server returns 409 with `already_uploaded: true`. Skip PUT + complete
+      // and synthesize a 100% progress event so the UI flips straight to
+      // "uploaded". The persisted session list in UploadController then keeps
+      // this state across App restarts.
+      if (init['already_uploaded'] == true) {
+        controller.add(UploadProgress(
+          fraction: 1.0,
+          bytesSent: fileLength,
+          bytesTotal: fileLength,
+        ));
+        await controller.close();
+        return;
+      }
+
       final uploadUrl = init['upload_url'] as String;
       final submissionId = init['submission_id'] as String;
 
@@ -281,10 +297,12 @@ class HttpUploadService implements UploadService {
           }),
         )
         .timeout(_controlTimeout);
-    if (res.statusCode != 200) {
-      throw _httpException(res, fallbackCode: 'init_failed');
+    if (res.statusCode == 200 || res.statusCode == 409) {
+      // 200 = fresh init; 409 = server-side dedup hit (body carries
+      // `already_uploaded: true`). Both bodies are JSON.
+      return jsonDecode(res.body) as Map<String, dynamic>;
     }
-    return jsonDecode(res.body) as Map<String, dynamic>;
+    throw _httpException(res, fallbackCode: 'init_failed');
   }
 
   Future<void> _putToS3({

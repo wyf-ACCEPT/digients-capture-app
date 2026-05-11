@@ -82,6 +82,7 @@ void main() async {
     compression: compressionQueue,
     auth: authController,
   );
+  await uploadController.hydrate();
 
   runApp(DigientsApp(
     themeController: themeController,
