@@ -161,11 +161,23 @@ class MockAuthService implements AuthService {
 // only user-visible breakage is OAuth buttons, which the UI can gate later.
 class HttpAuthService implements AuthService {
   final String baseUrl;
+  // Shared-demo bypass identifier (must match wrangler.toml DEMO_BYPASS_IDENTIFIER
+  // on the server) and the bypass code (must match the CF secret of the same
+  // name). When the code is present, signInAsDemo routes through real /verify
+  // with these credentials; the backend short-circuits the OTP check and mints
+  // a real JWT against a shared user. When the code is absent (dev builds
+  // without --dart-define=DEMO_BYPASS_CODE=...), signInAsDemo falls back to
+  // the pure-local mint, which still lets Apple Beta Reviewers tap the button
+  // but produces a session that can't talk to the backend.
+  final String demoIdentifier;
+  final String? demoBypassCode;
   final http.Client _client;
   final Duration _timeout;
 
   HttpAuthService({
     required this.baseUrl,
+    this.demoIdentifier = 'demo@digients.tech',
+    this.demoBypassCode,
     http.Client? client,
     Duration timeout = const Duration(seconds: 15),
   })  : _client = client ?? http.Client(),
@@ -225,12 +237,25 @@ class HttpAuthService implements AuthService {
     );
   }
 
-  // Mints a local "demo" session for the skip-sign-in path. No server roundtrip
-  // and no OAuth provider involved. The refresh token is prefixed `demo:` so
-  // refresh / logout below recognize it and stay local — see those handlers
-  // for why this matters at app relaunch.
+  // Skip-sign-in path. Two flavors depending on build:
+  //   1. If demoBypassCode is set (--dart-define=DEMO_BYPASS_CODE=...), we hit
+  //      the real /v1/auth/verify with the shared demo identifier and the
+  //      bypass code. The backend short-circuits OTP and mints a real JWT
+  //      against a shared user. The resulting session can upload to the real
+  //      backend, which is what factory contractors and any user who can't
+  //      reach Resend's email needs.
+  //   2. Otherwise we fall back to the pure-local mint (refresh token prefixed
+  //      `demo:`). Apple reviewers building from a dev IPA without the bypass
+  //      code still get a working skip-sign-in button; they just can't talk to
+  //      the backend, which is fine because reviewers don't upload anyway.
   @override
-  Future<AuthVerifyResponse> signInAsDemo() async => _mintDemoSession();
+  Future<AuthVerifyResponse> signInAsDemo() async {
+    final code = demoBypassCode;
+    if (code != null && code.isNotEmpty) {
+      return verifyOtp(identifier: demoIdentifier, code: code);
+    }
+    return _mintDemoSession();
+  }
 
   // refresh and logout still wrap their bodies as `async`: a sync throw inside
   // a Future-returning function can short-circuit the await mechanism in some
