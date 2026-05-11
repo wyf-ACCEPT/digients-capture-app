@@ -685,13 +685,31 @@ class _RecordingRow extends StatelessWidget {
                   // upload is reachable without entering the detail screen.
                   Row(
                     children: [
-                      const DCStatusBadge(status: SubmissionStatus.ondevice),
-                      const SizedBox(width: 6),
+                      // Drop the "on device" badge once the upload is done —
+                      // _UploadActionPill's UPLOADED state already conveys
+                      // "this take has been preserved", so keeping the
+                      // ondevice chip alongside it just duplicates ink. Local
+                      // copy is still on disk; we just stop announcing it.
                       Consumer<UploadController>(
-                        builder: (_, upload, __) => _UploadActionPill(
-                          entry: upload.entryFor(recording.sessionId),
-                          onTap: () => upload.enqueue(recording),
-                        ),
+                        builder: (_, upload, __) {
+                          final entry = upload.entryFor(recording.sessionId);
+                          final hideOnDeviceBadge =
+                              entry.status == UploadStatus.uploaded;
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!hideOnDeviceBadge) ...[
+                                const DCStatusBadge(
+                                    status: SubmissionStatus.ondevice),
+                                const SizedBox(width: 6),
+                              ],
+                              _UploadActionPill(
+                                entry: entry,
+                                onTap: () => upload.enqueue(recording),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const Spacer(),
                       Consumer<CompressionQueue>(
@@ -745,12 +763,29 @@ class _RecordingRow extends StatelessWidget {
             ),
             if (!selectionMode) ...[
               const SizedBox(width: 8),
-              DCIconButton(
-                icon: Icons.delete_outline,
-                color: c.danger,
-                bg: c.danger.withValues(alpha: 0.12),
-                onPressed: onDelete,
-                semanticLabel: l10n.delete,
+              Column(
+                children: [
+                  // Share / export — opens the system share sheet (AirDrop,
+                  // mail, Files.app). Kept here even after the inline cloud
+                  // upload pill landed, because share is still the only
+                  // working out-of-app path while HttpUploadService is mock-
+                  // only, and remains useful for ad-hoc collaborator drops.
+                  DCIconButton(
+                    icon: Icons.ios_share,
+                    color: c.text,
+                    bg: c.surface,
+                    onPressed: onShare,
+                    semanticLabel: l10n.export,
+                  ),
+                  const SizedBox(height: 6),
+                  DCIconButton(
+                    icon: Icons.delete_outline,
+                    color: c.danger,
+                    bg: c.danger.withValues(alpha: 0.12),
+                    onPressed: onDelete,
+                    semanticLabel: l10n.delete,
+                  ),
+                ],
               ),
             ],
           ],
