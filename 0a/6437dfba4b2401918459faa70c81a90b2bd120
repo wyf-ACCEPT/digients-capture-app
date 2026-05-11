@@ -1,0 +1,26 @@
+lib/main.dart
+  s_5d0af6646e7ab0::t_0e1daa74da9138 85
+lib/state/upload_controller.dart
+  s_5d0af6646e7ab0::t_65e254b5a554bc 33-38,45-46,51,64,68-106
+  s_5d0af6646e7ab0::t_5157f58d351b02 252-253
+  s_5d0af6646e7ab0::t_e106515635ff52 2,5
+lib/services/upload_service.dart
+  s_5d0af6646e7ab0::t_65d9d7fc6c9858 227-242
+  s_5d0af6646e7ab0::t_28d8b11650f0b8 300-303,305
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "0a6437dfba4b2401918459faa70c81a90b2bd120",
+  "prompts": {},
+  "sessions": {
+    "s_5d0af6646e7ab0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4369b00a-7252-4643-a100-a976f0ae000b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
