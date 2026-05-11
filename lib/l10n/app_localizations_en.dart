@@ -214,7 +214,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authInviteCodeModalHint =>
-      "Ask the Digients team for a code if you don't have one";
+      'Ask the Digients team for a code if you don\'t have one';
 
   @override
   String get authInviteCodeInputLabel => 'Invite code';
