@@ -1,0 +1,26 @@
+lib/state/auth_controller.dart
+  s_6dc58ae6903eff::t_66043a083b6c5f 19,25-33,38-102
+  s_6dc58ae6903eff::t_27195d278e17ee 1-2
+lib/state/upload_controller.dart
+  s_6dc58ae6903eff::t_48df58d8906546 152,167-170
+lib/services/upload_service.dart
+  s_6dc58ae6903eff::t_bee595186784cb 102
+  s_6dc58ae6903eff::t_ad96df043c70b1 55-61,70
+  s_6dc58ae6903eff::t_07fd9ef36e0efe 184,193,203,219-220,225,230-231,239-241,246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "504c4e93067a14ade213adecf7673338c423cd21",
+  "prompts": {},
+  "sessions": {
+    "s_6dc58ae6903eff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73d6b9fe-c1c5-46d2-b833-9dd773cc7a12",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
