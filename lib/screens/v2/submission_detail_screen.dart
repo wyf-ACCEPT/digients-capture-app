@@ -221,22 +221,27 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                _CloudUploadButton(
-                  recording: r,
-                  onSnack: (msg) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text(msg)));
-                  },
-                ),
-                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
-                        child: DCButton.secondary(
-                            label: l10n.export,
-                            leadingIcon: Icons.ios_share,
-                            onPressed: _share)),
+                      child: _CloudUploadButton(
+                        recording: r,
+                        onSnack: (msg) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(msg)));
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    DCIconButton(
+                      icon: Icons.ios_share,
+                      color: c.text,
+                      bg: c.surface,
+                      size: 56,
+                      onPressed: _share,
+                      semanticLabel: l10n.export,
+                    ),
                     const SizedBox(width: 10),
                     DCIconButton(
                       icon: Icons.delete_outline,
