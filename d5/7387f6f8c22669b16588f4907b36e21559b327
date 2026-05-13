@@ -1,0 +1,45 @@
+lib/l10n/app_localizations_en.dart
+  s_5d0af6646e7ab0::t_05f78870925dac 517-527
+lib/l10n/app_localizations_zh.dart
+  s_5d0af6646e7ab0::t_05f78870925dac 510-520
+lib/main.dart
+  s_5d0af6646e7ab0::t_7c4e0a52e2c796 56-62
+lib/l10n/app_localizations.dart
+  s_5d0af6646e7ab0::t_05f78870925dac 1037-1060
+lib/screens/v2/submission_detail_screen.dart
+  s_5d0af6646e7ab0::t_b5e22a26a5fb08 319-328,337-343
+  s_5d0af6646e7ab0::t_3e102eb800a3e2 367-369,385,396-403
+lib/l10n/app_en.arb
+  s_5d0af6646e7ab0::t_e25243da8f62ba 273-276
+lib/services/upload_service.dart
+  s_5d0af6646e7ab0::t_3adfa7cb248d73 29-35,40,46,51
+  s_5d0af6646e7ab0::t_7fea1880336f4a 264-276
+lib/state/upload_controller.dart
+  s_5d0af6646e7ab0::t_90b2f18c378391 131-134
+  s_5d0af6646e7ab0::t_f0db5d399faef6 13-26
+  s_5d0af6646e7ab0::t_41c9f2edd4f1bb 188-191,193,203-204,208-222,226-234,252-258,260
+  s_5d0af6646e7ab0::t_209487146ed612 151-154
+  s_5d0af6646e7ab0::t_7041a99e043946 271-276
+lib/screens/v2/record_screen.dart
+  s_5d0af6646e7ab0::t_44532660989f48 461-466
+lib/l10n/app_zh.arb
+  s_5d0af6646e7ab0::t_da925af09eb481 273-276
+lib/screens/v2/submissions_screen.dart
+  s_5d0af6646e7ab0::t_17ebbc1c723c64 939-945,950-955
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "d57387f6f8c22669b16588f4907b36e21559b327",
+  "prompts": {},
+  "sessions": {
+    "s_5d0af6646e7ab0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4369b00a-7252-4643-a100-a976f0ae000b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
