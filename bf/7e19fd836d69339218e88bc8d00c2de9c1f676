@@ -1,0 +1,19 @@
+ios/Runner.xcodeproj/project.pbxproj
+  s_5d0af6646e7ab0::t_aa53cde62e311e 503,510,543,687,694,710,717
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "bf7e19fd836d69339218e88bc8d00c2de9c1f676",
+  "prompts": {},
+  "sessions": {
+    "s_5d0af6646e7ab0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4369b00a-7252-4643-a100-a976f0ae000b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
