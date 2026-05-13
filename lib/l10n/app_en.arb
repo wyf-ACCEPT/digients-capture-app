@@ -270,6 +270,10 @@
     }
   },
   "uploadQueuedLabel": "Queued",
+  "uploadCompressingShort": "Packing",
+  "uploadCompressingLong": "Packing…",
+  "uploadFinalizingShort": "Finishing",
+  "uploadFinalizingLong": "Finishing up…",
   "uploadedLabel": "Uploaded",
   "uploadShort": "Upload",
   "uploadRetryShort": "Retry",

@@ -514,6 +514,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadQueuedLabel => 'Queued';
 
   @override
+  String get uploadCompressingShort => 'Packing';
+
+  @override
+  String get uploadCompressingLong => 'Packing…';
+
+  @override
+  String get uploadFinalizingShort => 'Finishing';
+
+  @override
+  String get uploadFinalizingLong => 'Finishing up…';
+
+  @override
   String get uploadedLabel => 'Uploaded';
 
   @override

@@ -458,12 +458,12 @@ class _RecordScreenState extends State<RecordScreen> {
     // list always has something to show — and so it lands on disk before
     // the post-compression cleanup deletes video.mp4. ~100 ms.
     unawaited(_recordingManager.ensureThumbnail(completedSessionId));
-    // Hand the just-finished take off to the background compressor and
-    // resume the queue. The user keeps recording back-to-back takes; the
-    // queue serializes them so we never run two builds at once.
-    final queue = Provider.of<CompressionQueue>(context, listen: false);
-    queue.enqueue(completedSessionId);
-    queue.resume();
+    // Compression is no longer triggered automatically — it now runs on
+    // demand the first time the user presses "Upload" for this recording.
+    // We still resume the queue so any *other* in-flight build (e.g. left
+    // over from a previous upload that ran during this recording) can
+    // continue once we relinquish CPU.
+    Provider.of<CompressionQueue>(context, listen: false).resume();
     unawaited(_handAudio.playSubmissionSuccess());
 
     // Auto-dismiss the popup and rearm after a short hold. Press-vol or tap

@@ -507,6 +507,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uploadQueuedLabel => '排队中';
 
   @override
+  String get uploadCompressingShort => '压缩中';
+
+  @override
+  String get uploadCompressingLong => '压缩中…';
+
+  @override
+  String get uploadFinalizingShort => '结尾中';
+
+  @override
+  String get uploadFinalizingLong => '结尾中…';
+
+  @override
   String get uploadedLabel => '已上传';
 
   @override

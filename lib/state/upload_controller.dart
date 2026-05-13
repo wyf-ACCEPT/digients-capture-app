@@ -6,13 +6,24 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/recording.dart';
 import '../services/compression_queue.dart';
-import '../services/recording_manager.dart';
 import '../services/upload_service.dart';
 import 'auth_controller.dart';
 
 // Per-recording upload status. `idle` is the implicit default for any
-// sessionId we haven't touched yet.
-enum UploadStatus { idle, queued, uploading, uploaded, failed }
+// sessionId we haven't touched yet. Pipeline (gated behind one button):
+//   idle / failed -> queued -> compressing -> uploading -> finalizing -> uploaded
+// `compressing` and `finalizing` carry no byte-level progress; the UI
+// renders them as spinner+label so the user knows the App is working
+// even though the percent isn't moving.
+enum UploadStatus {
+  idle,
+  queued,
+  compressing,
+  uploading,
+  finalizing,
+  uploaded,
+  failed,
+}
 
 class UploadEntry {
   final UploadStatus status;
@@ -45,7 +56,6 @@ class UploadController extends ChangeNotifier {
   static const _persistKey = 'upload_controller.uploaded_session_ids';
 
   final UploadService _service;
-  final RecordingManager _recordings;
   final CompressionQueue _compression;
   final AuthController _auth;
   final FlutterSecureStorage _storage;
@@ -58,12 +68,10 @@ class UploadController extends ChangeNotifier {
 
   UploadController({
     required UploadService service,
-    required RecordingManager recordings,
     required CompressionQueue compression,
     required AuthController auth,
     FlutterSecureStorage? storage,
   })  : _service = service,
-        _recordings = recordings,
         _compression = compression,
         _auth = auth,
         _storage = storage ?? const FlutterSecureStorage();
@@ -120,8 +128,10 @@ class UploadController extends ChangeNotifier {
   void enqueue(Recording recording) {
     final sid = recording.sessionId;
     final current = entryFor(sid).status;
-    if (current == UploadStatus.uploading ||
-        current == UploadStatus.queued ||
+    if (current == UploadStatus.queued ||
+        current == UploadStatus.compressing ||
+        current == UploadStatus.uploading ||
+        current == UploadStatus.finalizing ||
         current == UploadStatus.uploaded) {
       return;
     }
@@ -138,8 +148,10 @@ class UploadController extends ChangeNotifier {
     for (final r in recordings) {
       final sid = r.sessionId;
       final current = entryFor(sid).status;
-      if (current == UploadStatus.uploading ||
-          current == UploadStatus.queued ||
+      if (current == UploadStatus.queued ||
+          current == UploadStatus.compressing ||
+          current == UploadStatus.uploading ||
+          current == UploadStatus.finalizing ||
           current == UploadStatus.uploaded) {
         continue;
       }
@@ -173,8 +185,12 @@ class UploadController extends ChangeNotifier {
       return;
     }
     _current = next;
+    // Initial in-flight status is `compressing`: we now build the archive
+    // on demand inside _start rather than relying on a pre-built one. If
+    // it happens to already be on disk, _start will fast-path through
+    // this stage in milliseconds.
     _entries[next] = const UploadEntry(
-      status: UploadStatus.uploading,
+      status: UploadStatus.compressing,
       progress: 0,
     );
     notifyListeners();
@@ -184,22 +200,37 @@ class UploadController extends ChangeNotifier {
   Future<void> _start(Recording recording) async {
     final sid = recording.sessionId;
 
-    // The archive must exist on disk before we can upload it.
-    final archive = _recordings.findArchivePathSync(sid);
-    if (archive == null) {
-      final compState = _compression.stateOf(sid);
-      final hint = compState == CompressionState.compressing ||
-              compState == CompressionState.pending
-          ? ' (still compressing — try again in a moment)'
-          : '';
-      _finishFailure(sid, 'Archive not built yet$hint');
-      return;
-    }
-
     if (_auth.session == null) {
       _finishFailure(sid, 'Not signed in');
       return;
     }
+
+    // Stage 1: build the archive if it isn't on disk yet. `waitForReady`
+    // enqueues the recording into the single-worker CompressionQueue and
+    // resolves with the archive path once the worker isolate finishes.
+    // We don't expose a byte-level percent here (the tar+gzip isolate
+    // doesn't report progress); the UI shows a spinner labelled "压缩中".
+    final String archive;
+    try {
+      final result = await _compression.waitForReady(sid);
+      if (result == null) {
+        _finishFailure(sid, 'Compression failed');
+        return;
+      }
+      archive = result;
+    } catch (e) {
+      _finishFailure(sid, 'Compression error: $e');
+      return;
+    }
+
+    // Stage 2: upload. Flip to `uploading` with a fresh 0% baseline so the
+    // pill goes spinner -> progress bar at the right moment.
+    if (_current != sid) return; // Cancelled / superseded; bail.
+    _entries[sid] = const UploadEntry(
+      status: UploadStatus.uploading,
+      progress: 0,
+    );
+    notifyListeners();
 
     final sizeBytes = ((recording.fileSizeMB ?? 0) * 1024 * 1024).round();
     final durationSec = (recording.durationSeconds ?? 0).toDouble();
@@ -218,8 +249,15 @@ class UploadController extends ChangeNotifier {
           )
           .listen(
             (p) {
+              // `finalizing` is the service's signal that the byte stream
+              // closed and /complete is in flight (cross-region D1 update
+              // can take 1-3s). Render a spinner so the user knows we
+              // aren't hung at 100%.
+              final status = p.phase == UploadPhase.finalizing
+                  ? UploadStatus.finalizing
+                  : UploadStatus.uploading;
               _entries[sid] = UploadEntry(
-                status: UploadStatus.uploading,
+                status: status,
                 progress: p.fraction,
               );
               notifyListeners();
@@ -230,7 +268,12 @@ class UploadController extends ChangeNotifier {
             onDone: () {
               // If the stream closes after an error we've already finalized
               // the entry; don't overwrite the failure state with success.
-              if (entryFor(sid).status == UploadStatus.uploading) {
+              // Stream may close from either `uploading` (server 409 dedup
+              // short-circuit) or `finalizing` (normal happy path after
+              // /complete returns).
+              final st = entryFor(sid).status;
+              if (st == UploadStatus.uploading ||
+                  st == UploadStatus.finalizing) {
                 _finishSuccess(sid);
               }
             },

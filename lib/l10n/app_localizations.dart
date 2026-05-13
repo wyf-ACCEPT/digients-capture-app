@@ -1034,6 +1034,30 @@ abstract class AppLocalizations {
   /// **'排队中'**
   String get uploadQueuedLabel;
 
+  /// No description provided for @uploadCompressingShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'压缩中'**
+  String get uploadCompressingShort;
+
+  /// No description provided for @uploadCompressingLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'压缩中…'**
+  String get uploadCompressingLong;
+
+  /// No description provided for @uploadFinalizingShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'结尾中'**
+  String get uploadFinalizingShort;
+
+  /// No description provided for @uploadFinalizingLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'结尾中…'**
+  String get uploadFinalizingLong;
+
   /// No description provided for @uploadedLabel.
   ///
   /// In zh, this message translates to:

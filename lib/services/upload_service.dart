@@ -26,20 +26,29 @@ import 'device_id_service.dart';
 // addError() — listeners derive uploading / uploaded / failed from
 // onData / onDone / onError respectively.
 
+// Where in the multi-stage upload pipeline a given progress event was
+// emitted. `uploading` is the only phase that carries a meaningful byte
+// fraction; `finalizing` is a no-percent sentinel telling the controller
+// the PUT is done and we're now waiting on the backend /complete round-
+// trip (which can take 1-3s — token refresh + cross-region D1 update).
+enum UploadPhase { uploading, finalizing }
+
 class UploadProgress {
   final double fraction;
   final int bytesSent;
   final int bytesTotal;
+  final UploadPhase phase;
 
   const UploadProgress({
     required this.fraction,
     required this.bytesSent,
     required this.bytesTotal,
+    this.phase = UploadPhase.uploading,
   });
 
   @override
   String toString() =>
-      'UploadProgress(${(fraction * 100).toStringAsFixed(1)}%, $bytesSent/$bytesTotal)';
+      'UploadProgress(${phase.name}, ${(fraction * 100).toStringAsFixed(1)}%, $bytesSent/$bytesTotal)';
 }
 
 class UploadException implements Exception {
@@ -251,6 +260,19 @@ class HttpUploadService implements UploadService {
         file: file,
         fileLength: fileLength,
       );
+
+      // Signal the controller that the byte stream finished and we're now
+      // waiting on the backend round-trip. The /complete call below can
+      // take 1-3s (token refresh + cross-region D1 UPDATE), and that
+      // window used to look like a "stuck at 100%" hang in the UI.
+      if (!controller.isClosed) {
+        controller.add(UploadProgress(
+          fraction: 1.0,
+          bytesSent: fileLength,
+          bytesTotal: fileLength,
+          phase: UploadPhase.finalizing,
+        ));
+      }
 
       // Leg 3: complete — flip status uploading -> queued. Re-fetch the
       // token here in case the PUT ran long enough for the original to

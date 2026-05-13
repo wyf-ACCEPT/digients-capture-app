@@ -936,9 +936,23 @@ class _UploadActionPill extends StatelessWidget {
         bg = c.surface2;
         handler = null;
         break;
+      case UploadStatus.compressing:
+        icon = Icons.compress;
+        label = l10n.uploadCompressingShort;
+        fg = c.accent;
+        bg = c.accentTint;
+        handler = null;
+        break;
       case UploadStatus.uploading:
         icon = Icons.cloud_upload_outlined;
         label = '${(entry.progress * 100).round()}%';
+        fg = c.accent;
+        bg = c.accentTint;
+        handler = null;
+        break;
+      case UploadStatus.finalizing:
+        icon = Icons.cloud_sync_outlined;
+        label = l10n.uploadFinalizingShort;
         fg = c.accent;
         bg = c.accentTint;
         handler = null;

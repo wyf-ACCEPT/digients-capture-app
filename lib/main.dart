@@ -53,17 +53,15 @@ void main() async {
   // frame so the router never flashes the auth screen for a logged-in user.
   await authController.bootstrap();
 
-  // Background compressor for recordings. We construct it up front + scan
-  // for legacy recordings without an archive *after* the first frame ships
-  // (don't block app startup on it — large legacy backlogs would delay
-  // launch otherwise).
+  // Background compressor for recordings. Compression now runs on demand
+  // when the user presses "Upload" (via UploadController), not on app
+  // startup or end-of-recording. Recordings stay as raw files in
+  // recording_<sid>/ until first upload, which trades a bit of disk for
+  // (a) eliminating the "user clicked upload mid-compression and got a
+  // corrupt archive" race that hit the factory pilot, and (b) avoiding
+  // the worker isolate competing with the camera for CPU.
   final recordingManager = RecordingManager();
   final compressionQueue = CompressionQueue(recordingManager);
-  // Fire-and-forget: enqueueAllMissing only walks the recordings list; the
-  // actual compression happens on a worker isolate.
-  // ignore: unawaited_futures
-  Future<void>.delayed(const Duration(seconds: 1))
-      .then((_) => compressionQueue.enqueueAllMissing());
 
   // Cloud-upload pipeline. HTTP against digients-api by default; flip to the
   // mock with `flutter run --dart-define=UPLOAD_BACKEND=mock` for UX work
@@ -78,7 +76,6 @@ void main() async {
       : HttpUploadService(baseUrl: apiBase, deviceId: deviceIdService);
   final uploadController = UploadController(
     service: uploadService,
-    recordings: recordingManager,
     compression: compressionQueue,
     auth: authController,
   );

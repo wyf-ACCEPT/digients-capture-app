@@ -25,7 +25,6 @@ void main() {
     final locale = LocaleController();
     final upload = UploadController(
       service: MockUploadService(),
-      recordings: recordings,
       compression: compressionQueue,
       auth: auth,
     );

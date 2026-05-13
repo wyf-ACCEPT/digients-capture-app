@@ -270,6 +270,10 @@
     }
   },
   "uploadQueuedLabel": "排队中",
+  "uploadCompressingShort": "压缩中",
+  "uploadCompressingLong": "压缩中…",
+  "uploadFinalizingShort": "结尾中",
+  "uploadFinalizingLong": "结尾中…",
   "uploadedLabel": "已上传",
   "uploadShort": "上传",
   "uploadRetryShort": "重试",

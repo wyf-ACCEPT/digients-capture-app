@@ -316,10 +316,31 @@ class _CloudUploadButton extends StatelessWidget {
           leadingIcon: Icons.cloud_upload_outlined,
           onPressed: isQueued ? null : () => controller.enqueue(recording),
         );
+      case UploadStatus.compressing:
+        // Indeterminate stage: the tar+gzip isolate doesn't report progress,
+        // so show a sweeping bar and a label rather than a stale percent.
+        return _UploadingProgress(
+          fraction: null,
+          label: l10n.uploadCompressingLong,
+          accent: c.accent,
+          bg: c.surface,
+          border: c.borderStrong,
+        );
       case UploadStatus.uploading:
         return _UploadingProgress(
           fraction: entry.progress,
           label: l10n.uploadingPercent((entry.progress * 100).round()),
+          accent: c.accent,
+          bg: c.surface,
+          border: c.borderStrong,
+        );
+      case UploadStatus.finalizing:
+        // PUT byte stream is done; we're waiting on /complete cross-region.
+        // Same indeterminate UI as compressing — user knows we're still
+        // working even though percent isn't moving.
+        return _UploadingProgress(
+          fraction: null,
+          label: l10n.uploadFinalizingLong,
           accent: c.accent,
           bg: c.surface,
           border: c.borderStrong,
@@ -343,7 +364,9 @@ class _CloudUploadButton extends StatelessWidget {
 }
 
 class _UploadingProgress extends StatelessWidget {
-  final double fraction;
+  // null = indeterminate (compressing / finalizing): no fill bar, just
+  // the spinner + label. Concrete value drives the determinate fill.
+  final double? fraction;
   final String label;
   final Color accent;
   final Color bg;
@@ -359,6 +382,7 @@ class _UploadingProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final f = fraction;
     return Container(
       height: 56,
       decoration: BoxDecoration(
@@ -369,15 +393,16 @@ class _UploadingProgress extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: fraction.clamp(0.0, 1.0),
-                child: Container(color: accent.withValues(alpha: 0.18)),
+          if (f != null)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: f.clamp(0.0, 1.0),
+                  child: Container(color: accent.withValues(alpha: 0.18)),
+                ),
               ),
             ),
-          ),
           Center(
             child: Row(
               mainAxisSize: MainAxisSize.min,
