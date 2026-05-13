@@ -149,9 +149,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authEmail => '邮箱';
 
   @override
-  String get authMockBackendCode => '模拟后端 · 验证码是 123456';
-
-  @override
   String get authAgreementPrefix => '创建账号即表示你同意我们的';
 
   @override
@@ -195,6 +192,51 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authRegister => '注册';
+
+  @override
+  String get authPhoneComingSoonTitle => '手机号登录暂未开放';
+
+  @override
+  String get authPhoneComingSoonBody => '短信验证还在开发中，请先使用邮箱或下方免登录入口。';
+
+  @override
+  String get authSkipSignIn => '免登录（演示）';
+
+  @override
+  String get authSkipSignInHint => '跳过后将无法上传视频';
+
+  @override
+  String get authInviteCodeSignIn => '用邀请码登录';
+
+  @override
+  String get authInviteCodeModalTitle => '输入邀请码';
+
+  @override
+  String get authInviteCodeModalHint => '向 Digients 团队获取你的邀请码';
+
+  @override
+  String get authInviteCodeInputLabel => '邀请码';
+
+  @override
+  String get authInviteCodeSubmit => '登录';
+
+  @override
+  String get authInviteCodeMissing => '请输入邀请码';
+
+  @override
+  String get uploadLockedTitle => '上传需要登录';
+
+  @override
+  String get uploadLockedBody => '退出登录后用邀请码重新进入即可启用视频上传。';
+
+  @override
+  String get uploadLockedSignOut => '退出登录';
+
+  @override
+  String get uploadLockedDismiss => '暂不';
+
+  @override
+  String get uploadLockedShortLabel => '需登录';
 
   @override
   String get homeWelcomeBack => '欢迎回来';
@@ -446,6 +488,39 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String exportRecordingCount(int count) {
     return '导出 $count 条录制';
+  }
+
+  @override
+  String get uploadToCloud => '上传到云端';
+
+  @override
+  String uploadToCloudCount(int count) {
+    return '上传 $count 条到云端';
+  }
+
+  @override
+  String uploadingPercent(int percent) {
+    return '上传中 $percent%';
+  }
+
+  @override
+  String get uploadQueuedLabel => '排队中';
+
+  @override
+  String get uploadedLabel => '已上传';
+
+  @override
+  String get uploadShort => '上传';
+
+  @override
+  String get uploadRetryShort => '重试';
+
+  @override
+  String get uploadFailedRetry => '上传失败 — 点击重试';
+
+  @override
+  String uploadFailedSnack(String error) {
+    return '上传失败：$error';
   }
 
   @override

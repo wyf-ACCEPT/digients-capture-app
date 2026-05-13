@@ -149,9 +149,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authEmail => 'Email';
 
   @override
-  String get authMockBackendCode => 'Mock backend · the code is 123456';
-
-  @override
   String get authAgreementPrefix => 'By creating an account you agree to our ';
 
   @override
@@ -195,6 +192,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authRegister => 'Register';
+
+  @override
+  String get authPhoneComingSoonTitle => 'Phone sign-in is coming later';
+
+  @override
+  String get authPhoneComingSoonBody =>
+      'We\'re still working on SMS verification. Please use Email or the demo sign-in below for now.';
+
+  @override
+  String get authSkipSignIn => 'Skip sign-in (demo)';
+
+  @override
+  String get authSkipSignInHint => 'Skipping will leave video upload disabled';
+
+  @override
+  String get authInviteCodeSignIn => 'Sign in with invite code';
+
+  @override
+  String get authInviteCodeModalTitle => 'Enter Invite Code';
+
+  @override
+  String get authInviteCodeModalHint =>
+      'Ask the Digients team for a code if you don\'t have one';
+
+  @override
+  String get authInviteCodeInputLabel => 'Invite code';
+
+  @override
+  String get authInviteCodeSubmit => 'Sign in';
+
+  @override
+  String get authInviteCodeMissing => 'Invite code is required';
+
+  @override
+  String get uploadLockedTitle => 'Upload requires sign-in';
+
+  @override
+  String get uploadLockedBody =>
+      'Sign out and use an invite code to enable video upload.';
+
+  @override
+  String get uploadLockedSignOut => 'Sign out';
+
+  @override
+  String get uploadLockedDismiss => 'Not now';
+
+  @override
+  String get uploadLockedShortLabel => 'Locked';
 
   @override
   String get homeWelcomeBack => 'WELCOME BACK';
@@ -450,6 +495,39 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String exportRecordingCount(int count) {
     return 'EXPORT $count RECORDING(S)';
+  }
+
+  @override
+  String get uploadToCloud => 'Upload to Cloud';
+
+  @override
+  String uploadToCloudCount(int count) {
+    return 'UPLOAD $count TO CLOUD';
+  }
+
+  @override
+  String uploadingPercent(int percent) {
+    return 'Uploading $percent%';
+  }
+
+  @override
+  String get uploadQueuedLabel => 'Queued';
+
+  @override
+  String get uploadedLabel => 'Uploaded';
+
+  @override
+  String get uploadShort => 'Upload';
+
+  @override
+  String get uploadRetryShort => 'Retry';
+
+  @override
+  String get uploadFailedRetry => 'Upload failed — tap to retry';
+
+  @override
+  String uploadFailedSnack(String error) {
+    return 'Upload failed: $error';
   }
 
   @override

@@ -186,7 +186,11 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   Future<void> _bootstrap() async {
-    final l10n = context.l10n;
+    // Provider.of(..., listen: false) does not register an inherited
+    // dependency, so it is safe to read here. context.l10n goes through
+    // Localizations.of which DOES register a dependency, so it must wait
+    // until after the first await — by which time initState has completed
+    // and the framework is happy to hand out InheritedWidgets.
     final settings =
         Provider.of<HandPresenceSettingsController>(context, listen: false);
     _applySettings(settings);
@@ -196,17 +200,21 @@ class _RecordScreenState extends State<RecordScreen> {
     });
 
     final status = await Permission.camera.request();
+    if (!mounted) return;
+    final l10n = context.l10n;
     if (!status.isGranted) {
       setState(() => _errorMessage = l10n.cameraPermissionRequired);
       return;
     }
     final ok = await _cameraService.initializeCamera();
+    if (!mounted) return;
     if (!ok) {
       setState(() => _errorMessage = l10n.failedToInitializeCamera);
       return;
     }
     final cam = await _cameraService.getCameraInfo();
     final dev = await _cameraService.getDeviceInfo();
+    if (!mounted) return;
     setState(() {
       _isInitialized = true;
       _cameraInfo = cam;
@@ -959,6 +967,7 @@ class _PreStartOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final showDigit = secondsRemaining != null;
     return IgnorePointer(
       child: Center(

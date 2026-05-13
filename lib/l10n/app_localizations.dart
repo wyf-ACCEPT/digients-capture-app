@@ -374,12 +374,6 @@ abstract class AppLocalizations {
   /// **'邮箱'**
   String get authEmail;
 
-  /// No description provided for @authMockBackendCode.
-  ///
-  /// In zh, this message translates to:
-  /// **'模拟后端 · 验证码是 123456'**
-  String get authMockBackendCode;
-
   /// No description provided for @authAgreementPrefix.
   ///
   /// In zh, this message translates to:
@@ -469,6 +463,96 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'注册'**
   String get authRegister;
+
+  /// No description provided for @authPhoneComingSoonTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机号登录暂未开放'**
+  String get authPhoneComingSoonTitle;
+
+  /// No description provided for @authPhoneComingSoonBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'短信验证还在开发中，请先使用邮箱或下方免登录入口。'**
+  String get authPhoneComingSoonBody;
+
+  /// No description provided for @authSkipSignIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'免登录（演示）'**
+  String get authSkipSignIn;
+
+  /// No description provided for @authSkipSignInHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'跳过后将无法上传视频'**
+  String get authSkipSignInHint;
+
+  /// No description provided for @authInviteCodeSignIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'用邀请码登录'**
+  String get authInviteCodeSignIn;
+
+  /// No description provided for @authInviteCodeModalTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入邀请码'**
+  String get authInviteCodeModalTitle;
+
+  /// No description provided for @authInviteCodeModalHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'向 Digients 团队获取你的邀请码'**
+  String get authInviteCodeModalHint;
+
+  /// No description provided for @authInviteCodeInputLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'邀请码'**
+  String get authInviteCodeInputLabel;
+
+  /// No description provided for @authInviteCodeSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录'**
+  String get authInviteCodeSubmit;
+
+  /// No description provided for @authInviteCodeMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入邀请码'**
+  String get authInviteCodeMissing;
+
+  /// No description provided for @uploadLockedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传需要登录'**
+  String get uploadLockedTitle;
+
+  /// No description provided for @uploadLockedBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出登录后用邀请码重新进入即可启用视频上传。'**
+  String get uploadLockedBody;
+
+  /// No description provided for @uploadLockedSignOut.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出登录'**
+  String get uploadLockedSignOut;
+
+  /// No description provided for @uploadLockedDismiss.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂不'**
+  String get uploadLockedDismiss;
+
+  /// No description provided for @uploadLockedShortLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'需登录'**
+  String get uploadLockedShortLabel;
 
   /// No description provided for @homeWelcomeBack.
   ///
@@ -925,6 +1009,60 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'导出 {count} 条录制'**
   String exportRecordingCount(int count);
+
+  /// No description provided for @uploadToCloud.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传到云端'**
+  String get uploadToCloud;
+
+  /// No description provided for @uploadToCloudCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传 {count} 条到云端'**
+  String uploadToCloudCount(int count);
+
+  /// No description provided for @uploadingPercent.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传中 {percent}%'**
+  String uploadingPercent(int percent);
+
+  /// No description provided for @uploadQueuedLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'排队中'**
+  String get uploadQueuedLabel;
+
+  /// No description provided for @uploadedLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'已上传'**
+  String get uploadedLabel;
+
+  /// No description provided for @uploadShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传'**
+  String get uploadShort;
+
+  /// No description provided for @uploadRetryShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get uploadRetryShort;
+
+  /// No description provided for @uploadFailedRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传失败 — 点击重试'**
+  String get uploadFailedRetry;
+
+  /// No description provided for @uploadFailedSnack.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传失败：{error}'**
+  String uploadFailedSnack(String error);
 
   /// No description provided for @savedOnDevice.
   ///

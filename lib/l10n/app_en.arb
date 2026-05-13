@@ -53,7 +53,6 @@
   "authSignInSubtitle": "Sign in to continue capturing.",
   "authPhone": "Phone",
   "authEmail": "Email",
-  "authMockBackendCode": "Mock backend · the code is 123456",
   "authAgreementPrefix": "By creating an account you agree to our ",
   "authTerms": "Terms",
   "authAgreementMiddle": " and ",
@@ -69,6 +68,21 @@
   "authAlreadyHaveAccount": "Already have an account? ",
   "authDontHaveAccount": "Don't have an account? ",
   "authRegister": "Register",
+  "authPhoneComingSoonTitle": "Phone sign-in is coming later",
+  "authPhoneComingSoonBody": "We're still working on SMS verification. Please use Email or the demo sign-in below for now.",
+  "authSkipSignIn": "Skip sign-in (demo)",
+  "authSkipSignInHint": "Skipping will leave video upload disabled",
+  "authInviteCodeSignIn": "Sign in with invite code",
+  "authInviteCodeModalTitle": "Enter Invite Code",
+  "authInviteCodeModalHint": "Ask the Digients team for a code if you don't have one",
+  "authInviteCodeInputLabel": "Invite code",
+  "authInviteCodeSubmit": "Sign in",
+  "authInviteCodeMissing": "Invite code is required",
+  "uploadLockedTitle": "Upload requires sign-in",
+  "uploadLockedBody": "Sign out and use an invite code to enable video upload.",
+  "uploadLockedSignOut": "Sign out",
+  "uploadLockedDismiss": "Not now",
+  "uploadLockedShortLabel": "Locked",
   "homeWelcomeBack": "WELCOME BACK",
   "balance": "BALANCE",
   "pending": "PENDING",
@@ -235,6 +249,36 @@
     "placeholders": {
       "count": {
         "type": "int"
+      }
+    }
+  },
+  "uploadToCloud": "Upload to Cloud",
+  "uploadToCloudCount": "UPLOAD {count} TO CLOUD",
+  "@uploadToCloudCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadingPercent": "Uploading {percent}%",
+  "@uploadingPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadQueuedLabel": "Queued",
+  "uploadedLabel": "Uploaded",
+  "uploadShort": "Upload",
+  "uploadRetryShort": "Retry",
+  "uploadFailedRetry": "Upload failed — tap to retry",
+  "uploadFailedSnack": "Upload failed: {error}",
+  "@uploadFailedSnack": {
+    "placeholders": {
+      "error": {
+        "type": "String"
       }
     }
   },

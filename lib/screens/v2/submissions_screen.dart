@@ -14,6 +14,8 @@ import '../../widgets/recording_thumbnail.dart';
 import '../../services/compression_queue.dart';
 import '../../services/recording_manager.dart';
 import '../../models/recording.dart';
+import '../../state/auth_controller.dart';
+import '../../state/upload_controller.dart';
 
 class SubmissionsScreen extends StatefulWidget {
   const SubmissionsScreen({super.key});
@@ -187,6 +189,7 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
               bottom: 0,
               child: _SelectionActionBar(
                 count: _selectedIds.length,
+                onUploadToCloud: _bulkUploadToCloud,
                 onExport: _bulkShare,
               ),
             ),
@@ -395,6 +398,47 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
     }
   }
 
+  Future<void> _bulkUploadToCloud() async {
+    if (_selectedIds.isEmpty) return;
+    final l10n = context.l10n;
+    final auth = context.read<AuthController>();
+    if (!auth.canUpload) {
+      await promptInviteCodeRequired(context, auth);
+      return;
+    }
+    final upload = context.read<UploadController>();
+    final queue = context.read<CompressionQueue>();
+    final selected =
+        _recordings.where((r) => _selectedIds.contains(r.sessionId)).toList();
+
+    try {
+      // Ensure archives exist before queueing uploads. The UploadController
+      // would fail-fast otherwise; warming the compression queue first means
+      // the user sees a single "compressing…" modal instead of a parade of
+      // per-recording failure SnackBars.
+      final allReady = selected.every((r) => queue.isReady(r.sessionId));
+      if (!allReady) {
+        await withExportProgress<void>(
+          context,
+          initialMessage: l10n.compressingProgress(1, selected.length),
+          work: (progress) async {
+            for (int i = 0; i < selected.length; i++) {
+              progress.update(l10n.compressingProgress(i + 1, selected.length));
+              await queue.waitForReady(selected[i].sessionId);
+            }
+          },
+        );
+      }
+      if (!mounted) return;
+      upload.enqueueAll(selected);
+      _exitSelection();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.uploadFailedSnack(e.toString()))));
+    }
+  }
+
   Future<void> _delete(Recording r) async {
     final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
@@ -422,9 +466,14 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
 
 class _SelectionActionBar extends StatelessWidget {
   final int count;
+  final VoidCallback onUploadToCloud;
   final VoidCallback onExport;
 
-  const _SelectionActionBar({required this.count, required this.onExport});
+  const _SelectionActionBar({
+    required this.count,
+    required this.onUploadToCloud,
+    required this.onExport,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -442,32 +491,72 @@ class _SelectionActionBar extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           child: Opacity(
             opacity: disabled ? 0.4 : 1.0,
-            child: GestureDetector(
-              onTap: disabled ? null : onExport,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: c.accent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.upload, color: Colors.black, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      count == 0
-                          ? l10n.exportSelected
-                          : l10n.exportRecordingCount(count),
-                      style: DCText.mono(
-                          size: 13,
-                          weight: FontWeight.w700,
-                          color: Colors.black,
-                          letterSpacing: 1.4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Primary action: upload to cloud (factory-contractor main path).
+                GestureDetector(
+                  onTap: disabled ? null : onUploadToCloud,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: c.accent,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.cloud_upload_outlined,
+                            color: Colors.black, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          count == 0
+                              ? l10n.uploadToCloud.toUpperCase()
+                              : l10n.uploadToCloudCount(count),
+                          style: DCText.mono(
+                              size: 13,
+                              weight: FontWeight.w700,
+                              color: Colors.black,
+                              letterSpacing: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                // Secondary action: export via system share sheet (existing
+                // flow, kept for users who want to AirDrop / email / Files.app).
+                GestureDetector(
+                  onTap: disabled ? null : onExport,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: c.borderStrong),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.ios_share, color: c.text, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          count == 0
+                              ? l10n.exportSelected
+                              : l10n.exportRecordingCount(count),
+                          style: DCText.mono(
+                              size: 12,
+                              weight: FontWeight.w600,
+                              color: c.text,
+                              letterSpacing: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -595,58 +684,88 @@ class _RecordingRow extends StatelessWidget {
                         size: 10, weight: FontWeight.w500, color: c.textFaint),
                   ),
                   const SizedBox(height: 6),
-                  Consumer<CompressionQueue>(
-                    builder: (_, queue, __) {
-                      // Surface compression progress on the same row that
-                      // hosts the share button. ondevice status is still
-                      // the canonical "where this take lives" badge —
-                      // shown as soon as the archive is ready or not at
-                      // all if the queue keeps moving.
-                      switch (queue.stateOf(recording.sessionId)) {
-                        case CompressionState.ready:
-                          return const DCStatusBadge(status: SubmissionStatus.ondevice);
-                        case CompressionState.failed:
+                  // Compose: "on device" status badge + cloud upload action +
+                  // (optional) compression progress, all on one horizontal
+                  // line. Filling the blank space to the right of the status
+                  // badge with a tappable upload pill means a one-shot cloud
+                  // upload is reachable without entering the detail screen.
+                  Row(
+                    children: [
+                      // Drop the "on device" badge once the upload is done —
+                      // _UploadActionPill's UPLOADED state already conveys
+                      // "this take has been preserved", so keeping the
+                      // ondevice chip alongside it just duplicates ink. Local
+                      // copy is still on disk; we just stop announcing it.
+                      Consumer2<UploadController, AuthController>(
+                        builder: (_, upload, auth, __) {
+                          final entry = upload.entryFor(recording.sessionId);
+                          final hideOnDeviceBadge =
+                              entry.status == UploadStatus.uploaded;
                           return Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const DCStatusBadge(status: SubmissionStatus.ondevice),
-                              const SizedBox(width: 6),
-                              Text('compress failed',
+                              if (!hideOnDeviceBadge) ...[
+                                const DCStatusBadge(
+                                    status: SubmissionStatus.ondevice),
+                                const SizedBox(width: 6),
+                              ],
+                              _UploadActionPill(
+                                entry: entry,
+                                locked: !auth.canUpload,
+                                onTap: () => upload.enqueue(recording),
+                                onLockedTap: () =>
+                                    promptInviteCodeRequired(context, auth),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const Spacer(),
+                      Consumer<CompressionQueue>(
+                        builder: (_, queue, __) {
+                          // Compression sub-state only surfaces when the
+                          // archive isn't ready — once it is, the on-device
+                          // badge already says everything that needs saying.
+                          switch (queue.stateOf(recording.sessionId)) {
+                            case CompressionState.ready:
+                              return const SizedBox.shrink();
+                            case CompressionState.failed:
+                              return Text('compress failed',
                                   style: DCText.mono(
                                       size: 9,
                                       weight: FontWeight.w500,
                                       color: c.danger,
-                                      letterSpacing: 1.2)),
-                            ],
-                          );
-                        case CompressionState.compressing:
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 10,
-                                height: 10,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 1.5, color: c.accent),
-                              ),
-                              const SizedBox(width: 6),
-                              Text('compressing',
+                                      letterSpacing: 1.2));
+                            case CompressionState.compressing:
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 10,
+                                    height: 10,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 1.5, color: c.accent),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text('compressing',
+                                      style: DCText.mono(
+                                          size: 9,
+                                          weight: FontWeight.w500,
+                                          color: c.textDim,
+                                          letterSpacing: 1.2)),
+                                ],
+                              );
+                            case CompressionState.pending:
+                              return Text('queued',
                                   style: DCText.mono(
                                       size: 9,
                                       weight: FontWeight.w500,
-                                      color: c.textDim,
-                                      letterSpacing: 1.2)),
-                            ],
-                          );
-                        case CompressionState.pending:
-                          return Text('queued for compression',
-                              style: DCText.mono(
-                                  size: 9,
-                                  weight: FontWeight.w500,
-                                  color: c.textFaint,
-                                  letterSpacing: 1.2));
-                      }
-                    },
+                                      color: c.textFaint,
+                                      letterSpacing: 1.2));
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -655,10 +774,15 @@ class _RecordingRow extends StatelessWidget {
               const SizedBox(width: 8),
               Column(
                 children: [
+                  // Share / export — opens the system share sheet (AirDrop,
+                  // mail, Files.app). Kept here even after the inline cloud
+                  // upload pill landed, because share is still the only
+                  // working out-of-app path while HttpUploadService is mock-
+                  // only, and remains useful for ad-hoc collaborator drops.
                   DCIconButton(
-                    icon: Icons.upload,
-                    color: c.accent,
-                    bg: c.accentTint,
+                    icon: Icons.ios_share,
+                    color: c.text,
+                    bg: c.surface,
                     onPressed: onShare,
                     semanticLabel: l10n.export,
                   ),
@@ -710,5 +834,180 @@ extension _SubmissionFilterLabel on _SubmissionFilter {
       _SubmissionFilter.approved => l10n.statusApproved,
       _SubmissionFilter.rejected => l10n.statusRejected,
     };
+  }
+}
+
+// Shared helper: shown when a demo-session user taps a locked upload control.
+// Explains why upload is unavailable and offers a one-tap shortcut to sign
+// out so the user lands back on the auth screen and can redeem an invite
+// code. Used by both list-row pills and the detail-screen cloud button.
+Future<void> promptInviteCodeRequired(
+    BuildContext context, AuthController auth) async {
+  final l10n = context.l10n;
+  final c = context.dc;
+  final action = await showDialog<_LockedDialogAction>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: c.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(l10n.uploadLockedTitle,
+          style: DCText.inter(
+              size: 17, weight: FontWeight.w600, color: c.text)),
+      content: Text(l10n.uploadLockedBody,
+          style: DCText.inter(
+              size: 14, weight: FontWeight.w400, color: c.textDim)),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.of(ctx).pop(_LockedDialogAction.dismiss),
+          child: Text(l10n.uploadLockedDismiss),
+        ),
+        TextButton(
+          onPressed: () =>
+              Navigator.of(ctx).pop(_LockedDialogAction.signOut),
+          child: Text(l10n.uploadLockedSignOut,
+              style: TextStyle(color: c.danger)),
+        ),
+      ],
+    ),
+  );
+  if (action == _LockedDialogAction.signOut) {
+    await auth.logout();
+  }
+}
+
+enum _LockedDialogAction { dismiss, signOut }
+
+// Tappable inline pill that drives Cloud upload from the list row. Visually
+// matches DCStatusBadge (same padding, radius, mono uppercase font, leading
+// glyph) so it reads as a sibling to the "on device" badge it sits next to,
+// but is interactive in the idle / failed states. While uploading, a
+// progress fill animates the pill background.
+class _UploadActionPill extends StatelessWidget {
+  final UploadEntry entry;
+  final bool locked;
+  final VoidCallback onTap;
+  final VoidCallback onLockedTap;
+
+  const _UploadActionPill({
+    required this.entry,
+    required this.locked,
+    required this.onTap,
+    required this.onLockedTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.dc;
+    final l10n = context.l10n;
+
+    late final IconData icon;
+    late final String label;
+    late final Color fg;
+    late final Color bg;
+    VoidCallback? handler;
+
+    // Demo sessions (skip-sign-in) can't upload — present a locked variant
+    // that explains why on tap. Always wins over the regular status so the
+    // user sees a consistent "you need to sign in" affordance no matter
+    // what state the underlying upload entry is in.
+    // Demo sessions (skip-sign-in) can't upload — present a locked variant
+    // that explains why on tap. Wins over the regular status so the user
+    // sees a consistent affordance regardless of underlying upload state.
+    if (locked) {
+      icon = Icons.lock_outline;
+      label = l10n.uploadLockedShortLabel;
+      fg = c.textDim;
+      bg = c.surface2;
+      handler = onLockedTap;
+    } else {
+      switch (entry.status) {
+        case UploadStatus.idle:
+        icon = Icons.cloud_upload_outlined;
+        label = l10n.uploadShort;
+        fg = c.accent;
+        bg = c.accentTint;
+        handler = onTap;
+        break;
+      case UploadStatus.queued:
+        icon = Icons.schedule;
+        label = l10n.uploadQueuedLabel;
+        fg = c.textDim;
+        bg = c.surface2;
+        handler = null;
+        break;
+      case UploadStatus.uploading:
+        icon = Icons.cloud_upload_outlined;
+        label = '${(entry.progress * 100).round()}%';
+        fg = c.accent;
+        bg = c.accentTint;
+        handler = null;
+        break;
+      case UploadStatus.uploaded:
+        icon = Icons.cloud_done_outlined;
+        label = l10n.uploadedLabel;
+        fg = c.accent;
+        bg = c.accentTint;
+        handler = null;
+        break;
+      case UploadStatus.failed:
+        icon = Icons.refresh;
+        label = l10n.uploadRetryShort;
+        fg = c.danger;
+        bg = c.danger.withValues(alpha: 0.12);
+        handler = onTap;
+        break;
+      }
+    }
+
+    final showProgressFill =
+        !locked && entry.status == UploadStatus.uploading;
+
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      // While uploading, a thin progress bar overlays the bottom edge of the
+      // pill so the percent text is reinforced visually. Other states draw
+      // only the text/icon row.
+      child: Stack(
+        children: [
+          if (showProgressFill)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: FractionallySizedBox(
+                  widthFactor: entry.progress.clamp(0.0, 1.0),
+                  heightFactor: 0.14,
+                  child: Container(color: c.accent.withValues(alpha: 0.55)),
+                ),
+              ),
+            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 12, color: fg),
+              const SizedBox(width: 4),
+              Text(
+                label.toUpperCase(),
+                style: DCText.mono(
+                    size: 10,
+                    weight: FontWeight.w600,
+                    color: fg,
+                    letterSpacing: 1.2),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: handler,
+      child: pill,
+    );
   }
 }

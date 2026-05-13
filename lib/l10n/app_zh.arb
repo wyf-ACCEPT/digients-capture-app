@@ -53,7 +53,6 @@
   "authSignInSubtitle": "登录后继续采集。",
   "authPhone": "手机号",
   "authEmail": "邮箱",
-  "authMockBackendCode": "模拟后端 · 验证码是 123456",
   "authAgreementPrefix": "创建账号即表示你同意我们的",
   "authTerms": "服务条款",
   "authAgreementMiddle": "和",
@@ -69,6 +68,21 @@
   "authAlreadyHaveAccount": "已有账号？",
   "authDontHaveAccount": "还没有账号？",
   "authRegister": "注册",
+  "authPhoneComingSoonTitle": "手机号登录暂未开放",
+  "authPhoneComingSoonBody": "短信验证还在开发中，请先使用邮箱或下方免登录入口。",
+  "authSkipSignIn": "免登录（演示）",
+  "authSkipSignInHint": "跳过后将无法上传视频",
+  "authInviteCodeSignIn": "用邀请码登录",
+  "authInviteCodeModalTitle": "输入邀请码",
+  "authInviteCodeModalHint": "向 Digients 团队获取你的邀请码",
+  "authInviteCodeInputLabel": "邀请码",
+  "authInviteCodeSubmit": "登录",
+  "authInviteCodeMissing": "请输入邀请码",
+  "uploadLockedTitle": "上传需要登录",
+  "uploadLockedBody": "退出登录后用邀请码重新进入即可启用视频上传。",
+  "uploadLockedSignOut": "退出登录",
+  "uploadLockedDismiss": "暂不",
+  "uploadLockedShortLabel": "需登录",
   "homeWelcomeBack": "欢迎回来",
   "balance": "余额",
   "pending": "待入账",
@@ -235,6 +249,36 @@
     "placeholders": {
       "count": {
         "type": "int"
+      }
+    }
+  },
+  "uploadToCloud": "上传到云端",
+  "uploadToCloudCount": "上传 {count} 条到云端",
+  "@uploadToCloudCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadingPercent": "上传中 {percent}%",
+  "@uploadingPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadQueuedLabel": "排队中",
+  "uploadedLabel": "已上传",
+  "uploadShort": "上传",
+  "uploadRetryShort": "重试",
+  "uploadFailedRetry": "上传失败 — 点击重试",
+  "uploadFailedSnack": "上传失败：{error}",
+  "@uploadFailedSnack": {
+    "placeholders": {
+      "error": {
+        "type": "String"
       }
     }
   },

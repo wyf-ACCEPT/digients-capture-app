@@ -21,7 +21,9 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   AuthMode _mode = AuthMode.signIn;
-  AuthIdentifierType _method = AuthIdentifierType.phone;
+  // Email is the default until phone OTP (SMS) is implemented; the phone
+  // segment renders a "coming soon" notice instead of an input field.
+  AuthIdentifierType _method = AuthIdentifierType.email;
   bool _otpSent = false;
   final _idController = TextEditingController();
   final _otpController = TextEditingController();
@@ -72,29 +74,21 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Future<void> _signInWithApple() async {
+  Future<void> _skipSignIn() async {
     try {
-      // Real Apple Sign-In is not wired yet; the mock returns a synthetic
-      // session so the rest of the flow stays testable end-to-end.
-      await context.read<AuthController>().signInWithApple(
-            identityToken: 'mock-identity-token',
-            nonce: 'mock-nonce',
-          );
+      await context.read<AuthController>().signInAsDemo();
     } catch (e) {
       if (!mounted) return;
       _showError(_describe(e));
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    try {
-      await context
-          .read<AuthController>()
-          .signInWithGoogle(idToken: 'mock-id-token');
-    } catch (e) {
-      if (!mounted) return;
-      _showError(_describe(e));
-    }
+  Future<void> _openInviteCodeModal() async {
+    await showDialog<bool>(
+      context: context,
+      builder: (_) => const _InviteCodeDialog(),
+    );
+    // Router redirect picks up the auth state change and navigates.
   }
 
   void _showError(String message) {
@@ -177,63 +171,63 @@ class _AuthScreenState extends State<AuthScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              DCInputField(
-                controller: _idController,
-                hint: _method == AuthIdentifierType.phone
-                    ? '+1 555 0100'
-                    : 'you@example.com',
-                keyboardType: _method == AuthIdentifierType.phone
-                    ? TextInputType.phone
-                    : TextInputType.emailAddress,
-              ),
-              if (_otpSent) ...[
-                const SizedBox(height: 12),
+              if (_method == AuthIdentifierType.phone)
+                _PhoneComingSoonNotice(
+                  title: l10n.authPhoneComingSoonTitle,
+                  body: l10n.authPhoneComingSoonBody,
+                )
+              else ...[
                 DCInputField(
-                  controller: _otpController,
-                  hint: '000000',
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  mono: true,
+                  controller: _idController,
+                  hint: 'you@example.com',
+                  keyboardType: TextInputType.emailAddress,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.authMockBackendCode,
-                  style: DCText.mono(
-                      size: 11, weight: FontWeight.w500, color: c.textDim),
-                ),
-              ],
-              if (isRegister) ...[
-                const SizedBox(height: 12),
-                Text.rich(
-                  TextSpan(
-                    style: DCText.inter(
-                        size: 12, weight: FontWeight.w500, color: c.textDim),
-                    children: [
-                      TextSpan(text: l10n.authAgreementPrefix),
-                      TextSpan(
-                          text: l10n.authTerms,
-                          style: TextStyle(color: c.accent)),
-                      TextSpan(text: l10n.authAgreementMiddle),
-                      TextSpan(
-                          text: l10n.authPrivacyPolicy,
-                          style: TextStyle(color: c.accent)),
-                      TextSpan(text: l10n.authAgreementSuffix),
-                    ],
+                if (_otpSent) ...[
+                  const SizedBox(height: 12),
+                  DCInputField(
+                    controller: _otpController,
+                    hint: '000000',
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    mono: true,
                   ),
+                ],
+                if (isRegister) ...[
+                  const SizedBox(height: 12),
+                  Text.rich(
+                    TextSpan(
+                      style: DCText.inter(
+                          size: 12, weight: FontWeight.w500, color: c.textDim),
+                      children: [
+                        TextSpan(text: l10n.authAgreementPrefix),
+                        TextSpan(
+                            text: l10n.authTerms,
+                            style: TextStyle(color: c.accent)),
+                        TextSpan(text: l10n.authAgreementMiddle),
+                        TextSpan(
+                            text: l10n.authPrivacyPolicy,
+                            style: TextStyle(color: c.accent)),
+                        TextSpan(text: l10n.authAgreementSuffix),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                DCButton(
+                  label: !_otpSent
+                      ? (busy
+                          ? l10n.authSending
+                          : l10n.authSendVerificationCode)
+                      : (busy
+                          ? l10n.authVerifying
+                          : (isRegister
+                              ? l10n.authCreateAccount
+                              : l10n.authSignIn)),
+                  onPressed: busy ? null : (!_otpSent ? _sendOtp : _verifyOtp),
                 ),
               ],
-              const SizedBox(height: 18),
-              DCButton(
-                label: !_otpSent
-                    ? (busy ? l10n.authSending : l10n.authSendVerificationCode)
-                    : (busy
-                        ? l10n.authVerifying
-                        : (isRegister
-                            ? l10n.authCreateAccount
-                            : l10n.authSignIn)),
-                onPressed: busy ? null : (!_otpSent ? _sendOtp : _verifyOtp),
-              ),
-              const SizedBox(height: 20),
+              SizedBox(
+                  height: _method == AuthIdentifierType.phone ? 18 : 20),
               Row(
                 children: [
                   Expanded(child: Divider(color: c.border)),
@@ -249,24 +243,27 @@ class _AuthScreenState extends State<AuthScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: DCButton.secondary(
-                      label: l10n.authApple,
-                      leadingIcon: Icons.apple,
-                      onPressed: busy ? null : _signInWithApple,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DCButton.secondary(
-                      label: l10n.authGoogle,
-                      leadingIcon: Icons.g_mobiledata,
-                      onPressed: busy ? null : _signInWithGoogle,
-                    ),
-                  ),
-                ],
+              DCButton.secondary(
+                label: l10n.authInviteCodeSignIn,
+                leadingIcon: Icons.vpn_key_outlined,
+                onPressed: busy ? null : _openInviteCodeModal,
+              ),
+              const SizedBox(height: 10),
+              DCButton.secondary(
+                label: l10n.authSkipSignIn,
+                leadingIcon: Icons.science,
+                onPressed: busy ? null : _skipSignIn,
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(
+                  l10n.authSkipSignInHint,
+                  style: DCText.mono(
+                      size: 10,
+                      weight: FontWeight.w500,
+                      color: c.textFaint,
+                      letterSpacing: 1.0),
+                ),
               ),
               const SizedBox(height: 24),
               Center(
@@ -304,6 +301,156 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PhoneComingSoonNotice extends StatelessWidget {
+  const _PhoneComingSoonNotice({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.dc;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface2,
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hourglass_empty, size: 18, color: c.textDim),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: DCText.inter(
+                      size: 14, weight: FontWeight.w600, color: c.text),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: DCText.inter(
+                size: 13, weight: FontWeight.w500, color: c.textDim),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Wrapped in its own StatefulWidget so the TextEditingController's lifecycle
+// is bound to the widget (disposed by the framework when the dialog unmounts),
+// not to the showDialog Future. Disposing the controller synchronously after
+// `await showDialog` races with the dialog's exit transition — the transition
+// rebuilds the TextField one last time and calls addListener on an already-
+// disposed controller, tripping a debug assertion.
+class _InviteCodeDialog extends StatefulWidget {
+  const _InviteCodeDialog();
+
+  @override
+  State<_InviteCodeDialog> createState() => _InviteCodeDialogState();
+}
+
+class _InviteCodeDialogState extends State<_InviteCodeDialog> {
+  final _controller = TextEditingController();
+  String _error = '';
+  bool _inProgress = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final code = _controller.text.trim();
+    if (code.isEmpty) {
+      setState(() => _error = context.l10n.authInviteCodeMissing);
+      return;
+    }
+    setState(() {
+      _inProgress = true;
+      _error = '';
+    });
+    try {
+      await context.read<AuthController>().redeemInviteCode(code: code);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _inProgress = false;
+        _error = e is AuthException ? e.message : e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final c = context.dc;
+    return AlertDialog(
+      backgroundColor: c.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(l10n.authInviteCodeModalTitle,
+          style:
+              DCText.inter(size: 18, weight: FontWeight.w600, color: c.text)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.authInviteCodeModalHint,
+            style: DCText.inter(
+                size: 13, weight: FontWeight.w400, color: c.textDim),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            enabled: !_inProgress,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              labelText: l10n.authInviteCodeInputLabel,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            style:
+                DCText.mono(size: 16, weight: FontWeight.w500, color: c.text),
+            onSubmitted: _inProgress ? null : (_) => _submit(),
+          ),
+          if (_error.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(_error,
+                style: DCText.inter(
+                    size: 12, weight: FontWeight.w500, color: c.danger)),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed:
+              _inProgress ? null : () => Navigator.of(context).pop(false),
+          child: Text(l10n.cancel),
+        ),
+        TextButton(
+          onPressed: _inProgress ? null : _submit,
+          child: Text(l10n.authInviteCodeSubmit),
+        ),
+      ],
     );
   }
 }

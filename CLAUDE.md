@@ -135,8 +135,9 @@ The Capture App is currently shipped through a **personal Apple Developer accoun
 
 **After the company account is approved — commit a shared team to `main`**:
 1. On a feature branch, set the production values in pbxproj:
-   - `DEVELOPMENT_TEAM = <company team ID>`
-   - `PRODUCT_BUNDLE_IDENTIFIER = com.digients.capture`
+   - `DEVELOPMENT_TEAM = FTTNZLDA35` (Digients Tech Pte. Ltd.)
+   - `PRODUCT_BUNDLE_IDENTIFIER = tech.digients.capture`
+     - NOTE: this is `tech.` not `com.`. The `com.digients.capture` ID was globally taken on Apple's side (likely a teammate's Xcode auto-sign on their personal team). We use the `.tech` TLD that the company actually owns.
 2. PR → merge to `main`
 3. Each developer runs:
    ```bash

@@ -28,7 +28,26 @@ GoRouter buildRouter(AuthController auth) {
       return null;
     },
     routes: [
-      GoRoute(path: '/auth', builder: (_, __) => const AuthScreen()),
+      // /auth slides in from the LEFT (reverse direction) so that logout
+      // feels like a "back" navigation — the auth screen lives logically
+      // before the rest of the app, not as a child pushed on top.
+      GoRoute(
+        path: '/auth',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const AuthScreen(),
+          transitionsBuilder: (_, animation, __, child) => SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(-1, 0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.fastOutSlowIn,
+            )),
+            child: child,
+          ),
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) => ShellScaffold(child: child),
         routes: [
