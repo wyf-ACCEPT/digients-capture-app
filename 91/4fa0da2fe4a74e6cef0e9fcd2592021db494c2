@@ -1,0 +1,20 @@
+lib/screens/v2/auth_screen.dart
+  s_5d0af6646e7ab0::t_ca23e45115dcd1 351-456
+  s_5d0af6646e7ab0::t_8645c1e6bd56de 87,89,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "914fa0da2fe4a74e6cef0e9fcd2592021db494c2",
+  "prompts": {},
+  "sessions": {
+    "s_5d0af6646e7ab0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4369b00a-7252-4643-a100-a976f0ae000b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
