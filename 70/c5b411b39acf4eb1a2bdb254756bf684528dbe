@@ -1,0 +1,26 @@
+pubspec.yaml
+  s_e2932035c25f1a::t_5f8661f4ec9020 67-75
+  s_e2932035c25f1a::t_3af54508621813 19
+lib/services/upload_service.dart
+  s_e2932035c25f1a::t_241420226a3fc5 159-165,178,186,188-191,194
+  s_e2932035c25f1a::t_8179e379103372 347-379,381-400
+  s_e2932035c25f1a::t_ac50037ab04def 6
+docs/testflight-builds.md
+  s_e2932035c25f1a::t_cd2bc0178feb55 9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "70c5b411b39acf4eb1a2bdb254756bf684528dbe",
+  "prompts": {},
+  "sessions": {
+    "s_e2932035c25f1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb0a5242-0a90-4b5d-9e03-bc6b5ae28073",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
