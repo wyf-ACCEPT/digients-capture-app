@@ -29,17 +29,17 @@ void main() async {
   final handPresenceSettings = HandPresenceSettingsController();
   await handPresenceSettings.load();
 
-  // Default to the deployed prod backend; override via:
+  // Default to the AWS Lambda prod backend behind api.digients.tech. The
+  // legacy Cloudflare Workers deployment (digients-api.digients.workers.dev)
+  // is in retirement (handoff 6e15 §5.4 / Phase 6) and its D1 no longer
+  // tracks new invite codes minted in Aurora, so falling back to it silently
+  // bites local builds. Override the base for mock / local dev:
   //   flutter run --dart-define=AUTH_BACKEND=mock
   //   flutter run --dart-define=API_BASE=http://localhost:8787
-  // The prod URL is the team's Cloudflare Workers deployment (root CLAUDE.md
-  // §5.1). M3-M5 server endpoints aren't live yet, so refresh / logout / OAuth
-  // throw `not_implemented`; AuthController already swallows refresh/logout
-  // failures as best-effort.
   const backend = String.fromEnvironment('AUTH_BACKEND', defaultValue: 'http');
   const apiBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'https://digients-api.digients.workers.dev',
+    defaultValue: 'https://api.digients.tech',
   );
   final AuthService authService = backend == 'mock'
       ? MockAuthService()
