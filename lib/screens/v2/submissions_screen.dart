@@ -159,7 +159,6 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
                                     recording: r,
                                     selectionMode: _selectionMode,
                                     selected: selected,
-                                    onShare: () => _share(r),
                                     onDelete: () => _delete(r),
                                     onTap: () {
                                       if (_selectionMode) {
@@ -313,34 +312,6 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _share(Recording r) async {
-    final l10n = context.l10n;
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    final origin =
-        box != null ? box.localToGlobal(Offset.zero) & box.size : null;
-    final queue = context.read<CompressionQueue>();
-    try {
-      final archivePath = queue.isReady(r.sessionId)
-          ? await _manager.exportRecording(r.sessionId)
-          : await withExportProgress<String?>(
-              context,
-              initialMessage: l10n.compressingRecording,
-              work: (_) => queue.waitForReady(r.sessionId),
-            );
-      if (archivePath == null || !mounted) return;
-      await Share.shareXFiles(
-        [XFile(archivePath)],
-        subject: l10n.shareSubjectRecording,
-        text: l10n.shareTextRecording,
-        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.exportFailed(e.toString()))));
-    }
   }
 
   Future<void> _bulkShare() async {
@@ -569,7 +540,6 @@ class _RecordingRow extends StatelessWidget {
   final Recording recording;
   final bool selectionMode;
   final bool selected;
-  final VoidCallback onShare;
   final VoidCallback onDelete;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
@@ -578,7 +548,6 @@ class _RecordingRow extends StatelessWidget {
     required this.recording,
     required this.selectionMode,
     required this.selected,
-    required this.onShare,
     required this.onDelete,
     required this.onTap,
     required this.onLongPress,
@@ -684,21 +653,23 @@ class _RecordingRow extends StatelessWidget {
                         size: 10, weight: FontWeight.w500, color: c.textFaint),
                   ),
                   const SizedBox(height: 6),
-                  // Compose: "on device" status badge + cloud upload action +
-                  // (optional) compression progress, all on one horizontal
-                  // line. Filling the blank space to the right of the status
-                  // badge with a tappable upload pill means a one-shot cloud
-                  // upload is reachable without entering the detail screen.
+                  // Compose: "on device" status badge + cloud upload status
+                  // pill + (optional) compression progress, all on one
+                  // horizontal line. The pill here is display-only — the
+                  // tappable affordance lives in the upload square on the
+                  // right side of the row. Progress bar + status text stay
+                  // mid-bottom so the upload's state is visible without
+                  // entering the detail screen.
                   Row(
                     children: [
-                      // Drop the "on device" badge once the upload is done —
-                      // _UploadActionPill's UPLOADED state already conveys
-                      // "this take has been preserved", so keeping the
-                      // ondevice chip alongside it just duplicates ink. Local
-                      // copy is still on disk; we just stop announcing it.
-                      Consumer2<UploadController, AuthController>(
-                        builder: (_, upload, auth, __) {
+                      Consumer<UploadController>(
+                        builder: (_, upload, __) {
                           final entry = upload.entryFor(recording.sessionId);
+                          // Drop the "on device" badge once the upload is
+                          // done — UPLOADED already conveys "this take has
+                          // been preserved", so the ondevice chip would
+                          // just duplicate ink. Local copy is still on
+                          // disk; we just stop announcing it.
                           final hideOnDeviceBadge =
                               entry.status == UploadStatus.uploaded;
                           return Row(
@@ -709,13 +680,7 @@ class _RecordingRow extends StatelessWidget {
                                     status: SubmissionStatus.ondevice),
                                 const SizedBox(width: 6),
                               ],
-                              _UploadActionPill(
-                                entry: entry,
-                                locked: !auth.canUpload,
-                                onTap: () => upload.enqueue(recording),
-                                onLockedTap: () =>
-                                    promptInviteCodeRequired(context, auth),
-                              ),
+                              _UploadStatusPill(entry: entry),
                             ],
                           );
                         },
@@ -774,18 +739,12 @@ class _RecordingRow extends StatelessWidget {
               const SizedBox(width: 8),
               Column(
                 children: [
-                  // Share / export — opens the system share sheet (AirDrop,
-                  // mail, Files.app). Kept here even after the inline cloud
-                  // upload pill landed, because share is still the only
-                  // working out-of-app path while HttpUploadService is mock-
-                  // only, and remains useful for ad-hoc collaborator drops.
-                  DCIconButton(
-                    icon: Icons.ios_share,
-                    color: c.text,
-                    bg: c.surface,
-                    onPressed: onShare,
-                    semanticLabel: l10n.export,
-                  ),
+                  // Upload + delete squares. Upload is the primary action
+                  // for getting a take to the cloud; export was moved to
+                  // the detail screen so the list row reads as a binary
+                  // "send it / drop it" choice. Per-state progress is
+                  // surfaced by the status pill above, not this button.
+                  _RowUploadButton(recording: recording),
                   const SizedBox(height: 6),
                   DCIconButton(
                     icon: Icons.delete_outline,
@@ -878,23 +837,19 @@ Future<void> promptInviteCodeRequired(
 
 enum _LockedDialogAction { dismiss, signOut }
 
-// Tappable inline pill that drives Cloud upload from the list row. Visually
-// matches DCStatusBadge (same padding, radius, mono uppercase font, leading
-// glyph) so it reads as a sibling to the "on device" badge it sits next to,
-// but is interactive in the idle / failed states. While uploading, a
-// progress fill animates the pill background.
-class _UploadActionPill extends StatelessWidget {
+// Display-only pill that surfaces upload progress + state inline in the
+// list row. Visually matches DCStatusBadge (same padding, radius, mono
+// uppercase font, leading glyph) so it reads as a sibling to the "on
+// device" badge it sits next to. The tappable upload affordance lives in
+// the upload square on the right side of the row; this pill exists purely
+// so users can read progress without opening the detail screen.
+//
+// Idle (and locked, which is handled by the right-side button) collapses
+// to zero height — the on-device badge alone carries the row in that case.
+class _UploadStatusPill extends StatelessWidget {
   final UploadEntry entry;
-  final bool locked;
-  final VoidCallback onTap;
-  final VoidCallback onLockedTap;
 
-  const _UploadActionPill({
-    required this.entry,
-    required this.locked,
-    required this.onTap,
-    required this.onLockedTap,
-  });
+  const _UploadStatusPill({required this.entry});
 
   @override
   Widget build(BuildContext context) {
@@ -905,87 +860,59 @@ class _UploadActionPill extends StatelessWidget {
     late final String label;
     late final Color fg;
     late final Color bg;
-    VoidCallback? handler;
 
-    // Demo sessions (skip-sign-in) can't upload — present a locked variant
-    // that explains why on tap. Always wins over the regular status so the
-    // user sees a consistent "you need to sign in" affordance no matter
-    // what state the underlying upload entry is in.
-    // Demo sessions (skip-sign-in) can't upload — present a locked variant
-    // that explains why on tap. Wins over the regular status so the user
-    // sees a consistent affordance regardless of underlying upload state.
-    if (locked) {
-      icon = Icons.lock_outline;
-      label = l10n.uploadLockedShortLabel;
-      fg = c.textDim;
-      bg = c.surface2;
-      handler = onLockedTap;
-    } else {
-      switch (entry.status) {
-        case UploadStatus.idle:
-        icon = Icons.cloud_upload_outlined;
-        label = l10n.uploadShort;
-        fg = c.accent;
-        bg = c.accentTint;
-        handler = onTap;
-        break;
+    switch (entry.status) {
+      case UploadStatus.idle:
+        return const SizedBox.shrink();
       case UploadStatus.queued:
         icon = Icons.schedule;
         label = l10n.uploadQueuedLabel;
         fg = c.textDim;
         bg = c.surface2;
-        handler = null;
         break;
       case UploadStatus.compressing:
         icon = Icons.compress;
         label = l10n.uploadCompressingShort;
         fg = c.accent;
         bg = c.accentTint;
-        handler = null;
         break;
       case UploadStatus.uploading:
         icon = Icons.cloud_upload_outlined;
         label = '${(entry.progress * 100).round()}%';
         fg = c.accent;
         bg = c.accentTint;
-        handler = null;
         break;
       case UploadStatus.finalizing:
         icon = Icons.cloud_sync_outlined;
         label = l10n.uploadFinalizingShort;
         fg = c.accent;
         bg = c.accentTint;
-        handler = null;
         break;
       case UploadStatus.uploaded:
         icon = Icons.cloud_done_outlined;
         label = l10n.uploadedLabel;
         fg = c.accent;
         bg = c.accentTint;
-        handler = null;
         break;
       case UploadStatus.failed:
-        icon = Icons.refresh;
-        label = l10n.uploadRetryShort;
+        icon = Icons.error_outline;
+        label = l10n.uploadFailedShort;
         fg = c.danger;
         bg = c.danger.withValues(alpha: 0.12);
-        handler = onTap;
         break;
-      }
     }
 
-    final showProgressFill =
-        !locked && entry.status == UploadStatus.uploading;
+    final showProgressFill = entry.status == UploadStatus.uploading;
 
-    final pill = Container(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(6),
       ),
-      // While uploading, a thin progress bar overlays the bottom edge of the
-      // pill so the percent text is reinforced visually. Other states draw
-      // only the text/icon row.
+      // While uploading, a thin progress bar overlays the bottom edge of
+      // the pill so the percent text is reinforced visually. Other states
+      // draw only the text/icon row.
       child: Stack(
         children: [
           if (showProgressFill)
@@ -1017,11 +944,74 @@ class _UploadActionPill extends StatelessWidget {
         ],
       ),
     );
+  }
+}
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: handler,
-      child: pill,
-    );
+// Right-side upload square. Mirrors the delete square's footprint
+// (DCIconButton, default 38pt) and changes affordance + color based on
+// UploadController state for this recording. Demo sessions (no invite
+// code redeemed) see a lock icon that prompts re-auth on tap. Progress
+// numbers + status text live in _UploadStatusPill above, so this button
+// is a pure "trigger / state" surface, not a label.
+class _RowUploadButton extends StatelessWidget {
+  final Recording recording;
+
+  const _RowUploadButton({required this.recording});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.dc;
+    final l10n = context.l10n;
+    final upload = context.watch<UploadController>();
+    final auth = context.watch<AuthController>();
+    final entry = upload.entryFor(recording.sessionId);
+
+    if (!auth.canUpload) {
+      return DCIconButton(
+        icon: Icons.lock_outline,
+        color: c.textDim,
+        bg: c.surface2,
+        onPressed: () => promptInviteCodeRequired(context, auth),
+        semanticLabel: l10n.uploadLockedShortLabel,
+      );
+    }
+
+    switch (entry.status) {
+      case UploadStatus.idle:
+        return DCIconButton(
+          icon: Icons.cloud_upload_outlined,
+          color: c.accent,
+          bg: c.accentTint,
+          onPressed: () => upload.enqueue(recording),
+          semanticLabel: l10n.uploadShort,
+        );
+      case UploadStatus.queued:
+      case UploadStatus.compressing:
+      case UploadStatus.uploading:
+      case UploadStatus.finalizing:
+        return DCIconButton(
+          icon: Icons.cloud_upload_outlined,
+          color: c.textDim,
+          bg: c.surface2,
+          onPressed: null,
+          semanticLabel: l10n.uploadShort,
+        );
+      case UploadStatus.uploaded:
+        return DCIconButton(
+          icon: Icons.cloud_done_outlined,
+          color: c.accent,
+          bg: c.accentTint,
+          onPressed: null,
+          semanticLabel: l10n.uploadedLabel,
+        );
+      case UploadStatus.failed:
+        return DCIconButton(
+          icon: Icons.refresh,
+          color: c.danger,
+          bg: c.danger.withValues(alpha: 0.12),
+          onPressed: () => upload.enqueue(recording),
+          semanticLabel: l10n.uploadRetryShort,
+        );
+    }
   }
 }

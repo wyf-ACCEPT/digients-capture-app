@@ -277,6 +277,7 @@
   "uploadedLabel": "已上传",
   "uploadShort": "上传",
   "uploadRetryShort": "重试",
+  "uploadFailedShort": "失败",
   "uploadFailedRetry": "上传失败 — 点击重试",
   "uploadFailedSnack": "上传失败：{error}",
   "@uploadFailedSnack": {

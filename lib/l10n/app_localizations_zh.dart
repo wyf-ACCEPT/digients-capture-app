@@ -528,6 +528,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uploadRetryShort => '重试';
 
   @override
+  String get uploadFailedShort => '失败';
+
+  @override
   String get uploadFailedRetry => '上传失败 — 点击重试';
 
   @override

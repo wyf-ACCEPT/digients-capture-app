@@ -277,6 +277,7 @@
   "uploadedLabel": "Uploaded",
   "uploadShort": "Upload",
   "uploadRetryShort": "Retry",
+  "uploadFailedShort": "Failed",
   "uploadFailedRetry": "Upload failed — tap to retry",
   "uploadFailedSnack": "Upload failed: {error}",
   "@uploadFailedSnack": {

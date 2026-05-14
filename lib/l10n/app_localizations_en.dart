@@ -535,6 +535,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadRetryShort => 'Retry';
 
   @override
+  String get uploadFailedShort => 'Failed';
+
+  @override
   String get uploadFailedRetry => 'Upload failed — tap to retry';
 
   @override

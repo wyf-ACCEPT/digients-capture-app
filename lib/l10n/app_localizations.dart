@@ -1076,6 +1076,12 @@ abstract class AppLocalizations {
   /// **'重试'**
   String get uploadRetryShort;
 
+  /// No description provided for @uploadFailedShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'失败'**
+  String get uploadFailedShort;
+
   /// No description provided for @uploadFailedRetry.
   ///
   /// In zh, this message translates to:
