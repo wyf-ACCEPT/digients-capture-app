@@ -1,0 +1,19 @@
+pubspec.yaml
+  s_e2932035c25f1a::t_4452c759a91c3a 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "6e126abd03f135e525ab1010378a8df01be70cc7",
+  "prompts": {},
+  "sessions": {
+    "s_e2932035c25f1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb0a5242-0a90-4b5d-9e03-bc6b5ae28073",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
