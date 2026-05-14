@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.2.2+1
+version: 0.2.2+2
 
 environment:
   sdk: ^3.5.0
@@ -63,6 +63,15 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   sensors_plus: ^7.0.0
   http: ^1.2.2
+
+  # Used specifically for streaming large file uploads (multi-GB recordings).
+  # package:http's StreamedRequest buffers the entire body in an unbounded
+  # in-memory queue with no backpressure, which OOM-crashed the app on 0.2.2+1
+  # for 3.5 GB takes. dio's `data: Stream<List<int>>` path propagates
+  # backpressure from URLSession upstream, so memory stays bounded and
+  # `onSendProgress` reflects real network throughput rather than disk-read
+  # speed.
+  dio: ^5.7.0
 
   # Hand-presence feedback (V2 addendum)
   just_audio: ^0.9.42

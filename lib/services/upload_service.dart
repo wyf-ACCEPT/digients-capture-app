@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -155,9 +156,13 @@ class MockUploadService implements UploadService {
 //   1. POST /v1/submissions/init with session/device metadata, get back a
 //      pre-signed PUT URL (TTL ~15min) and the matching submission id.
 //   2. HTTP PUT the tar.gz body to S3 directly via the pre-signed URL.
-//      Body is streamed off disk, not loaded into memory, so a 3 GB take
-//      doesn't OOM the App. Progress events are emitted as bytes flow into
-//      the request sink — the network rate IS the progress rate.
+//      Body is streamed off disk via dio — URLSession applies backpressure
+//      so memory stays bounded even for multi-GB takes (a prior http.dart
+//      StreamedRequest implementation OOM-crashed on 3.5 GB uploads because
+//      its sink was unbounded and the file was read into RAM at disk speed).
+//      Progress events come from dio's onSendProgress, which fires as bytes
+//      are actually consumed by the underlying HttpClient — reflecting real
+//      network throughput, not disk-read speed.
 //   3. POST /v1/submissions/<id>/complete with final size + duration to
 //      flip the submission status uploading -> queued on the backend.
 //
@@ -170,6 +175,7 @@ class HttpUploadService implements UploadService {
   final String baseUrl;
   final DeviceIdService _deviceId;
   final http.Client _client;
+  final Dio _dio;
   final Duration _controlTimeout;
   final Duration _uploadTimeout;
 
@@ -177,10 +183,15 @@ class HttpUploadService implements UploadService {
     required this.baseUrl,
     required DeviceIdService deviceId,
     http.Client? client,
+    Dio? dio,
     Duration controlTimeout = const Duration(seconds: 30),
-    Duration uploadTimeout = const Duration(minutes: 30),
+    // 2h is generous on purpose: a 3.5 GB take at 5 Mbps real upload finishes
+    // in ~93 min. Multi-part upload (planned) will replace this with per-part
+    // timeouts an order of magnitude smaller.
+    Duration uploadTimeout = const Duration(hours: 2),
   })  : _deviceId = deviceId,
         _client = client ?? http.Client(),
+        _dio = dio ?? Dio(),
         _controlTimeout = controlTimeout,
         _uploadTimeout = uploadTimeout;
 
@@ -333,45 +344,60 @@ class HttpUploadService implements UploadService {
     required File file,
     required int fileLength,
   }) async {
-    final request = http.StreamedRequest('PUT', Uri.parse(uploadUrl));
-    request.headers['Content-Type'] = 'application/gzip';
-    request.contentLength = fileLength;
-
-    // Drain the file into the request sink in the background. The http client
-    // pumps the sink as the upload progresses, providing natural backpressure.
-    // Progress events fire as each chunk hits the sink, which approximates
-    // network rate closely enough for a moving progress bar.
-    var sent = 0;
-    final pump = () async {
-      try {
-        await for (final chunk in file.openRead()) {
-          if (controller.isClosed) break;
-          request.sink.add(chunk);
-          sent += chunk.length;
-          if (!controller.isClosed) {
-            controller.add(UploadProgress(
-              fraction: fileLength == 0 ? 0 : sent / fileLength,
-              bytesSent: sent,
-              bytesTotal: fileLength,
-            ));
-          }
-        }
-      } catch (e) {
-        request.sink.addError(e);
-      } finally {
-        await request.sink.close();
-      }
-    }();
-
-    final response =
-        await _client.send(request).timeout(_uploadTimeout);
-    await pump; // ensure file stream completed (or failed)
-    final body = await response.stream.bytesToString();
-    if (response.statusCode != 200) {
-      throw UploadException(
-        'S3 PUT ${response.statusCode}: ${body.isEmpty ? '(empty)' : body}',
-        code: 'put_${response.statusCode}',
+    // dio consumes `file.openRead()` as a Stream<List<int>> and pumps it into
+    // the underlying HttpClient with proper backpressure — the stream is only
+    // pulled as fast as URLSession can transmit, so memory stays bounded
+    // regardless of file size. Content-Length must be supplied explicitly
+    // because the stream has no inherent length; S3 also requires it on PUT.
+    try {
+      final response = await _dio.put<String>(
+        uploadUrl,
+        data: file.openRead(),
+        options: Options(
+          contentType: 'application/gzip',
+          headers: {
+            Headers.contentLengthHeader: fileLength,
+          },
+          responseType: ResponseType.plain,
+          sendTimeout: _uploadTimeout,
+          receiveTimeout: _controlTimeout,
+          // Inspect status ourselves so we can produce a uniform
+          // UploadException shape instead of catching DioException for !=2xx.
+          validateStatus: (_) => true,
+        ),
+        onSendProgress: (sent, total) {
+          if (controller.isClosed) return;
+          // dio reports `total` from Content-Length; fall back to fileLength
+          // for safety.
+          final reportedTotal = total > 0 ? total : fileLength;
+          controller.add(UploadProgress(
+            fraction:
+                reportedTotal == 0 ? 0 : sent / reportedTotal,
+            bytesSent: sent,
+            bytesTotal: reportedTotal,
+          ));
+        },
       );
+
+      if (response.statusCode != 200) {
+        final body = response.data ?? '';
+        throw UploadException(
+          'S3 PUT ${response.statusCode}: ${body.isEmpty ? '(empty)' : body}',
+          code: 'put_${response.statusCode}',
+        );
+      }
+    } on DioException catch (e) {
+      // Network-layer failures (timeout, connection lost, TLS, etc.) never
+      // reach the validateStatus path above.
+      final code = switch (e.type) {
+        DioExceptionType.sendTimeout => 'upload_send_timeout',
+        DioExceptionType.receiveTimeout => 'upload_recv_timeout',
+        DioExceptionType.connectionTimeout => 'upload_connect_timeout',
+        DioExceptionType.connectionError => 'upload_connection_error',
+        DioExceptionType.cancel => 'upload_cancelled',
+        _ => 'upload_io_error',
+      };
+      throw UploadException(e.message ?? e.type.toString(), code: code);
     }
   }
 
