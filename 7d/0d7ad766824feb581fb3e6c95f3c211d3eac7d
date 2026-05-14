@@ -1,0 +1,19 @@
+lib/main.dart
+  s_85cf7382c7c0b3::t_093cfeb32af3c9 32-36,42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "7d0d7ad766824feb581fb3e6c95f3c211d3eac7d",
+  "prompts": {},
+  "sessions": {
+    "s_85cf7382c7c0b3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d5490210-80da-4289-a41f-40973c503c87",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
