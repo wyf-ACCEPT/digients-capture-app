@@ -1,0 +1,19 @@
+docs/testflight-builds.md
+  s_e2932035c25f1a::t_48b72d52c547fa 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "fcaa363b22e523a58018987823b72a51be96d8be",
+  "prompts": {},
+  "sessions": {
+    "s_e2932035c25f1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb0a5242-0a90-4b5d-9e03-bc6b5ae28073",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
