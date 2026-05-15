@@ -1,0 +1,28 @@
+lib/services/upload_service.dart
+  s_85cf7382c7c0b3::t_a3789a4a9f75c1 195-203,216,228,233-234
+  s_85cf7382c7c0b3::t_148869c3a2f213 9
+  s_85cf7382c7c0b3::t_fafac92202eb55 304-309
+  s_85cf7382c7c0b3::t_7faefdf1332c63 343-346
+  s_85cf7382c7c0b3::t_22f684e2075c90 525-653
+  s_85cf7382c7c0b3::t_628bae083413c9 84-96
+  s_85cf7382c7c0b3::t_e742003a6d0351 168-172
+lib/state/upload_controller.dart
+  s_85cf7382c7c0b3::t_835a8bf778fb53 85-94,96-104,107-128,134-139,141,143-144
+  s_85cf7382c7c0b3::t_cbf191479a47ed 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "7de3f3449b3423a1f5a08981b30e0d85e6c634d8",
+  "prompts": {},
+  "sessions": {
+    "s_85cf7382c7c0b3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d5490210-80da-4289-a41f-40973c503c87",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
