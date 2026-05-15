@@ -172,6 +172,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       danger: true,
                       isLast: true),
                 ]),
+                // Dev-only entry — Tier 2 background-upload spike. Tap
+                // routes to /dev/upload-spike which loads a throwaway
+                // screen that drives background_downloader against a
+                // recording of your choice. Delete this section when
+                // Phase B folds the proven path into HttpUploadService.
+                _Section(title: 'DEV', children: [
+                  _SettingsRow(
+                    label: 'Upload spike (background_downloader)',
+                    onTap: () => context.push('/dev/upload-spike'),
+                    trailing: Icon(Icons.chevron_right, color: c.textDim),
+                    isLast: true,
+                  ),
+                ]),
               ],
             ),
           ),

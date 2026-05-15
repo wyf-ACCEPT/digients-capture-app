@@ -90,6 +90,7 @@ dependencies:
   # First-frame thumbnail extraction for the submissions list. iOS:
   # AVAssetImageGenerator. Android: MediaMetadataRetriever.getFrameAtTime.
   video_thumbnail: ^0.5.3
+  background_downloader: ^8.6.0
 
 dev_dependencies:
   flutter_test:

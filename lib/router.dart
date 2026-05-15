@@ -12,6 +12,7 @@ import 'screens/v2/submissions_screen.dart';
 import 'screens/v2/submission_detail_screen.dart';
 import 'screens/v2/profile_screen.dart';
 import 'screens/v2/settings_screen.dart';
+import 'screens/dev/upload_spike_screen.dart';
 import 'state/auth_controller.dart';
 
 GoRouter buildRouter(AuthController auth) {
@@ -92,6 +93,13 @@ GoRouter buildRouter(AuthController auth) {
         builder: (_, state) => SubmissionDetailScreen(sessionId: state.pathParameters['sessionId']!),
       ),
       GoRoute(path: '/me/settings', builder: (_, __) => const SettingsScreen()),
+      // Throwaway dev-only spike for Tier 2 background-upload validation.
+      // Delete when Phase B folds the proven background_downloader path
+      // into HttpUploadService. Plan: .claude/plan/6e15-plan-background-upload.md
+      GoRoute(
+        path: '/dev/upload-spike',
+        builder: (_, __) => const UploadSpikeScreen(),
+      ),
     ],
   );
 }
