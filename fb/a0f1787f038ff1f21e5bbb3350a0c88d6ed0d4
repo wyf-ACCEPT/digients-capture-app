@@ -1,0 +1,24 @@
+lib/screens/v2/settings_screen.dart
+  s_85cf7382c7c0b3::t_b86eeff2968119 175-187
+lib/screens/dev/upload_spike_screen.dart
+  s_85cf7382c7c0b3::t_e026163a48ff78 1-536
+lib/router.dart
+  s_85cf7382c7c0b3::t_bc6e56f290a3d7 15
+  s_85cf7382c7c0b3::t_1da8e2cc68e18b 96-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "fba0f1787f038ff1f21e5bbb3350a0c88d6ed0d4",
+  "prompts": {},
+  "sessions": {
+    "s_85cf7382c7c0b3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d5490210-80da-4289-a41f-40973c503c87",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
