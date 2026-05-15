@@ -279,6 +279,8 @@
   "uploadRetryShort": "Retry",
   "uploadFailedShort": "Failed",
   "uploadFailedRetry": "Upload failed — tap to retry",
+  "uploadForegroundBannerTitle": "Upload in progress — keep app open",
+  "uploadForegroundBannerBody": "Locking the screen or switching apps may interrupt large uploads. Background uploads are coming in a future build.",
   "uploadFailedSnack": "Upload failed: {error}",
   "@uploadFailedSnack": {
     "placeholders": {

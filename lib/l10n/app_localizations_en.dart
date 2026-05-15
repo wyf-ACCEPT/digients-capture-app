@@ -541,6 +541,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadFailedRetry => 'Upload failed — tap to retry';
 
   @override
+  String get uploadForegroundBannerTitle =>
+      'Upload in progress — keep app open';
+
+  @override
+  String get uploadForegroundBannerBody =>
+      'Locking the screen or switching apps may interrupt large uploads. Background uploads are coming in a future build.';
+
+  @override
   String uploadFailedSnack(String error) {
     return 'Upload failed: $error';
   }

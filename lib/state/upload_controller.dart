@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/recording.dart';
 import '../services/compression_queue.dart';
@@ -185,6 +186,7 @@ class UploadController extends ChangeNotifier {
       return;
     }
     _current = next;
+    _reconcileWakelock();
     // Initial in-flight status is `compressing`: we now build the archive
     // on demand inside _start rather than relying on a pre-built one. If
     // it happens to already be on disk, _start will fast-path through
@@ -195,6 +197,30 @@ class UploadController extends ChangeNotifier {
     );
     notifyListeners();
     _start(recording);
+  }
+
+  // Keep the screen awake while any upload is in flight. iOS's default
+  // URLSession (what dio rides on) is killed seconds after the app goes
+  // into background — auto screen-lock counts as "background" and was the
+  // top cause of failed multi-GB uploads in Dylan's factory testing.
+  // This wakelock prevents the *idle timer* from firing; it does NOT stop
+  // the user from manually locking the screen or switching apps. The
+  // durable fix is Tier 2 (background URLSession via background_downloader)
+  // tracked in .claude/plan/6e15-plan-background-upload.md.
+  // Idempotent — multiple enable/disable calls collapse to the right state.
+  void _reconcileWakelock() {
+    final shouldHold = _current != null;
+    () async {
+      try {
+        if (shouldHold) {
+          await WakelockPlus.enable();
+        } else {
+          await WakelockPlus.disable();
+        }
+      } catch (e) {
+        debugPrint('[UploadController] wakelock toggle failed: $e');
+      }
+    }();
   }
 
   Future<void> _start(Recording recording) async {
@@ -291,6 +317,7 @@ class UploadController extends ChangeNotifier {
     );
     _activeSub = null;
     _current = null;
+    _reconcileWakelock();
     notifyListeners();
     // ignore: unawaited_futures
     _persistUploaded();
@@ -304,6 +331,7 @@ class UploadController extends ChangeNotifier {
     );
     _activeSub = null;
     _current = null;
+    _reconcileWakelock();
     notifyListeners();
     _pump();
   }
@@ -311,6 +339,10 @@ class UploadController extends ChangeNotifier {
   @override
   void dispose() {
     _activeSub?.cancel();
+    // Best-effort release on teardown — don't strand a held wakelock if the
+    // controller is disposed mid-upload (e.g., app shutting down).
+    // ignore: unawaited_futures
+    WakelockPlus.disable().catchError((_) {});
     super.dispose();
   }
 }

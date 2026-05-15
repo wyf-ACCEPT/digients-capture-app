@@ -279,6 +279,8 @@
   "uploadRetryShort": "重试",
   "uploadFailedShort": "失败",
   "uploadFailedRetry": "上传失败 — 点击重试",
+  "uploadForegroundBannerTitle": "上传中 — 请保持 App 在前台",
+  "uploadForegroundBannerBody": "锁屏或切换到其他 App 可能会中断大文件上传。后续版本将支持后台上传。",
   "uploadFailedSnack": "上传失败：{error}",
   "@uploadFailedSnack": {
     "placeholders": {

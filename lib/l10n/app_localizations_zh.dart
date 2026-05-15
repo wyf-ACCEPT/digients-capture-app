@@ -534,6 +534,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uploadFailedRetry => '上传失败 — 点击重试';
 
   @override
+  String get uploadForegroundBannerTitle => '上传中 — 请保持 App 在前台';
+
+  @override
+  String get uploadForegroundBannerBody =>
+      '锁屏或切换到其他 App 可能会中断大文件上传。后续版本将支持后台上传。';
+
+  @override
   String uploadFailedSnack(String error) {
     return '上传失败：$error';
   }

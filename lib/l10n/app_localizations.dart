@@ -1088,6 +1088,18 @@ abstract class AppLocalizations {
   /// **'上传失败 — 点击重试'**
   String get uploadFailedRetry;
 
+  /// No description provided for @uploadForegroundBannerTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传中 — 请保持 App 在前台'**
+  String get uploadForegroundBannerTitle;
+
+  /// No description provided for @uploadForegroundBannerBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'锁屏或切换到其他 App 可能会中断大文件上传。后续版本将支持后台上传。'**
+  String get uploadForegroundBannerBody;
+
   /// No description provided for @uploadFailedSnack.
   ///
   /// In zh, this message translates to:

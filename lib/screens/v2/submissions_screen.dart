@@ -117,6 +117,16 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
                     ? _buildSelectionHeader(c)
                     : _buildDefaultHeader(c, totalGb),
               ),
+              // While any upload is in flight, surface a "keep app open"
+              // banner. iOS suspends default URLSession uploads after the
+              // app leaves the foreground (lock / app switch), and we don't
+              // yet have background URLSession wiring — without this nudge,
+              // factory testers were silently losing multi-GB uploads at
+              // 10-30% when their phones auto-locked on their desks.
+              // The companion wakelock in UploadController prevents *auto*
+              // screen-lock from triggering this; the banner covers manual
+              // lock + app-switch which wakelock can't stop.
+              const _UploadForegroundBanner(),
               if (!_selectionMode)
                 SizedBox(
                   height: 48,
@@ -1013,5 +1023,66 @@ class _RowUploadButton extends StatelessWidget {
           semanticLabel: l10n.uploadRetryShort,
         );
     }
+  }
+}
+
+// Banner shown only while UploadController reports an in-flight upload.
+// Soft warning (warning-tinted, not danger) — uploads work when the
+// user follows the hint; failure is silent OS suspension, not an error.
+// Lives in the screen scaffold above the filter chips so it's visible
+// in both default and selection mode.
+class _UploadForegroundBanner extends StatelessWidget {
+  const _UploadForegroundBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.dc;
+    final l10n = context.l10n;
+    return Consumer<UploadController>(
+      builder: (_, upload, __) {
+        if (!upload.isAnyUploading) return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: c.warning.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: c.warning.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 18, color: c.warning),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.uploadForegroundBannerTitle,
+                      style: DCText.inter(
+                        size: 13,
+                        weight: FontWeight.w600,
+                        color: c.text,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.uploadForegroundBannerBody,
+                      style: DCText.inter(
+                        size: 11,
+                        weight: FontWeight.w400,
+                        color: c.textDim,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
