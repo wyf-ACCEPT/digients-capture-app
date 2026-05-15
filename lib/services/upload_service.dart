@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import 'device_id_service.dart';
@@ -80,6 +81,19 @@ abstract class UploadService {
     required double durationSec,
     required AccessTokenProvider getAccessToken,
   });
+
+  // Phase C cold-start recovery: replay /complete for any upload whose
+  // S3 PUT succeeded (`background_downloader` reports `TaskStatus.complete`)
+  // but whose follow-up POST /v1/submissions/<id>/complete never landed —
+  // typically because the App was killed in the narrow window between PUT
+  // returning and /complete being invoked.
+  //
+  // Returns sessionIds that were successfully recovered, so the caller
+  // (UploadController.hydrate) can flip their UI state to `uploaded`.
+  // Server is idempotent on submission_id, so re-firing /complete for an
+  // already-completed submission is safe.
+  Future<List<String>> recoverPendingCompletes(
+      AccessTokenProvider getAccessToken);
 }
 
 // In-memory fake. Walks 0% -> 100% across `_durationMs` and either completes
@@ -151,6 +165,11 @@ class MockUploadService implements UploadService {
 
     return controller.stream;
   }
+
+  @override
+  Future<List<String>> recoverPendingCompletes(
+      AccessTokenProvider getAccessToken) async =>
+      const <String>[]; // mock has no real backend to recover against
 }
 
 // Real backend implementation. Three-legged flow against digients-api:
@@ -173,6 +192,15 @@ class MockUploadService implements UploadService {
 // token via AuthController, so this self-heals on retry. Proper mid-flight
 // refresh is a fast-follow.
 class HttpUploadService implements UploadService {
+  // Phase C: secure-storage key for the "PUT done, /complete not yet acked"
+  // map. JSON-encoded `{ sessionId: submissionId }`. Entries are added right
+  // after /init succeeds (we know submissionId) and removed once /complete
+  // returns 2xx. Anything left at startup means the App was killed in the
+  // narrow window between PUT-complete and /complete-ack — `recoverPending
+  // Completes()` retries /complete for each.
+  static const _pendingCompleteKey =
+      'upload_service.pending_complete_v1';
+
   final String baseUrl;
   final DeviceIdService _deviceId;
   final http.Client _client;
@@ -185,6 +213,7 @@ class HttpUploadService implements UploadService {
   final Duration _controlTimeout;
   // ignore: unused_field
   final Duration _uploadTimeout;
+  final FlutterSecureStorage _secureStorage;
 
   HttpUploadService({
     required this.baseUrl,
@@ -196,11 +225,13 @@ class HttpUploadService implements UploadService {
     // in ~93 min. Multi-part upload (planned) will replace this with per-part
     // timeouts an order of magnitude smaller.
     Duration uploadTimeout = const Duration(hours: 2),
+    FlutterSecureStorage? secureStorage,
   })  : _deviceId = deviceId,
         _client = client ?? http.Client(),
         _dio = dio ?? Dio(),
         _controlTimeout = controlTimeout,
-        _uploadTimeout = uploadTimeout;
+        _uploadTimeout = uploadTimeout,
+        _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   @override
   Stream<UploadProgress> upload({
@@ -270,6 +301,12 @@ class HttpUploadService implements UploadService {
       final uploadUrl = init['upload_url'] as String;
       final submissionId = init['submission_id'] as String;
 
+      // Phase C: persist (sessionId -> submissionId) BEFORE the PUT starts,
+      // not after. If the App is killed mid-PUT, hydrate() can ask
+      // background_downloader for the task status: if `complete`, we still
+      // have the submissionId on disk and can fire /complete on recovery.
+      await _persistPendingComplete(sessionId, submissionId);
+
       // Leg 2: PUT to S3 with byte-level progress. The pre-signed URL embeds
       // its own auth (SigV4), so the access token never reaches AWS.
       await _putToS3(
@@ -302,6 +339,10 @@ class HttpUploadService implements UploadService {
         durationSec: durationSec,
         accessToken: await getAccessToken(),
       );
+
+      // Phase C: /complete acked — clear the recovery marker so we don't
+      // try to replay it on next startup.
+      await _clearPendingComplete(sessionId);
 
       await controller.close();
     } catch (e, st) {
@@ -480,5 +521,134 @@ class HttpUploadService implements UploadService {
         code: fallbackCode,
       );
     }
+  }
+
+  // --- Phase C: pending-complete recovery ---
+
+  Future<Map<String, String>> _readPendingComplete() async {
+    try {
+      final raw = await _secureStorage.read(key: _pendingCompleteKey);
+      if (raw == null || raw.isEmpty) return <String, String>{};
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return <String, String>{};
+      return decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+    } catch (e) {
+      debugPrint('[HttpUploadService] read pending-complete failed: $e');
+      return <String, String>{};
+    }
+  }
+
+  Future<void> _writePendingComplete(Map<String, String> map) async {
+    try {
+      await _secureStorage.write(
+        key: _pendingCompleteKey,
+        value: jsonEncode(map),
+      );
+    } catch (e) {
+      // Persistence is best-effort — if it fails, the worst case is that we
+      // miss recovery on the next cold start. Server is idempotent on
+      // submission_id so a user-triggered retry still resolves it.
+      debugPrint('[HttpUploadService] write pending-complete failed: $e');
+    }
+  }
+
+  Future<void> _persistPendingComplete(
+      String sessionId, String submissionId) async {
+    final m = await _readPendingComplete();
+    m[sessionId] = submissionId;
+    await _writePendingComplete(m);
+  }
+
+  Future<void> _clearPendingComplete(String sessionId) async {
+    final m = await _readPendingComplete();
+    if (m.remove(sessionId) != null) {
+      await _writePendingComplete(m);
+    }
+  }
+
+  @override
+  Future<List<String>> recoverPendingCompletes(
+      AccessTokenProvider getAccessToken) async {
+    final pending = await _readPendingComplete();
+    if (pending.isEmpty) return const <String>[];
+
+    final recovered = <String>[];
+    // Snapshot before iterating — `_run` could also be writing to the same
+    // secure-storage key if the user kicked off an upload while hydrate
+    // is still running. Operating on the snapshot is safe; the per-entry
+    // remove at the end uses _clearPendingComplete which re-reads.
+    for (final entry in pending.entries) {
+      final sessionId = entry.key;
+      final submissionId = entry.value;
+
+      // Look up the task in background_downloader's persisted DB. If the
+      // record is missing (DB pruned, task never enqueued) or in a non-
+      // terminal state, skip this entry — leave it for a future hydrate
+      // or for a user-triggered retry to re-resolve.
+      TaskRecord? record;
+      try {
+        record =
+            await FileDownloader().database.recordForId(sessionId);
+      } catch (e) {
+        debugPrint(
+            '[HttpUploadService] recordForId($sessionId) threw: $e');
+        continue;
+      }
+      if (record == null) {
+        // No tracked task — the PUT either never happened or its record
+        // was lost. Drop the marker; user retry triggers a fresh /init.
+        await _clearPendingComplete(sessionId);
+        continue;
+      }
+      if (record.status != TaskStatus.complete) {
+        // Still running / failed / canceled. We only own the /complete
+        // recovery here; in-flight tasks come back via the global listener,
+        // failed/canceled the user can retry. Don't touch.
+        continue;
+      }
+
+      // PUT finished while we were dead. Replay /complete (idempotent).
+      try {
+        // sizeBytes / durationSec: we don't have these in the recovery
+        // path. Try the archive file we know the task was uploading
+        // from — background_downloader knows the file path. duration
+        // we have to guess (0 is honest — the field is informational).
+        final sizeBytes = await _fileLengthForRecord(record);
+        await _postComplete(
+          submissionId: submissionId,
+          sizeBytes: sizeBytes,
+          durationSec: 0,
+          accessToken: await getAccessToken(),
+        );
+        await _clearPendingComplete(sessionId);
+        recovered.add(sessionId);
+        debugPrint(
+            '[HttpUploadService] recovered /complete for $sessionId');
+      } catch (e) {
+        debugPrint(
+            '[HttpUploadService] /complete recovery for $sessionId failed: $e');
+        // Leave the entry — next hydrate will retry. If the server has
+        // permanently lost the submission row, this entry will sit
+        // forever; that's acceptable for the 99.99% case and Phase D
+        // can add a "give up after N retries" if it ever bites.
+      }
+    }
+    return recovered;
+  }
+
+  Future<int> _fileLengthForRecord(TaskRecord record) async {
+    try {
+      final task = record.task;
+      // UploadTask exposes filename + directory + baseDirectory; combine
+      // through Task.filePath() to get the absolute path on disk. If the
+      // file has been deleted since upload (e.g., user manually purged the
+      // recording), fall back to 0 — the size_bytes field is informational.
+      final path = await task.filePath();
+      final file = File(path);
+      if (await file.exists()) return await file.length();
+    } catch (e) {
+      debugPrint('[HttpUploadService] file size lookup failed: $e');
+    }
+    return 0;
   }
 }

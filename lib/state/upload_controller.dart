@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -81,25 +82,66 @@ class UploadController extends ChangeNotifier {
   // once at App startup before runApp so the first frame already reflects
   // remembered state and we don't briefly show idle pills for known-uploaded
   // recordings.
+  //
+  // Phase C also drives cold-start recovery here:
+  //   1. Enable background_downloader's persistent task DB (idempotent
+  //      across calls) so allTasks / recordForId can see tasks queued in
+  //      a previous app session.
+  //   2. Restore the `uploaded` set from secure storage (original behavior).
+  //   3. Ask UploadService.recoverPendingCompletes() to retry /complete for
+  //      any upload whose S3 PUT finished while the app was killed but
+  //      whose /complete call never landed. Recovered sessionIds are also
+  //      folded into the uploaded set so the UI reflects them.
   Future<void> hydrate() async {
     try {
+      await FileDownloader().trackTasks();
+    } catch (e) {
+      // Not fatal — trackTasks failing only means we lose recovery on
+      // a subsequent cold start. Don't block hydrate.
+      debugPrint('[UploadController] trackTasks failed: $e');
+    }
+
+    var changed = false;
+    try {
       final raw = await _storage.read(key: _persistKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      var changed = false;
-      for (final id in decoded) {
-        if (id is! String || id.isEmpty) continue;
-        _entries[id] = const UploadEntry(
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final id in decoded) {
+            if (id is! String || id.isEmpty) continue;
+            _entries[id] = const UploadEntry(
+              status: UploadStatus.uploaded,
+              progress: 1.0,
+            );
+            changed = true;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[UploadController] hydrate uploaded-set failed: $e');
+    }
+
+    try {
+      final recovered =
+          await _service.recoverPendingCompletes(_auth.getFreshAccessToken);
+      for (final sid in recovered) {
+        _entries[sid] = const UploadEntry(
           status: UploadStatus.uploaded,
           progress: 1.0,
         );
         changed = true;
       }
-      if (changed) notifyListeners();
+      if (recovered.isNotEmpty) {
+        // Fold the recovered ids into the persisted uploaded set so the
+        // next cold start doesn't need to re-recover.
+        // ignore: unawaited_futures
+        _persistUploaded();
+      }
     } catch (e) {
-      debugPrint('[UploadController] hydrate failed: $e');
+      debugPrint('[UploadController] hydrate recoverPendingCompletes failed: $e');
     }
+
+    if (changed) notifyListeners();
   }
 
   Future<void> _persistUploaded() async {
