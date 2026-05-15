@@ -1,0 +1,38 @@
+lib/state/upload_controller.dart
+  s_85cf7382c7c0b3::t_d3b930ccf642c7 189,202-223
+  s_85cf7382c7c0b3::t_318ba2fd65ec45 320,334,342-345
+  s_85cf7382c7c0b3::t_316a8a3da9ed1e 6
+lib/screens/v2/submissions_screen.dart
+  s_85cf7382c7c0b3::t_4181858ac27b2e 120-129
+  s_85cf7382c7c0b3::t_1998df80b88bd9 1028-1088
+lib/l10n/app_localizations_zh.dart
+  s_85cf7382c7c0b3::t_933e5b4826d9b2 537-542
+docs/testflight-builds.md
+  s_85cf7382c7c0b3::t_f2cca63f31f6c3 9-11
+lib/l10n/app_localizations_en.dart
+  s_85cf7382c7c0b3::t_933e5b4826d9b2 544-550
+lib/l10n/app_en.arb
+  s_85cf7382c7c0b3::t_75f8a7593889d4 282-283
+lib/l10n/app_localizations.dart
+  s_85cf7382c7c0b3::t_933e5b4826d9b2 1091-1102
+lib/l10n/app_zh.arb
+  s_85cf7382c7c0b3::t_dd9969f365f74b 282-283
+pubspec.yaml
+  s_85cf7382c7c0b3::t_e04934784811a0 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "609cf3796bfb792cbb6282bd6a6c62d7c0842b4f",
+  "prompts": {},
+  "sessions": {
+    "s_85cf7382c7c0b3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d5490210-80da-4289-a41f-40973c503c87",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
