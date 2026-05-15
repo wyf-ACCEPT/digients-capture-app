@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -175,8 +176,14 @@ class HttpUploadService implements UploadService {
   final String baseUrl;
   final DeviceIdService _deviceId;
   final http.Client _client;
+  // `_dio` and `_uploadTimeout` were the dio path before Phase B swapped
+  // `_putToS3` onto background_downloader. Kept around (with the dep) until
+  // Phase D verifies the new path holds and removes both at once — per the
+  // conservative-change discipline in .claude/plan/6e15-plan-background-upload.md.
+  // ignore: unused_field
   final Dio _dio;
   final Duration _controlTimeout;
+  // ignore: unused_field
   final Duration _uploadTimeout;
 
   HttpUploadService({
@@ -267,6 +274,7 @@ class HttpUploadService implements UploadService {
       // its own auth (SigV4), so the access token never reaches AWS.
       await _putToS3(
         controller: controller,
+        sessionId: sessionId,
         uploadUrl: uploadUrl,
         file: file,
         fileLength: fileLength,
@@ -340,64 +348,95 @@ class HttpUploadService implements UploadService {
 
   Future<void> _putToS3({
     required StreamController<UploadProgress> controller,
+    required String sessionId,
     required String uploadUrl,
     required File file,
     required int fileLength,
   }) async {
-    // dio consumes `file.openRead()` as a Stream<List<int>> and pumps it into
-    // the underlying HttpClient with proper backpressure — the stream is only
-    // pulled as fast as URLSession can transmit, so memory stays bounded
-    // regardless of file size. Content-Length must be supplied explicitly
-    // because the stream has no inherent length; S3 also requires it on PUT.
+    // Hand the PUT off to iOS background URLSession via the
+    // background_downloader plugin (`nsurlsessiond` daemon). Unlike dio's
+    // default URLSession, nsurlsessiond outlives the app process: lock
+    // screen, app switch, jetsam kill — the upload keeps going until iOS
+    // either delivers it or cancels (e.g., user force-quits, 7-day TTL).
+    // Phase A spike (commit fba0f17) validated lock-screen survival on
+    // iOS 26.4 with a 1.6 GB take; event log confirmed nsurlsessiond
+    // continued the transfer across multiple paused/hidden/resumed cycles.
+    //
+    // background_downloader emits TaskStatusUpdate + TaskProgressUpdate on
+    // a global broadcast stream. We filter by taskId == sessionId, bridge
+    // progress events back into the local `controller` (so the rest of
+    // _run / UploadController doesn't know the transport changed), and use
+    // a Completer to convert the async "complete" event into a synchronous
+    // return from this function.
+    //
+    // _uploadTimeout / _controlTimeout from dio path no longer apply —
+    // background_downloader has its own 7-day default TTL which is far
+    // more than enough for any single take. Per-part timeouts will come
+    // back with multipart upload in Tier 3.
+    final completer = Completer<void>();
+    final sub = FileDownloader().updates.listen((update) {
+      if (update.task.taskId != sessionId) return;
+      if (update is TaskProgressUpdate) {
+        if (controller.isClosed) return;
+        final fraction = update.progress.clamp(0.0, 1.0);
+        controller.add(UploadProgress(
+          fraction: fraction,
+          bytesSent: (fraction * fileLength).round(),
+          bytesTotal: fileLength,
+        ));
+      } else if (update is TaskStatusUpdate) {
+        if (completer.isCompleted) return;
+        switch (update.status) {
+          case TaskStatus.complete:
+            completer.complete();
+            break;
+          case TaskStatus.failed:
+            completer.completeError(UploadException(
+              update.exception?.description ?? 'Upload task failed',
+              code: 'put_failed',
+            ));
+            break;
+          case TaskStatus.canceled:
+            completer.completeError(UploadException(
+              'Upload canceled',
+              code: 'put_canceled',
+            ));
+            break;
+          case TaskStatus.notFound:
+            completer.completeError(UploadException(
+              'Upload task not found in system DB',
+              code: 'put_not_found',
+            ));
+            break;
+          default:
+            // running / enqueued / paused / waitingToRetry — keep waiting
+            break;
+        }
+      }
+    });
     try {
-      final response = await _dio.put<String>(
-        uploadUrl,
-        data: file.openRead(),
-        options: Options(
-          contentType: 'application/gzip',
-          headers: {
-            Headers.contentLengthHeader: fileLength,
-          },
-          responseType: ResponseType.plain,
-          sendTimeout: _uploadTimeout,
-          receiveTimeout: _controlTimeout,
-          // Inspect status ourselves so we can produce a uniform
-          // UploadException shape instead of catching DioException for !=2xx.
-          validateStatus: (_) => true,
-        ),
-        onSendProgress: (sent, total) {
-          if (controller.isClosed) return;
-          // dio reports `total` from Content-Length; fall back to fileLength
-          // for safety.
-          final reportedTotal = total > 0 ? total : fileLength;
-          controller.add(UploadProgress(
-            fraction:
-                reportedTotal == 0 ? 0 : sent / reportedTotal,
-            bytesSent: sent,
-            bytesTotal: reportedTotal,
-          ));
-        },
+      final task = UploadTask.fromFile(
+        file: file,
+        taskId: sessionId,
+        url: uploadUrl,
+        httpRequestMethod: 'PUT',
+        // `post: 'binary'` puts the raw file body as the HTTP body (vs
+        // multipart/form-data which is the default). S3 presigned PUT
+        // expects raw bytes.
+        post: 'binary',
+        headers: const {'Content-Type': 'application/gzip'},
+        updates: Updates.statusAndProgress,
       );
-
-      if (response.statusCode != 200) {
-        final body = response.data ?? '';
+      final enqueued = await FileDownloader().enqueue(task);
+      if (!enqueued) {
         throw UploadException(
-          'S3 PUT ${response.statusCode}: ${body.isEmpty ? '(empty)' : body}',
-          code: 'put_${response.statusCode}',
+          'FileDownloader.enqueue returned false (taskId=$sessionId)',
+          code: 'enqueue_failed',
         );
       }
-    } on DioException catch (e) {
-      // Network-layer failures (timeout, connection lost, TLS, etc.) never
-      // reach the validateStatus path above.
-      final code = switch (e.type) {
-        DioExceptionType.sendTimeout => 'upload_send_timeout',
-        DioExceptionType.receiveTimeout => 'upload_recv_timeout',
-        DioExceptionType.connectionTimeout => 'upload_connect_timeout',
-        DioExceptionType.connectionError => 'upload_connection_error',
-        DioExceptionType.cancel => 'upload_cancelled',
-        _ => 'upload_io_error',
-      };
-      throw UploadException(e.message ?? e.type.toString(), code: code);
+      await completer.future;
+    } finally {
+      await sub.cancel();
     }
   }
 
