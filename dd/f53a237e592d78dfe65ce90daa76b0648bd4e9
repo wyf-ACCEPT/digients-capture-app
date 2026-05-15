@@ -1,0 +1,31 @@
+lib/screens/v2/submission_detail_screen.dart
+  s_85cf7382c7c0b3::t_ed7573123fa52a 116-120
+lib/screens/v2/submissions_screen.dart
+  s_85cf7382c7c0b3::t_0f22160c4122e0 443-449
+lib/services/upload_service.dart
+  s_85cf7382c7c0b3::t_61182edbae2a4e 601-610,612-614
+  s_85cf7382c7c0b3::t_c8b1d1ba6fef10 96-101
+  s_85cf7382c7c0b3::t_ff26100de280b0 178-180
+  s_85cf7382c7c0b3::t_28389aedc8a486 187-194
+  s_85cf7382c7c0b3::t_7a9aeaeb92481c 564-566
+lib/state/upload_controller.dart
+  s_85cf7382c7c0b3::t_9f60a453a27904 220-275
+pubspec.yaml
+  s_85cf7382c7c0b3::t_4347862658c510 84-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "ddf53a237e592d78dfe65ce90daa76b0648bd4e9",
+  "prompts": {},
+  "sessions": {
+    "s_85cf7382c7c0b3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d5490210-80da-4289-a41f-40973c503c87",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
