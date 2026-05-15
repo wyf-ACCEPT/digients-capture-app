@@ -217,6 +217,62 @@ class UploadController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Phase D: cancel any in-flight upload for [sessionId] and wipe all
+  // controller-side state for it. Called when the user deletes the
+  // recording from disk — the archive is about to disappear, so leaving
+  // the background_downloader task pointed at the (soon to be) missing
+  // file would just generate noise. Idempotent.
+  //
+  // Order of operations:
+  //   1. If this sid is currently uploading, cancel the active stream sub
+  //      and release wakelock if it's the last in-flight upload.
+  //   2. Cancel the background_downloader UploadTask so nsurlsessiond
+  //      stops trying to PUT a file that's about to vanish.
+  //   3. Clear the pending-complete marker so a future hydrate doesn't
+  //      try to replay /complete for a canceled task.
+  //   4. Wipe our local entry + queue tracking + persist (so the
+  //      submissions screen no longer shows any upload state for this
+  //      sid). Note: if the sid was already in the `uploaded` set, we
+  //      remove it from there too — the user deleted the recording, so
+  //      we don't owe them a "remembered as uploaded" marker either.
+  Future<void> cancel(String sessionId) async {
+    final wasCurrent = _current == sessionId;
+
+    _queue.remove(sessionId);
+    _pending.remove(sessionId);
+    final hadEntry = _entries.remove(sessionId) != null;
+
+    if (wasCurrent) {
+      await _activeSub?.cancel();
+      _activeSub = null;
+      _current = null;
+      _reconcileWakelock();
+    }
+
+    try {
+      await FileDownloader().cancelTaskWithId(sessionId);
+    } catch (e) {
+      debugPrint('[UploadController] cancelTaskWithId($sessionId) failed: $e');
+    }
+
+    try {
+      await _service.clearPendingComplete(sessionId);
+    } catch (e) {
+      debugPrint('[UploadController] clearPendingComplete failed: $e');
+    }
+
+    if (hadEntry) {
+      // ignore: unawaited_futures
+      _persistUploaded();
+      notifyListeners();
+    }
+
+    if (wasCurrent) {
+      // Let the next queued upload (if any) proceed.
+      _pump();
+    }
+  }
+
   void _pump() {
     if (_current != null) return;
     if (_queue.isEmpty) return;

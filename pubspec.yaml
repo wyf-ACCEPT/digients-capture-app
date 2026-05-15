@@ -64,15 +64,6 @@ dependencies:
   sensors_plus: ^7.0.0
   http: ^1.2.2
 
-  # Used specifically for streaming large file uploads (multi-GB recordings).
-  # package:http's StreamedRequest buffers the entire body in an unbounded
-  # in-memory queue with no backpressure, which OOM-crashed the app on 0.2.2+1
-  # for 3.5 GB takes. dio's `data: Stream<List<int>>` path propagates
-  # backpressure from URLSession upstream, so memory stays bounded and
-  # `onSendProgress` reflects real network throughput rather than disk-read
-  # speed.
-  dio: ^5.7.0
-
   # Hand-presence feedback (V2 addendum)
   just_audio: ^0.9.42
   audio_session: ^0.1.21
@@ -90,6 +81,13 @@ dependencies:
   # First-frame thumbnail extraction for the submissions list. iOS:
   # AVAssetImageGenerator. Android: MediaMetadataRetriever.getFrameAtTime.
   video_thumbnail: ^0.5.3
+
+  # iOS background URLSession (`nsurlsessiond`) wrapper for multi-GB S3
+  # uploads that need to survive lock-screen, app-switch, and jetsam. The
+  # plugin internally references PHPhotoLibrary APIs for a "download to
+  # camera roll" code path we never invoke — that's why Info.plist
+  # declares NSPhotoLibraryUsageDescription (ASC's static analyzer flags
+  # the bundled symbol regardless of runtime use).
   background_downloader: ^8.6.0
 
 dev_dependencies:

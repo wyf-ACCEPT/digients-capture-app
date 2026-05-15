@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -94,6 +93,12 @@ abstract class UploadService {
   // already-completed submission is safe.
   Future<List<String>> recoverPendingCompletes(
       AccessTokenProvider getAccessToken);
+
+  // Phase D: drop any persisted pending-complete marker for this
+  // sessionId. Used when the user deletes a recording while its upload
+  // is in flight — we'll be canceling the background task on the way
+  // out, and there's nothing to recover after that.
+  Future<void> clearPendingComplete(String sessionId);
 }
 
 // In-memory fake. Walks 0% -> 100% across `_durationMs` and either completes
@@ -170,19 +175,23 @@ class MockUploadService implements UploadService {
   Future<List<String>> recoverPendingCompletes(
       AccessTokenProvider getAccessToken) async =>
       const <String>[]; // mock has no real backend to recover against
+
+  @override
+  Future<void> clearPendingComplete(String sessionId) async {} // no-op
 }
 
 // Real backend implementation. Three-legged flow against digients-api:
 //   1. POST /v1/submissions/init with session/device metadata, get back a
 //      pre-signed PUT URL (TTL ~15min) and the matching submission id.
 //   2. HTTP PUT the tar.gz body to S3 directly via the pre-signed URL.
-//      Body is streamed off disk via dio — URLSession applies backpressure
-//      so memory stays bounded even for multi-GB takes (a prior http.dart
-//      StreamedRequest implementation OOM-crashed on 3.5 GB uploads because
-//      its sink was unbounded and the file was read into RAM at disk speed).
-//      Progress events come from dio's onSendProgress, which fires as bytes
-//      are actually consumed by the underlying HttpClient — reflecting real
-//      network throughput, not disk-read speed.
+//      Body is uploaded via the background_downloader plugin, which hands
+//      the file to iOS background URLSession (`nsurlsessiond` daemon). The
+//      daemon owns the transfer and outlives the app process, so lock-
+//      screen / app-switch / jetsam do not interrupt multi-GB uploads.
+//      (History: dio's default URLSession-based path worked but got killed
+//      seconds after the app left the foreground. An even earlier path
+//      using `http.dart`'s `StreamedRequest` OOM-crashed on 3.5 GB takes
+//      because its sink was unbounded.)
 //   3. POST /v1/submissions/<id>/complete with final size + duration to
 //      flip the submission status uploading -> queued on the backend.
 //
@@ -204,33 +213,18 @@ class HttpUploadService implements UploadService {
   final String baseUrl;
   final DeviceIdService _deviceId;
   final http.Client _client;
-  // `_dio` and `_uploadTimeout` were the dio path before Phase B swapped
-  // `_putToS3` onto background_downloader. Kept around (with the dep) until
-  // Phase D verifies the new path holds and removes both at once — per the
-  // conservative-change discipline in .claude/plan/6e15-plan-background-upload.md.
-  // ignore: unused_field
-  final Dio _dio;
   final Duration _controlTimeout;
-  // ignore: unused_field
-  final Duration _uploadTimeout;
   final FlutterSecureStorage _secureStorage;
 
   HttpUploadService({
     required this.baseUrl,
     required DeviceIdService deviceId,
     http.Client? client,
-    Dio? dio,
     Duration controlTimeout = const Duration(seconds: 30),
-    // 2h is generous on purpose: a 3.5 GB take at 5 Mbps real upload finishes
-    // in ~93 min. Multi-part upload (planned) will replace this with per-part
-    // timeouts an order of magnitude smaller.
-    Duration uploadTimeout = const Duration(hours: 2),
     FlutterSecureStorage? secureStorage,
   })  : _deviceId = deviceId,
         _client = client ?? http.Client(),
-        _dio = dio ?? Dio(),
         _controlTimeout = controlTimeout,
-        _uploadTimeout = uploadTimeout,
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   @override
@@ -567,6 +561,10 @@ class HttpUploadService implements UploadService {
   }
 
   @override
+  Future<void> clearPendingComplete(String sessionId) =>
+      _clearPendingComplete(sessionId);
+
+  @override
   Future<List<String>> recoverPendingCompletes(
       AccessTokenProvider getAccessToken) async {
     final pending = await _readPendingComplete();
@@ -600,10 +598,20 @@ class HttpUploadService implements UploadService {
         await _clearPendingComplete(sessionId);
         continue;
       }
+      if (record.status == TaskStatus.failed ||
+          record.status == TaskStatus.canceled ||
+          record.status == TaskStatus.notFound) {
+        // Terminal failure for this PUT — /complete will never apply
+        // (S3 has nothing committed under this submission). Drop the
+        // marker so the map doesn't grow unbounded across cold starts.
+        // User retry creates a fresh /init + submission_id.
+        await _clearPendingComplete(sessionId);
+        continue;
+      }
       if (record.status != TaskStatus.complete) {
-        // Still running / failed / canceled. We only own the /complete
-        // recovery here; in-flight tasks come back via the global listener,
-        // failed/canceled the user can retry. Don't touch.
+        // Still running / enqueued / paused / waitingToRetry. Leave the
+        // marker; next hydrate (or the in-band /complete flow once the
+        // task finishes) will resolve it.
         continue;
       }
 

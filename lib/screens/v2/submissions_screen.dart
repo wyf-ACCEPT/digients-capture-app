@@ -440,6 +440,13 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
       ),
     );
     if (confirmed != true) return;
+    // Cancel any in-flight upload before deleting the archive on disk —
+    // otherwise nsurlsessiond keeps trying to PUT a file that's about to
+    // vanish, and pending-complete recovery markers would point at a
+    // deleted recording. See UploadController.cancel for full sequence.
+    if (mounted) {
+      await context.read<UploadController>().cancel(r.sessionId);
+    }
     await _manager.deleteRecording(r.sessionId);
     await _load();
   }

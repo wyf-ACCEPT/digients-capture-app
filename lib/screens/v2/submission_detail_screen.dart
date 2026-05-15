@@ -113,6 +113,11 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
       ),
     );
     if (confirmed != true) return;
+    // Cancel any in-flight upload before deleting on disk — same reasoning
+    // as the submissions-list delete path; see UploadController.cancel.
+    if (mounted) {
+      await context.read<UploadController>().cancel(_recording!.sessionId);
+    }
     await _manager.deleteRecording(_recording!.sessionId);
     if (!mounted) return;
     context.pop();
