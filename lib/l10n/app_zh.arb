@@ -272,6 +272,7 @@
   "uploadQueuedLabel": "排队中",
   "uploadCompressingShort": "压缩中",
   "uploadCompressingLong": "压缩中…",
+  "compressFailedShort": "压缩失败",
   "uploadFinalizingShort": "结尾中",
   "uploadFinalizingLong": "结尾中…",
   "uploadedLabel": "已上传",
@@ -279,8 +280,8 @@
   "uploadRetryShort": "重试",
   "uploadFailedShort": "失败",
   "uploadFailedRetry": "上传失败 — 点击重试",
-  "uploadForegroundBannerTitle": "上传中 — 请保持 App 在前台",
-  "uploadForegroundBannerBody": "锁屏或切换到其他 App 可能会中断大文件上传。后续版本将支持后台上传。",
+  "uploadForegroundBannerTitle": "上传中 — 建议保持 App 在前台",
+  "uploadForegroundBannerBody": "强制退出会取消上传。",
   "uploadFailedSnack": "上传失败：{error}",
   "@uploadFailedSnack": {
     "placeholders": {

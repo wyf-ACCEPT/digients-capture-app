@@ -514,10 +514,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadQueuedLabel => 'Queued';
 
   @override
-  String get uploadCompressingShort => 'Packing';
+  String get uploadCompressingShort => 'Compressing';
 
   @override
-  String get uploadCompressingLong => 'Packing…';
+  String get uploadCompressingLong => 'Compressing…';
+
+  @override
+  String get compressFailedShort => 'Compress failed';
 
   @override
   String get uploadFinalizingShort => 'Finishing';
@@ -542,11 +545,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadForegroundBannerTitle =>
-      'Upload in progress — keep app open';
+      'Upload in progress — keep app open if possible';
 
   @override
   String get uploadForegroundBannerBody =>
-      'Locking the screen or switching apps may interrupt large uploads. Background uploads are coming in a future build.';
+      'Force-quitting the app will cancel the upload.';
 
   @override
   String uploadFailedSnack(String error) {

@@ -76,7 +76,28 @@ class UploadController extends ChangeNotifier {
   })  : _service = service,
         _compression = compression,
         _auth = auth,
-        _storage = storage ?? const FlutterSecureStorage();
+        _storage = storage ?? const FlutterSecureStorage() {
+    // Mirror the active compression's byte-level progress onto the
+    // current entry so the submissions-list pill can render a real
+    // progress bar (not just a spinner) during the `compressing` stage.
+    // The queue notifies on every progress tick; we ignore notifies that
+    // don't pertain to the in-flight sid.
+    _compression.addListener(_onCompressionChanged);
+  }
+
+  void _onCompressionChanged() {
+    final sid = _current;
+    if (sid == null) return;
+    final entry = _entries[sid];
+    if (entry == null || entry.status != UploadStatus.compressing) return;
+    final p = _compression.progressOf(sid);
+    if ((p - entry.progress).abs() < 1e-4) return;
+    _entries[sid] = UploadEntry(
+      status: UploadStatus.compressing,
+      progress: p,
+    );
+    notifyListeners();
+  }
 
   // Restore the persisted "already uploaded" set from secure storage. Call
   // once at App startup before runApp so the first frame already reflects
@@ -436,6 +457,7 @@ class UploadController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _compression.removeListener(_onCompressionChanged);
     _activeSub?.cancel();
     // Best-effort release on teardown — don't strand a held wakelock if the
     // controller is disposed mid-upload (e.g., app shutting down).

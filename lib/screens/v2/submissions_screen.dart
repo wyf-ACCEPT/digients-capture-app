@@ -712,7 +712,7 @@ class _RecordingRow extends StatelessWidget {
                             case CompressionState.ready:
                               return const SizedBox.shrink();
                             case CompressionState.failed:
-                              return Text('compress failed',
+                              return Text(l10n.compressFailedShort,
                                   style: DCText.mono(
                                       size: 9,
                                       weight: FontWeight.w500,
@@ -729,7 +729,7 @@ class _RecordingRow extends StatelessWidget {
                                         strokeWidth: 1.5, color: c.accent),
                                   ),
                                   const SizedBox(width: 6),
-                                  Text('compressing',
+                                  Text(l10n.uploadCompressingShort,
                                       style: DCText.mono(
                                           size: 9,
                                           weight: FontWeight.w500,
@@ -889,7 +889,13 @@ class _UploadStatusPill extends StatelessWidget {
         break;
       case UploadStatus.compressing:
         icon = Icons.compress;
-        label = l10n.uploadCompressingShort;
+        // Show "compressing" until the worker isolate emits its first
+        // non-zero tick (a couple hundred ms in), then switch to the
+        // byte-level percent so the user sees real movement instead of
+        // a frozen label for the 20–30 s a 7 GB take takes to pack.
+        label = entry.progress > 0
+            ? '${(entry.progress * 100).round()}%'
+            : l10n.uploadCompressingShort;
         fg = c.accent;
         bg = c.accentTint;
         break;
@@ -919,7 +925,13 @@ class _UploadStatusPill extends StatelessWidget {
         break;
     }
 
-    final showProgressFill = entry.status == UploadStatus.uploading;
+    // Draw the progress fill for any state that carries a meaningful
+    // byte fraction. `compressing` only emits non-zero progress once the
+    // worker has actually started writing bytes, so guarding on
+    // `progress > 0` keeps a stray sub-zero-width fill from flashing in
+    // the first frame after pumping a new sid into compressing.
+    final showProgressFill = entry.status == UploadStatus.uploading ||
+        (entry.status == UploadStatus.compressing && entry.progress > 0);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

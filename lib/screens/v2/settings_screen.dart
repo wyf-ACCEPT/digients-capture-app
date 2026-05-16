@@ -148,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(title: l10n.settingsAbout, children: [
                   _SettingsRow(
                       label: l10n.settingsVersion,
-                      valueText: '2.0.0',
+                      valueText: '0.2.3(1)',
                       mono: true),
                   _SettingsRow(
                       label: l10n.settingsPrivacyPolicy,

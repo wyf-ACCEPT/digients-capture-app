@@ -200,6 +200,16 @@ class MockUploadService implements UploadService {
 // will 401 and the take ends up in `failed`. Retrying re-fetches a fresh
 // token via AuthController, so this self-heals on retry. Proper mid-flight
 // refresh is a fast-follow.
+// Routing slot for a single in-flight S3 PUT. The HttpUploadService
+// singleton listener on `FileDownloader().updates` keys events by taskId
+// (which equals sessionId for our uploads) and dispatches to the matching
+// entry's completer / onProgress.
+class _ActiveTask {
+  final Completer<void> completer;
+  final void Function(double fraction) onProgress;
+  _ActiveTask({required this.completer, required this.onProgress});
+}
+
 class HttpUploadService implements UploadService {
   // Phase C: secure-storage key for the "PUT done, /complete not yet acked"
   // map. JSON-encoded `{ sessionId: submissionId }`. Entries are added right
@@ -216,6 +226,16 @@ class HttpUploadService implements UploadService {
   final Duration _controlTimeout;
   final FlutterSecureStorage _secureStorage;
 
+  // Per-taskId state for in-flight S3 PUTs, plus the single subscription
+  // that fans events out to those entries. `FileDownloader().updates` is
+  // backed by a non-broadcast StreamController (see
+  // background_downloader/lib/src/base_downloader.dart:90), so listening
+  // per upload would crash on the second attempt with "Bad state: Stream
+  // has already been listened to". One service-wide listener avoids that
+  // and matches the plugin's intended usage pattern.
+  final Map<String, _ActiveTask> _activeTasks = {};
+  StreamSubscription<TaskUpdate>? _updatesSub;
+
   HttpUploadService({
     required this.baseUrl,
     required DeviceIdService deviceId,
@@ -226,6 +246,50 @@ class HttpUploadService implements UploadService {
         _client = client ?? http.Client(),
         _controlTimeout = controlTimeout,
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
+
+  // Lazy-init the singleton subscription. Idempotent across calls; the
+  // first _putToS3 wires it up and it lives until process death (no
+  // dispose path — the service is constructed once at app boot).
+  void _ensureUpdatesListener() {
+    if (_updatesSub != null) return;
+    _updatesSub = FileDownloader().updates.listen((update) {
+      final taskId = update.task.taskId;
+      final active = _activeTasks[taskId];
+      if (active == null) return; // foreign task or already resolved
+      if (update is TaskProgressUpdate) {
+        final fraction = update.progress.clamp(0.0, 1.0);
+        active.onProgress(fraction);
+      } else if (update is TaskStatusUpdate) {
+        if (active.completer.isCompleted) return;
+        switch (update.status) {
+          case TaskStatus.complete:
+            active.completer.complete();
+            break;
+          case TaskStatus.failed:
+            active.completer.completeError(UploadException(
+              update.exception?.description ?? 'Upload task failed',
+              code: 'put_failed',
+            ));
+            break;
+          case TaskStatus.canceled:
+            active.completer.completeError(UploadException(
+              'Upload canceled',
+              code: 'put_canceled',
+            ));
+            break;
+          case TaskStatus.notFound:
+            active.completer.completeError(UploadException(
+              'Upload task not found in system DB',
+              code: 'put_not_found',
+            ));
+            break;
+          default:
+            // running / enqueued / paused / waitingToRetry — keep waiting
+            break;
+        }
+      }
+    });
+  }
 
   @override
   Stream<UploadProgress> upload({
@@ -397,58 +461,53 @@ class HttpUploadService implements UploadService {
     // iOS 26.4 with a 1.6 GB take; event log confirmed nsurlsessiond
     // continued the transfer across multiple paused/hidden/resumed cycles.
     //
-    // background_downloader emits TaskStatusUpdate + TaskProgressUpdate on
-    // a global broadcast stream. We filter by taskId == sessionId, bridge
-    // progress events back into the local `controller` (so the rest of
-    // _run / UploadController doesn't know the transport changed), and use
-    // a Completer to convert the async "complete" event into a synchronous
-    // return from this function.
+    // Events flow through the service-wide singleton listener wired in
+    // `_ensureUpdatesListener`; here we just register a routing slot for
+    // this taskId and await its completer. See the `_activeTasks` field
+    // doc for why the listener has to be a singleton.
     //
-    // _uploadTimeout / _controlTimeout from dio path no longer apply —
-    // background_downloader has its own 7-day default TTL which is far
+    // _uploadTimeout / _controlTimeout from the dio path no longer apply —
+    // background_downloader has its own 7-day default TTL, which is far
     // more than enough for any single take. Per-part timeouts will come
     // back with multipart upload in Tier 3.
+    _ensureUpdatesListener();
+
+    // Purge any stale terminal record for this taskId before enqueuing.
+    // After a force-quit, iOS marks the prior background URLSession task
+    // as `canceled` and background_downloader persists that record in its
+    // local DB. A subsequent enqueue with the same taskId can then re-emit
+    // the canceled status on the updates stream, which the singleton
+    // listener would route to the *new* completer as a spurious
+    // `put_canceled`. Wiping the stale record makes the new enqueue start
+    // from a clean slate. Best-effort: a failure here just degrades to
+    // the old behaviour, it doesn't block the upload.
+    try {
+      final stale =
+          await FileDownloader().database.recordForId(sessionId);
+      if (stale != null &&
+          (stale.status == TaskStatus.canceled ||
+              stale.status == TaskStatus.failed ||
+              stale.status == TaskStatus.notFound)) {
+        await FileDownloader().database.deleteRecordWithId(sessionId);
+      }
+    } catch (e) {
+      debugPrint(
+          '[HttpUploadService] stale record purge for $sessionId failed: $e');
+    }
+
     final completer = Completer<void>();
-    final sub = FileDownloader().updates.listen((update) {
-      if (update.task.taskId != sessionId) return;
-      if (update is TaskProgressUpdate) {
+    _activeTasks[sessionId] = _ActiveTask(
+      completer: completer,
+      onProgress: (fraction) {
         if (controller.isClosed) return;
-        final fraction = update.progress.clamp(0.0, 1.0);
         controller.add(UploadProgress(
           fraction: fraction,
           bytesSent: (fraction * fileLength).round(),
           bytesTotal: fileLength,
         ));
-      } else if (update is TaskStatusUpdate) {
-        if (completer.isCompleted) return;
-        switch (update.status) {
-          case TaskStatus.complete:
-            completer.complete();
-            break;
-          case TaskStatus.failed:
-            completer.completeError(UploadException(
-              update.exception?.description ?? 'Upload task failed',
-              code: 'put_failed',
-            ));
-            break;
-          case TaskStatus.canceled:
-            completer.completeError(UploadException(
-              'Upload canceled',
-              code: 'put_canceled',
-            ));
-            break;
-          case TaskStatus.notFound:
-            completer.completeError(UploadException(
-              'Upload task not found in system DB',
-              code: 'put_not_found',
-            ));
-            break;
-          default:
-            // running / enqueued / paused / waitingToRetry — keep waiting
-            break;
-        }
-      }
-    });
+      },
+    );
+
     try {
       final task = UploadTask.fromFile(
         file: file,
@@ -471,7 +530,7 @@ class HttpUploadService implements UploadService {
       }
       await completer.future;
     } finally {
-      await sub.cancel();
+      _activeTasks.remove(sessionId);
     }
   }
 
@@ -606,6 +665,16 @@ class HttpUploadService implements UploadService {
         // marker so the map doesn't grow unbounded across cold starts.
         // User retry creates a fresh /init + submission_id.
         await _clearPendingComplete(sessionId);
+        // Also wipe the plugin DB record so a future retry on this same
+        // sessionId doesn't trip over the stale terminal status when it
+        // re-enqueues. (Defence in depth — _putToS3 also purges before
+        // enqueue, but doing it here keeps the DB tidy across cold starts.)
+        try {
+          await FileDownloader().database.deleteRecordWithId(sessionId);
+        } catch (e) {
+          debugPrint(
+              '[HttpUploadService] deleteRecordWithId($sessionId) failed: $e');
+        }
         continue;
       }
       if (record.status != TaskStatus.complete) {

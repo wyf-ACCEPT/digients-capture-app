@@ -32,9 +32,21 @@ class CompressionQueue extends ChangeNotifier {
   final Map<String, CompressionState> _states = {};
   final Map<String, List<Completer<String?>>> _waiters = {};
 
+  /// Byte-level fraction (0.0..1.0) of the in-flight tar+gzip build,
+  /// emitted by the worker isolate at ~10 Hz. Only populated while the
+  /// sid is `compressing`; cleared on terminal transition. UI consumers
+  /// read via [progressOf].
+  final Map<String, double> _progress = {};
+
   String? get current => _current;
   bool get isPaused => _paused;
   List<String> get pending => List.unmodifiable(_queue);
+
+  /// Byte-level compression progress (0.0..1.0) for [sessionId]. Returns
+  /// 0.0 when nothing is in flight or the sid isn't currently being
+  /// compressed — callers should pair this with [stateOf] to know
+  /// whether to render the value.
+  double progressOf(String sessionId) => _progress[sessionId] ?? 0.0;
 
   /// Live state for [sessionId]. Falls back to a disk check for ready —
   /// the queue itself doesn't track every recording, just ones we've
@@ -137,6 +149,7 @@ class CompressionQueue extends ChangeNotifier {
     final sid = _queue.removeAt(0);
     _current = sid;
     _states[sid] = CompressionState.compressing;
+    _progress[sid] = 0.0;
     notifyListeners();
     String? result;
     try {
@@ -147,7 +160,19 @@ class CompressionQueue extends ChangeNotifier {
       // call, this catches it.
       await _manager.ensureThumbnail(sid);
       notifyListeners();
-      result = await _manager.buildArchive(sid);
+      result = await _manager.buildArchive(
+        sid,
+        onProgress: (fraction) {
+          // Coalesce micro-deltas — the isolate already throttles to
+          // ~10 Hz, but identical fractions can still arrive when the
+          // throttle window aligns with the file boundary. Skip the
+          // notifyListeners() round-trip if nothing visible changed.
+          final prev = _progress[sid] ?? 0.0;
+          if ((fraction - prev).abs() < 0.001 && fraction < 1.0) return;
+          _progress[sid] = fraction;
+          notifyListeners();
+        },
+      );
       if (result != null) {
         // Halve disk usage by removing the loose metadata + video + motion
         // files; the archive contains them, and the thumbnail survives
@@ -160,6 +185,7 @@ class CompressionQueue extends ChangeNotifier {
     }
     _states[sid] =
         result != null ? CompressionState.ready : CompressionState.failed;
+    _progress.remove(sid);
     _current = null;
     notifyListeners();
     final waiters = _waiters.remove(sid);

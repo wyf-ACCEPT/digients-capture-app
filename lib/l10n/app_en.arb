@@ -270,8 +270,9 @@
     }
   },
   "uploadQueuedLabel": "Queued",
-  "uploadCompressingShort": "Packing",
-  "uploadCompressingLong": "Packing…",
+  "uploadCompressingShort": "Compressing",
+  "uploadCompressingLong": "Compressing…",
+  "compressFailedShort": "Compress failed",
   "uploadFinalizingShort": "Finishing",
   "uploadFinalizingLong": "Finishing up…",
   "uploadedLabel": "Uploaded",
@@ -279,8 +280,8 @@
   "uploadRetryShort": "Retry",
   "uploadFailedShort": "Failed",
   "uploadFailedRetry": "Upload failed — tap to retry",
-  "uploadForegroundBannerTitle": "Upload in progress — keep app open",
-  "uploadForegroundBannerBody": "Locking the screen or switching apps may interrupt large uploads. Background uploads are coming in a future build.",
+  "uploadForegroundBannerTitle": "Upload in progress — keep app open if possible",
+  "uploadForegroundBannerBody": "Force-quitting the app will cancel the upload.",
   "uploadFailedSnack": "Upload failed: {error}",
   "@uploadFailedSnack": {
     "placeholders": {

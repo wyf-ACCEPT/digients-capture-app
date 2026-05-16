@@ -513,6 +513,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uploadCompressingLong => '压缩中…';
 
   @override
+  String get compressFailedShort => '压缩失败';
+
+  @override
   String get uploadFinalizingShort => '结尾中';
 
   @override
@@ -534,11 +537,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uploadFailedRetry => '上传失败 — 点击重试';
 
   @override
-  String get uploadForegroundBannerTitle => '上传中 — 请保持 App 在前台';
+  String get uploadForegroundBannerTitle => '上传中 — 建议保持 App 在前台';
 
   @override
-  String get uploadForegroundBannerBody =>
-      '锁屏或切换到其他 App 可能会中断大文件上传。后续版本将支持后台上传。';
+  String get uploadForegroundBannerBody => '强制退出会取消上传。';
 
   @override
   String uploadFailedSnack(String error) {

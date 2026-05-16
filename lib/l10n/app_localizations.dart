@@ -1046,6 +1046,12 @@ abstract class AppLocalizations {
   /// **'压缩中…'**
   String get uploadCompressingLong;
 
+  /// No description provided for @compressFailedShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'压缩失败'**
+  String get compressFailedShort;
+
   /// No description provided for @uploadFinalizingShort.
   ///
   /// In zh, this message translates to:
@@ -1091,13 +1097,13 @@ abstract class AppLocalizations {
   /// No description provided for @uploadForegroundBannerTitle.
   ///
   /// In zh, this message translates to:
-  /// **'上传中 — 请保持 App 在前台'**
+  /// **'上传中 — 建议保持 App 在前台'**
   String get uploadForegroundBannerTitle;
 
   /// No description provided for @uploadForegroundBannerBody.
   ///
   /// In zh, this message translates to:
-  /// **'锁屏或切换到其他 App 可能会中断大文件上传。后续版本将支持后台上传。'**
+  /// **'强制退出会取消上传。'**
   String get uploadForegroundBannerBody;
 
   /// No description provided for @uploadFailedSnack.
