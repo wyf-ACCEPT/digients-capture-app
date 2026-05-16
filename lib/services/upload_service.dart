@@ -370,9 +370,15 @@ class HttpUploadService implements UploadService {
             }
             break;
           case TaskStatus.failed:
+            // Encode the HTTP response code into the exception so the
+            // caller can pattern-match on specific S3 failures (e.g.
+            // 403 = presigned URL expired -> re-presign + retry).
+            // Falls back to 'put_failed' when the plugin didn't surface
+            // a status code (network error before any response).
+            final status = update.responseStatusCode;
             active.completer.completeError(UploadException(
               update.exception?.description ?? 'Upload task failed',
-              code: 'put_failed',
+              code: status != null ? 'put_$status' : 'put_failed',
             ));
             break;
           case TaskStatus.canceled:
@@ -743,28 +749,16 @@ class HttpUploadService implements UploadService {
       final partFile = await _splitChunk(file, offset, size, partNum);
 
       try {
-        final url = await _postPartUrl(
+        final etag = await _uploadPartWithRetry(
           submissionId: submissionId,
-          partNumber: partNum,
-          accessToken: await getAccessToken(),
-        );
-
-        final etag = await _putPartAndWait(
           sessionId: sessionId,
           partNumber: partNum,
           partFile: partFile,
           partSize: size,
-          url: url,
-          onPartProgress: (frac) {
-            if (controller.isClosed) return;
-            final bytesInPart = (frac * size).round();
-            final totalSent = processedBytes + bytesInPart;
-            controller.add(UploadProgress(
-              fraction: totalSent / fileLength,
-              bytesSent: totalSent,
-              bytesTotal: fileLength,
-            ));
-          },
+          processedBytes: processedBytes,
+          fileLength: fileLength,
+          controller: controller,
+          getAccessToken: getAccessToken,
         );
 
         final completed = _CompletedPart(
@@ -792,6 +786,74 @@ class HttpUploadService implements UploadService {
         bytesSent: fileLength,
         bytesTotal: fileLength,
       ));
+    }
+  }
+
+  // Cap on per-part retry attempts before giving up. URL expiry (15 min
+  // S3 presign TTL) is the realistic case we want to absorb — on a slow
+  // link a single 25 MB part could plausibly exceed 15 min and need a
+  // re-presign. Hard-fail anything beyond three attempts so a genuinely
+  // broken upload doesn't loop forever.
+  static const int _partRetryBudget = 3;
+
+  // Run one part through `_postPartUrl + _putPartAndWait` with bounded
+  // retry on transient S3 failures (currently: 403 from an expired
+  // presigned URL). Re-presigns on each attempt and re-enqueues. The
+  // temp part file on disk is unchanged across attempts.
+  Future<String> _uploadPartWithRetry({
+    required String submissionId,
+    required String sessionId,
+    required int partNumber,
+    required File partFile,
+    required int partSize,
+    required int processedBytes,
+    required int fileLength,
+    required StreamController<UploadProgress> controller,
+    required AccessTokenProvider getAccessToken,
+  }) async {
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      final stopwatch = Stopwatch()..start();
+      final url = await _postPartUrl(
+        submissionId: submissionId,
+        partNumber: partNumber,
+        accessToken: await getAccessToken(),
+      );
+      try {
+        final etag = await _putPartAndWait(
+          sessionId: sessionId,
+          partNumber: partNumber,
+          partFile: partFile,
+          partSize: partSize,
+          url: url,
+          onPartProgress: (frac) {
+            if (controller.isClosed) return;
+            final bytesInPart = (frac * partSize).round();
+            final totalSent = processedBytes + bytesInPart;
+            controller.add(UploadProgress(
+              fraction: totalSent / fileLength,
+              bytesSent: totalSent,
+              bytesTotal: fileLength,
+            ));
+          },
+        );
+        stopwatch.stop();
+        debugPrint(
+            '[HttpUploadService] part $partNumber OK in ${stopwatch.elapsedMilliseconds}ms (attempt $attempt, ${partSize >> 10} KiB)');
+        return etag;
+      } on UploadException catch (e) {
+        stopwatch.stop();
+        final isExpiry = e.code == 'put_403';
+        if (isExpiry && attempt < _partRetryBudget) {
+          debugPrint(
+              '[HttpUploadService] part $partNumber URL expired after ${stopwatch.elapsedMilliseconds}ms (attempt $attempt/$_partRetryBudget) — re-presigning');
+          continue;
+        }
+        debugPrint(
+            '[HttpUploadService] part $partNumber FAILED after ${stopwatch.elapsedMilliseconds}ms (attempt $attempt, code=${e.code}): ${e.message}');
+        rethrow;
+      }
     }
   }
 
