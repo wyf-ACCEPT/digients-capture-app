@@ -270,16 +270,19 @@ class UploadController extends ChangeNotifier {
       _reconcileWakelock();
     }
 
+    // Tier 3: per-part task IDs (`'$sid.p$N'`) and the multipart-state
+    // persistence are both owned by the service. cancelInflight does the
+    // full teardown: cancel the current part task, POST /abort to free
+    // S3 partial state eagerly, delete temp part files, and wipe local
+    // persistence. The S3 bucket lifecycle is a safety net for the case
+    // where /abort itself fails.
     try {
-      await FileDownloader().cancelTaskWithId(sessionId);
+      await _service.cancelInflight(
+        sessionId,
+        getAccessToken: _auth.getFreshAccessToken,
+      );
     } catch (e) {
-      debugPrint('[UploadController] cancelTaskWithId($sessionId) failed: $e');
-    }
-
-    try {
-      await _service.clearPendingComplete(sessionId);
-    } catch (e) {
-      debugPrint('[UploadController] clearPendingComplete failed: $e');
+      debugPrint('[UploadController] cancelInflight($sessionId) failed: $e');
     }
 
     if (hadEntry) {
