@@ -25,7 +25,7 @@ void main() {
     final locale = LocaleController();
     final upload = UploadController(
       service: MockUploadService(),
-      compression: compressionQueue,
+      manager: recordings,
       auth: auth,
     );
     await tester.pumpWidget(DigientsApp(

@@ -7,32 +7,100 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
 
 import 'device_id_service.dart';
 
-// Client surface for the M-Upload-Lite pipeline (digients-api v1/submissions).
+// Client surface for the v2 multi-file upload pipeline
+// (digients-api /v2/submissions).
 //
-// The real flow is three-legged:
-//   1. POST /v1/submissions/init with {session_id, device_uuid, device_model,
-//      content_type} -> returns a pre-signed S3 PUT URL (15min TTL).
-//   2. PUT the tar.gz body to that URL directly. AWS S3 verifies the SigV4
-//      signature; the App never sees the AWS credentials.
-//   3. POST /v1/submissions/<id>/complete with {size_bytes, duration_sec} to
-//      flip the submission status uploading -> queued.
+// Replaces the v1 tar.gz-bundled flow with a 4-file direct-PUT pipeline:
+//   1. POST /v2/submissions/init with {session_id, device_uuid, device_model}
+//      -> returns submission_id + 4 pre-signed S3 PUT URLs (one per kind:
+//      video, metadata, motion, thumbnail). A url is `null` when the
+//      backend has already ack'd that file (server-side dedup on retry).
+//   2. PUT each file body to its URL in series. We serialize on purpose so
+//      a single phone's uplink isn't divided four ways — video alone is
+//      ~99% of the bytes anyway.
+//   3. After each PUT completes, POST
+//      /v2/submissions/<id>/complete?file=<kind> with {size_bytes,
+//      duration_sec} to mark that file ack'd. The backend flips status
+//      uploading -> queued only once all 4 columns are NOT NULL.
 //
 // UI code talks only to UploadService, so we can swap Mock <-> Http via
 // --dart-define=UPLOAD_BACKEND=mock|http exactly like AuthService.
 //
-// Each call returns a [Stream<UploadProgress>] so the UI can render a
-// progress bar without polling. The stream terminates with done() or
-// addError() — listeners derive uploading / uploaded / failed from
-// onData / onDone / onError respectively.
+// Each call returns a [Stream<UploadProgress>] that emits a combined,
+// byte-weighted progress fraction across all 4 files. The stream
+// terminates with done() on success or addError() on failure.
+
+// The 4 files that make up a single recording submission. Order in this
+// list is also the upload order — keep video first so the user sees the
+// big bar move right away (it's ~99% of the bytes).
+enum FileKind { video, metadata, motion, thumbnail }
+
+const List<FileKind> _kFileKinds = [
+  FileKind.video,
+  FileKind.metadata,
+  FileKind.motion,
+  FileKind.thumbnail,
+];
+
+extension FileKindExt on FileKind {
+  String get wireName {
+    switch (this) {
+      case FileKind.video:
+        return 'video';
+      case FileKind.metadata:
+        return 'metadata';
+      case FileKind.motion:
+        return 'motion';
+      case FileKind.thumbnail:
+        return 'thumbnail';
+    }
+  }
+
+  String get filename {
+    switch (this) {
+      case FileKind.video:
+        return 'video.mp4';
+      case FileKind.metadata:
+        return 'metadata.json';
+      case FileKind.motion:
+        return 'motion.jsonl';
+      case FileKind.thumbnail:
+        return 'thumbnail.jpg';
+    }
+  }
+
+  // Must match digients-api/src/lib/s3.ts CONTENT_TYPE_BY_KIND exactly —
+  // SigV4 verification on S3 fails if the PUT Content-Type doesn't match
+  // what was signed at /v2/init time.
+  String get contentType {
+    switch (this) {
+      case FileKind.video:
+        return 'video/mp4';
+      case FileKind.metadata:
+        return 'application/json';
+      case FileKind.motion:
+        return 'application/x-ndjson';
+      case FileKind.thumbnail:
+        return 'image/jpeg';
+    }
+  }
+}
+
+FileKind? _fileKindFromWire(String s) {
+  for (final k in _kFileKinds) {
+    if (k.wireName == s) return k;
+  }
+  return null;
+}
 
 // Where in the multi-stage upload pipeline a given progress event was
-// emitted. `uploading` is the only phase that carries a meaningful byte
-// fraction; `finalizing` is a no-percent sentinel telling the controller
-// the PUT is done and we're now waiting on the backend /complete round-
-// trip (which can take 1-3s — token refresh + cross-region D1 update).
+// emitted. `uploading` carries a byte-weighted fraction across all 4
+// files; `finalizing` is a no-percent sentinel meaning the last PUT has
+// landed and we're waiting on the trailing /complete round-trip.
 enum UploadPhase { uploading, finalizing }
 
 class UploadProgress {
@@ -65,48 +133,52 @@ class UploadException implements Exception {
 
 // Callback the service uses each time it needs an access token. We don't
 // take a token by value because uploads can run long (10+ min on slow
-// links) — by the time `complete` fires, the 15-minute access token captured
-// at upload-start may have expired. The callback resolves to a fresh token
-// each call, so the implementation can auto-refresh transparently.
+// links) — by the time `complete` fires, the 15-minute access token
+// captured at upload-start may have expired. The callback resolves to a
+// fresh token each call, so the implementation can auto-refresh
+// transparently.
 typedef AccessTokenProvider = Future<String> Function();
 
 abstract class UploadService {
-  // Streams progress events while the upload is in flight; closes normally
-  // on success and emits an [UploadException] via addError on failure.
+  // Streams progress events while the upload is in flight; closes
+  // normally on success and emits an [UploadException] via addError on
+  // failure. [recordingDir] holds the 4 source files
+  // (video.mp4 / metadata.json / motion.jsonl / thumbnail.jpg); the
+  // thumbnail is required (caller must ensureThumbnail before calling).
   Stream<UploadProgress> upload({
     required String sessionId,
-    required String archivePath,
-    required int sizeBytes,
+    required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
   });
 
-  // Phase C cold-start recovery: replay /complete for any upload whose
-  // S3 PUT succeeded (`background_downloader` reports `TaskStatus.complete`)
-  // but whose follow-up POST /v1/submissions/<id>/complete never landed —
-  // typically because the App was killed in the narrow window between PUT
-  // returning and /complete being invoked.
+  // Cold-start recovery: replay /complete for any (sessionId, fileKind)
+  // whose S3 PUT succeeded (background_downloader reports
+  // `TaskStatus.complete`) but whose follow-up /complete?file=<kind>
+  // never landed — typically because the App was killed in the narrow
+  // window between PUT returning and /complete being invoked.
   //
-  // Returns sessionIds that were successfully recovered, so the caller
-  // (UploadController.hydrate) can flip their UI state to `uploaded`.
-  // Server is idempotent on submission_id, so re-firing /complete for an
-  // already-completed submission is safe.
+  // Returns sessionIds that were fully recovered (all 4 file acks
+  // replayed), so UploadController.hydrate can flip them to `uploaded`.
   Future<List<String>> recoverPendingCompletes(
       AccessTokenProvider getAccessToken);
 
-  // Phase D: drop any persisted pending-complete marker for this
-  // sessionId. Used when the user deletes a recording while its upload
-  // is in flight — we'll be canceling the background task on the way
-  // out, and there's nothing to recover after that.
+  // Drop any persisted pending-complete markers for [sessionId]. Used
+  // when the user deletes a recording while its upload is in flight —
+  // the caller will cancel background tasks separately.
   Future<void> clearPendingComplete(String sessionId);
+
+  // Cancel any in-flight background_downloader tasks for [sessionId].
+  // Per-file taskIds are an implementation detail of HttpUploadService;
+  // wrapping the cancel here keeps callers (UploadController) ignorant
+  // of how many tasks back a single session.
+  Future<void> cancelInFlight(String sessionId);
 }
 
-// In-memory fake. Walks 0% -> 100% across `_durationMs` and either completes
-// or fails depending on `_failureRate`. Used by Jason to drive UX iteration
-// in the simulator/device before the real Http implementation is wired.
-//
-// Tunable via constructor args so we can dial up failures while testing the
-// retry path without touching the call site.
+// In-memory fake. Walks 0% -> 100% across `_durationMs` and either
+// completes or fails depending on `_failureRate`. Used by Jason to drive
+// UX iteration in the simulator/device before the real Http
+// implementation is wired.
 class MockUploadService implements UploadService {
   final Duration _duration;
   final double _failureRate;
@@ -126,8 +198,7 @@ class MockUploadService implements UploadService {
   @override
   Stream<UploadProgress> upload({
     required String sessionId,
-    required String archivePath,
-    required int sizeBytes,
+    required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
   }) {
@@ -136,11 +207,12 @@ class MockUploadService implements UploadService {
       microseconds: (_duration.inMicroseconds / _tickCount).round(),
     );
     final willFail = _rng.nextDouble() < _failureRate;
-    // If we're going to fail, fail somewhere between 20% and 80% — that's the
-    // realistic window for a network blip mid-upload.
     final failAtTick = willFail
         ? (_tickCount * (0.2 + _rng.nextDouble() * 0.6)).round()
         : -1;
+
+    // Pretend the take is ~1.5 GB for the mock progress display.
+    const fakeTotal = 1500 * 1024 * 1024;
 
     var tick = 0;
     Timer.periodic(tickInterval, (t) {
@@ -159,8 +231,8 @@ class MockUploadService implements UploadService {
       final fraction = (tick / _tickCount).clamp(0.0, 1.0);
       controller.add(UploadProgress(
         fraction: fraction,
-        bytesSent: (sizeBytes * fraction).round(),
-        bytesTotal: sizeBytes,
+        bytesSent: (fakeTotal * fraction).round(),
+        bytesTotal: fakeTotal,
       ));
       if (tick >= _tickCount) {
         t.cancel();
@@ -173,36 +245,19 @@ class MockUploadService implements UploadService {
 
   @override
   Future<List<String>> recoverPendingCompletes(
-      AccessTokenProvider getAccessToken) async =>
-      const <String>[]; // mock has no real backend to recover against
+          AccessTokenProvider getAccessToken) async =>
+      const <String>[];
 
   @override
-  Future<void> clearPendingComplete(String sessionId) async {} // no-op
+  Future<void> clearPendingComplete(String sessionId) async {}
+
+  @override
+  Future<void> cancelInFlight(String sessionId) async {}
 }
 
-// Real backend implementation. Three-legged flow against digients-api:
-//   1. POST /v1/submissions/init with session/device metadata, get back a
-//      pre-signed PUT URL (TTL ~15min) and the matching submission id.
-//   2. HTTP PUT the tar.gz body to S3 directly via the pre-signed URL.
-//      Body is uploaded via the background_downloader plugin, which hands
-//      the file to iOS background URLSession (`nsurlsessiond` daemon). The
-//      daemon owns the transfer and outlives the app process, so lock-
-//      screen / app-switch / jetsam do not interrupt multi-GB uploads.
-//      (History: dio's default URLSession-based path worked but got killed
-//      seconds after the app left the foreground. An even earlier path
-//      using `http.dart`'s `StreamedRequest` OOM-crashed on 3.5 GB takes
-//      because its sink was unbounded.)
-//   3. POST /v1/submissions/<id>/complete with final size + duration to
-//      flip the submission status uploading -> queued on the backend.
-//
-// Known gap: the access token is captured at call-time and used for both
-// /init and /complete. If the token expires mid-upload (>15 min), /complete
-// will 401 and the take ends up in `failed`. Retrying re-fetches a fresh
-// token via AuthController, so this self-heals on retry. Proper mid-flight
-// refresh is a fast-follow.
 // Routing slot for a single in-flight S3 PUT. The HttpUploadService
 // singleton listener on `FileDownloader().updates` keys events by taskId
-// (which equals sessionId for our uploads) and dispatches to the matching
+// (which is "<sessionId>:<wireName>") and dispatches to the matching
 // entry's completer / onProgress.
 class _ActiveTask {
   final Completer<void> completer;
@@ -211,14 +266,12 @@ class _ActiveTask {
 }
 
 class HttpUploadService implements UploadService {
-  // Phase C: secure-storage key for the "PUT done, /complete not yet acked"
-  // map. JSON-encoded `{ sessionId: submissionId }`. Entries are added right
-  // after /init succeeds (we know submissionId) and removed once /complete
-  // returns 2xx. Anything left at startup means the App was killed in the
-  // narrow window between PUT-complete and /complete-ack — `recoverPending
-  // Completes()` retries /complete for each.
-  static const _pendingCompleteKey =
-      'upload_service.pending_complete_v1';
+  // Per-file pending-complete map: `{ "<sid>:<wireName>": submissionId }`.
+  // We persist BEFORE each PUT enqueues so a cold start can match the
+  // background_downloader task record back to a submission id and replay
+  // /complete?file=<kind>. Entries are removed once the matching
+  // /complete returns 2xx.
+  static const _pendingCompleteKey = 'upload_service.pending_complete_v2';
 
   final String baseUrl;
   final DeviceIdService _deviceId;
@@ -227,12 +280,11 @@ class HttpUploadService implements UploadService {
   final FlutterSecureStorage _secureStorage;
 
   // Per-taskId state for in-flight S3 PUTs, plus the single subscription
-  // that fans events out to those entries. `FileDownloader().updates` is
-  // backed by a non-broadcast StreamController (see
-  // background_downloader/lib/src/base_downloader.dart:90), so listening
-  // per upload would crash on the second attempt with "Bad state: Stream
-  // has already been listened to". One service-wide listener avoids that
-  // and matches the plugin's intended usage pattern.
+  // that fans events out. `FileDownloader().updates` is backed by a
+  // non-broadcast StreamController, so listening per upload would crash
+  // on the second attempt with "Bad state: Stream has already been
+  // listened to". One service-wide listener matches the plugin's
+  // intended usage pattern.
   final Map<String, _ActiveTask> _activeTasks = {};
   StreamSubscription<TaskUpdate>? _updatesSub;
 
@@ -247,9 +299,6 @@ class HttpUploadService implements UploadService {
         _controlTimeout = controlTimeout,
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  // Lazy-init the singleton subscription. Idempotent across calls; the
-  // first _putToS3 wires it up and it lives until process death (no
-  // dispose path — the service is constructed once at app boot).
   void _ensureUpdatesListener() {
     if (_updatesSub != null) return;
     _updatesSub = FileDownloader().updates.listen((update) {
@@ -284,18 +333,19 @@ class HttpUploadService implements UploadService {
             ));
             break;
           default:
-            // running / enqueued / paused / waitingToRetry — keep waiting
             break;
         }
       }
     });
   }
 
+  String _taskId(String sessionId, FileKind kind) =>
+      '$sessionId:${kind.wireName}';
+
   @override
   Stream<UploadProgress> upload({
     required String sessionId,
-    required String archivePath,
-    required int sizeBytes,
+    required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
   }) {
@@ -304,7 +354,7 @@ class HttpUploadService implements UploadService {
     _run(
       controller: controller,
       sessionId: sessionId,
-      archivePath: archivePath,
+      recordingDir: recordingDir,
       durationSec: durationSec,
       getAccessToken: getAccessToken,
     );
@@ -314,7 +364,7 @@ class HttpUploadService implements UploadService {
   Future<void> _run({
     required StreamController<UploadProgress> controller,
     required String sessionId,
-    required String archivePath,
+    required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
   }) async {
@@ -322,18 +372,27 @@ class HttpUploadService implements UploadService {
       final deviceUuid = await _deviceId.getOrCreateUuid();
       final deviceModel = await _deviceId.getDeviceModelLabel();
 
-      final file = File(archivePath);
-      if (!await file.exists()) {
-        throw UploadException(
-          'Archive not found at $archivePath',
-          code: 'archive_missing',
-        );
+      // Stat the 4 source files up front. The thumbnail must exist —
+      // the backend requires all 4 columns NOT NULL to flip status, and
+      // there's no upstream retry path mid-flight if it's missing.
+      // Caller (UploadController) is responsible for ensureThumbnail()
+      // before invoking us.
+      final files = <FileKind, File>{};
+      final sizes = <FileKind, int>{};
+      for (final kind in _kFileKinds) {
+        final f = File(path.join(recordingDir, kind.filename));
+        if (!await f.exists()) {
+          throw UploadException(
+            '${kind.filename} not found in $recordingDir',
+            code: 'source_missing',
+          );
+        }
+        files[kind] = f;
+        sizes[kind] = await f.length();
       }
-      final fileLength = await file.length();
+      final totalBytes = sizes.values.fold<int>(0, (a, b) => a + b);
 
-      // Leg 1: init — server issues pre-signed PUT URL + submission row.
-      // Pull a fresh access token immediately before each control-plane call
-      // so an in-flight refresh (long PUT, long backoff) doesn't 401.
+      // Leg 1: init.
       final init = await _postInit(
         sessionId: sessionId,
         deviceUuid: deviceUuid,
@@ -341,66 +400,104 @@ class HttpUploadService implements UploadService {
         accessToken: await getAccessToken(),
       );
 
-      // Server-side dedup: if this (user, session) already finished, the
-      // server returns 409 with `already_uploaded: true`. Skip PUT + complete
-      // and synthesize a 100% progress event so the UI flips straight to
-      // "uploaded". The persisted session list in UploadController then keeps
-      // this state across App restarts.
+      // Server-side dedup: all 4 already ack'd (HTTP 409 path). Skip
+      // PUTs entirely and synthesize a 100% event so the UI flips to
+      // uploaded.
       if (init['already_uploaded'] == true) {
         controller.add(UploadProgress(
           fraction: 1.0,
-          bytesSent: fileLength,
-          bytesTotal: fileLength,
+          bytesSent: totalBytes,
+          bytesTotal: totalBytes,
         ));
         await controller.close();
         return;
       }
 
-      final uploadUrl = init['upload_url'] as String;
       final submissionId = init['submission_id'] as String;
+      final urlsRaw = (init['urls'] as Map?) ?? const {};
+      // Map every kind to either its URL or null (= already ack'd, skip).
+      final urls = <FileKind, String?>{
+        for (final k in _kFileKinds)
+          k: (urlsRaw[k.wireName] is String) ? urlsRaw[k.wireName] as String : null,
+      };
 
-      // Phase C: persist (sessionId -> submissionId) BEFORE the PUT starts,
-      // not after. If the App is killed mid-PUT, hydrate() can ask
-      // background_downloader for the task status: if `complete`, we still
-      // have the submissionId on disk and can fire /complete on recovery.
-      await _persistPendingComplete(sessionId, submissionId);
+      // Persist (sid:kind -> submissionId) for every kind we're about to
+      // PUT, BEFORE any enqueue. Cold-start recovery walks this map and
+      // looks up the matching background_downloader record; if the PUT
+      // landed during the killed-app window, recovery fires /complete.
+      for (final k in _kFileKinds) {
+        if (urls[k] != null) {
+          await _persistPendingComplete(sessionId, k, submissionId);
+        }
+      }
 
-      // Leg 2: PUT to S3 with byte-level progress. The pre-signed URL embeds
-      // its own auth (SigV4), so the access token never reaches AWS.
-      await _putToS3(
-        controller: controller,
-        sessionId: sessionId,
-        uploadUrl: uploadUrl,
-        file: file,
-        fileLength: fileLength,
-      );
+      // Leg 2: serial PUTs + per-file /complete after each.
+      final bytesUploaded = <FileKind, int>{
+        for (final k in _kFileKinds) k: 0,
+      };
 
-      // Signal the controller that the byte stream finished and we're now
-      // waiting on the backend round-trip. The /complete call below can
-      // take 1-3s (token refresh + cross-region D1 UPDATE), and that
-      // window used to look like a "stuck at 100%" hang in the UI.
-      if (!controller.isClosed) {
+      void emitOverall() {
+        if (controller.isClosed) return;
+        final sent = bytesUploaded.values.fold<int>(0, (a, b) => a + b);
+        final fraction = totalBytes == 0 ? 1.0 : sent / totalBytes;
         controller.add(UploadProgress(
-          fraction: 1.0,
-          bytesSent: fileLength,
-          bytesTotal: fileLength,
-          phase: UploadPhase.finalizing,
+          fraction: fraction.clamp(0.0, 1.0),
+          bytesSent: sent,
+          bytesTotal: totalBytes,
         ));
       }
 
-      // Leg 3: complete — flip status uploading -> queued. Re-fetch the
-      // token here in case the PUT ran long enough for the original to
-      // have expired.
-      await _postComplete(
-        submissionId: submissionId,
-        sizeBytes: fileLength,
-        durationSec: durationSec,
-        accessToken: await getAccessToken(),
-      );
+      for (final kind in _kFileKinds) {
+        final url = urls[kind];
+        if (url == null) {
+          // Server already has this file (partial dedup). Credit its full
+          // byte count to keep the progress bar honest.
+          bytesUploaded[kind] = sizes[kind]!;
+          emitOverall();
+          continue;
+        }
 
-      // Phase C: /complete acked — clear the recovery marker so we don't
-      // try to replay it on next startup.
-      await _clearPendingComplete(sessionId);
+        await _putToS3(
+          sessionId: sessionId,
+          kind: kind,
+          uploadUrl: url,
+          file: files[kind]!,
+          fileLength: sizes[kind]!,
+          onProgress: (fraction) {
+            bytesUploaded[kind] = (sizes[kind]! * fraction).round();
+            emitOverall();
+          },
+        );
+
+        // Clamp this file to its full size in case the final progress tick
+        // was throttled out before emitOverall saw 100%.
+        bytesUploaded[kind] = sizes[kind]!;
+        emitOverall();
+
+        // Per-file /complete ack. Re-fetch the token: long video PUTs
+        // can outlive the 15-min access TTL captured at /init.
+        await _postComplete(
+          submissionId: submissionId,
+          kind: kind,
+          sizeBytes: sizes[kind]!,
+          durationSec: kind == FileKind.video ? durationSec : null,
+          accessToken: await getAccessToken(),
+        );
+        await _clearPendingComplete(sessionId, kind);
+      }
+
+      // Signal finalizing — kept for parity with the v1 UI, though under
+      // /v2 the per-file /complete is interleaved with the PUTs so the
+      // tail is much shorter than the cross-region D1 round-trip used to
+      // be on v1.
+      if (!controller.isClosed) {
+        controller.add(UploadProgress(
+          fraction: 1.0,
+          bytesSent: totalBytes,
+          bytesTotal: totalBytes,
+          phase: UploadPhase.finalizing,
+        ));
+      }
 
       await controller.close();
     } catch (e, st) {
@@ -424,7 +521,7 @@ class HttpUploadService implements UploadService {
   }) async {
     final res = await _client
         .post(
-          Uri.parse('$baseUrl/v1/submissions/init'),
+          Uri.parse('$baseUrl/v2/submissions/init'),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $accessToken',
@@ -433,124 +530,99 @@ class HttpUploadService implements UploadService {
             'session_id': sessionId,
             'device_uuid': deviceUuid,
             'device_model': deviceModel,
-            'content_type': 'application/gzip',
           }),
         )
         .timeout(_controlTimeout);
     if (res.statusCode == 200 || res.statusCode == 409) {
-      // 200 = fresh init; 409 = server-side dedup hit (body carries
-      // `already_uploaded: true`). Both bodies are JSON.
+      // 200 = fresh init or partial dedup (some urls null);
+      // 409 = full dedup (`already_uploaded: true` in body).
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
     throw _httpException(res, fallbackCode: 'init_failed');
   }
 
   Future<void> _putToS3({
-    required StreamController<UploadProgress> controller,
     required String sessionId,
+    required FileKind kind,
     required String uploadUrl,
     required File file,
     required int fileLength,
+    required void Function(double fraction) onProgress,
   }) async {
-    // Hand the PUT off to iOS background URLSession via the
-    // background_downloader plugin (`nsurlsessiond` daemon). Unlike dio's
-    // default URLSession, nsurlsessiond outlives the app process: lock
-    // screen, app switch, jetsam kill — the upload keeps going until iOS
-    // either delivers it or cancels (e.g., user force-quits, 7-day TTL).
-    // Phase A spike (commit fba0f17) validated lock-screen survival on
-    // iOS 26.4 with a 1.6 GB take; event log confirmed nsurlsessiond
-    // continued the transfer across multiple paused/hidden/resumed cycles.
-    //
-    // Events flow through the service-wide singleton listener wired in
-    // `_ensureUpdatesListener`; here we just register a routing slot for
-    // this taskId and await its completer. See the `_activeTasks` field
-    // doc for why the listener has to be a singleton.
-    //
-    // _uploadTimeout / _controlTimeout from the dio path no longer apply —
-    // background_downloader has its own 7-day default TTL, which is far
-    // more than enough for any single take. Per-part timeouts will come
-    // back with multipart upload in Tier 3.
+    // Background URLSession via background_downloader — outlives the app
+    // process so multi-GB video PUTs survive lock screen / app switch /
+    // jetsam. (See git history before plan 6e19 for the v1 OOM and
+    // dio-vs-http journey that landed us here.)
     _ensureUpdatesListener();
 
-    // Purge any stale terminal record for this taskId before enqueuing.
-    // After a force-quit, iOS marks the prior background URLSession task
-    // as `canceled` and background_downloader persists that record in its
-    // local DB. A subsequent enqueue with the same taskId can then re-emit
-    // the canceled status on the updates stream, which the singleton
-    // listener would route to the *new* completer as a spurious
-    // `put_canceled`. Wiping the stale record makes the new enqueue start
-    // from a clean slate. Best-effort: a failure here just degrades to
-    // the old behaviour, it doesn't block the upload.
+    final taskId = _taskId(sessionId, kind);
+
+    // Purge any stale terminal record so a retry on the same taskId
+    // doesn't re-emit the old canceled / failed status to our new
+    // completer.
     try {
-      final stale =
-          await FileDownloader().database.recordForId(sessionId);
+      final stale = await FileDownloader().database.recordForId(taskId);
       if (stale != null &&
           (stale.status == TaskStatus.canceled ||
               stale.status == TaskStatus.failed ||
               stale.status == TaskStatus.notFound)) {
-        await FileDownloader().database.deleteRecordWithId(sessionId);
+        await FileDownloader().database.deleteRecordWithId(taskId);
       }
     } catch (e) {
       debugPrint(
-          '[HttpUploadService] stale record purge for $sessionId failed: $e');
+          '[HttpUploadService] stale record purge for $taskId failed: $e');
     }
 
     final completer = Completer<void>();
-    _activeTasks[sessionId] = _ActiveTask(
+    _activeTasks[taskId] = _ActiveTask(
       completer: completer,
-      onProgress: (fraction) {
-        if (controller.isClosed) return;
-        controller.add(UploadProgress(
-          fraction: fraction,
-          bytesSent: (fraction * fileLength).round(),
-          bytesTotal: fileLength,
-        ));
-      },
+      onProgress: onProgress,
     );
 
     try {
       final task = UploadTask.fromFile(
         file: file,
-        taskId: sessionId,
+        taskId: taskId,
         url: uploadUrl,
         httpRequestMethod: 'PUT',
-        // `post: 'binary'` puts the raw file body as the HTTP body (vs
-        // multipart/form-data which is the default). S3 presigned PUT
+        // `post: 'binary'` puts the raw file body as the HTTP body
+        // (vs multipart/form-data, the plugin default). S3 presigned PUT
         // expects raw bytes.
         post: 'binary',
-        headers: const {'Content-Type': 'application/gzip'},
+        headers: {'Content-Type': kind.contentType},
         updates: Updates.statusAndProgress,
       );
       final enqueued = await FileDownloader().enqueue(task);
       if (!enqueued) {
         throw UploadException(
-          'FileDownloader.enqueue returned false (taskId=$sessionId)',
+          'FileDownloader.enqueue returned false (taskId=$taskId)',
           code: 'enqueue_failed',
         );
       }
       await completer.future;
     } finally {
-      _activeTasks.remove(sessionId);
+      _activeTasks.remove(taskId);
     }
   }
 
   Future<void> _postComplete({
     required String submissionId,
+    required FileKind kind,
     required int sizeBytes,
-    required double durationSec,
+    required double? durationSec,
     required String accessToken,
   }) async {
+    final body = <String, dynamic>{'size_bytes': sizeBytes};
+    if (durationSec != null) body['duration_sec'] = durationSec;
     final res = await _client
         .post(
-          Uri.parse('$baseUrl/v1/submissions/$submissionId/complete'),
+          Uri.parse(
+              '$baseUrl/v2/submissions/$submissionId/complete?file=${kind.wireName}'),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $accessToken',
           },
-          body: jsonEncode({
-            'size_bytes': sizeBytes,
-            'duration_sec': durationSec,
-          }),
+          body: jsonEncode(body),
         )
         .timeout(_controlTimeout);
     if (res.statusCode != 204) {
@@ -576,7 +648,7 @@ class HttpUploadService implements UploadService {
     }
   }
 
-  // --- Phase C: pending-complete recovery ---
+  // --- pending-complete recovery (per-file) ---
 
   Future<Map<String, String>> _readPendingComplete() async {
     try {
@@ -598,30 +670,49 @@ class HttpUploadService implements UploadService {
         value: jsonEncode(map),
       );
     } catch (e) {
-      // Persistence is best-effort — if it fails, the worst case is that we
-      // miss recovery on the next cold start. Server is idempotent on
-      // submission_id so a user-triggered retry still resolves it.
       debugPrint('[HttpUploadService] write pending-complete failed: $e');
     }
   }
 
   Future<void> _persistPendingComplete(
-      String sessionId, String submissionId) async {
+      String sessionId, FileKind kind, String submissionId) async {
     final m = await _readPendingComplete();
-    m[sessionId] = submissionId;
+    m[_taskId(sessionId, kind)] = submissionId;
     await _writePendingComplete(m);
   }
 
-  Future<void> _clearPendingComplete(String sessionId) async {
+  Future<void> _clearPendingComplete(String sessionId, FileKind kind) async {
     final m = await _readPendingComplete();
-    if (m.remove(sessionId) != null) {
+    if (m.remove(_taskId(sessionId, kind)) != null) {
       await _writePendingComplete(m);
     }
   }
 
   @override
-  Future<void> clearPendingComplete(String sessionId) =>
-      _clearPendingComplete(sessionId);
+  Future<void> clearPendingComplete(String sessionId) async {
+    final m = await _readPendingComplete();
+    final keys = m.keys
+        .where((k) => k.startsWith('$sessionId:'))
+        .toList(growable: false);
+    if (keys.isEmpty) return;
+    for (final k in keys) {
+      m.remove(k);
+    }
+    await _writePendingComplete(m);
+  }
+
+  @override
+  Future<void> cancelInFlight(String sessionId) async {
+    for (final k in _kFileKinds) {
+      final taskId = _taskId(sessionId, k);
+      try {
+        await FileDownloader().cancelTaskWithId(taskId);
+      } catch (e) {
+        debugPrint(
+            '[HttpUploadService] cancelTaskWithId($taskId) failed: $e');
+      }
+    }
+  }
 
   @override
   Future<List<String>> recoverPendingCompletes(
@@ -629,86 +720,80 @@ class HttpUploadService implements UploadService {
     final pending = await _readPendingComplete();
     if (pending.isEmpty) return const <String>[];
 
-    final recovered = <String>[];
-    // Snapshot before iterating — `_run` could also be writing to the same
-    // secure-storage key if the user kicked off an upload while hydrate
-    // is still running. Operating on the snapshot is safe; the per-entry
-    // remove at the end uses _clearPendingComplete which re-reads.
+    // Group entries by sessionId so we can report a sid as "recovered"
+    // only when all of its per-file entries either re-acked or were
+    // dropped as terminal failures (i.e. the sid is no longer holding
+    // unfinished business).
+    final bySid = <String, Map<FileKind, String>>{};
     for (final entry in pending.entries) {
-      final sessionId = entry.key;
-      final submissionId = entry.value;
+      final parts = entry.key.split(':');
+      if (parts.length != 2) continue;
+      final sid = parts[0];
+      final kind = _fileKindFromWire(parts[1]);
+      if (kind == null) continue;
+      (bySid[sid] ??= {})[kind] = entry.value;
+    }
 
-      // Look up the task in background_downloader's persisted DB. If the
-      // record is missing (DB pruned, task never enqueued) or in a non-
-      // terminal state, skip this entry — leave it for a future hydrate
-      // or for a user-triggered retry to re-resolve.
-      TaskRecord? record;
-      try {
-        record =
-            await FileDownloader().database.recordForId(sessionId);
-      } catch (e) {
-        debugPrint(
-            '[HttpUploadService] recordForId($sessionId) threw: $e');
-        continue;
-      }
-      if (record == null) {
-        // No tracked task — the PUT either never happened or its record
-        // was lost. Drop the marker; user retry triggers a fresh /init.
-        await _clearPendingComplete(sessionId);
-        continue;
-      }
-      if (record.status == TaskStatus.failed ||
-          record.status == TaskStatus.canceled ||
-          record.status == TaskStatus.notFound) {
-        // Terminal failure for this PUT — /complete will never apply
-        // (S3 has nothing committed under this submission). Drop the
-        // marker so the map doesn't grow unbounded across cold starts.
-        // User retry creates a fresh /init + submission_id.
-        await _clearPendingComplete(sessionId);
-        // Also wipe the plugin DB record so a future retry on this same
-        // sessionId doesn't trip over the stale terminal status when it
-        // re-enqueues. (Defence in depth — _putToS3 also purges before
-        // enqueue, but doing it here keeps the DB tidy across cold starts.)
+    final recovered = <String>[];
+    for (final sidEntry in bySid.entries) {
+      final sid = sidEntry.key;
+      final perKind = sidEntry.value;
+      var anyStillPending = false;
+
+      for (final k in _kFileKinds) {
+        final submissionId = perKind[k];
+        if (submissionId == null) continue; // not part of this sid's pending set
+
+        final taskId = _taskId(sid, k);
+        TaskRecord? record;
         try {
-          await FileDownloader().database.deleteRecordWithId(sessionId);
+          record = await FileDownloader().database.recordForId(taskId);
         } catch (e) {
           debugPrint(
-              '[HttpUploadService] deleteRecordWithId($sessionId) failed: $e');
+              '[HttpUploadService] recordForId($taskId) threw: $e');
+          anyStillPending = true;
+          continue;
         }
-        continue;
-      }
-      if (record.status != TaskStatus.complete) {
-        // Still running / enqueued / paused / waitingToRetry. Leave the
-        // marker; next hydrate (or the in-band /complete flow once the
-        // task finishes) will resolve it.
-        continue;
+        if (record == null) {
+          // No tracked task — PUT never happened or its record was lost.
+          // Drop the marker; a user-driven retry triggers fresh /init.
+          await _clearPendingComplete(sid, k);
+          continue;
+        }
+        if (record.status == TaskStatus.failed ||
+            record.status == TaskStatus.canceled ||
+            record.status == TaskStatus.notFound) {
+          await _clearPendingComplete(sid, k);
+          try {
+            await FileDownloader().database.deleteRecordWithId(taskId);
+          } catch (_) {}
+          continue;
+        }
+        if (record.status != TaskStatus.complete) {
+          anyStillPending = true;
+          continue;
+        }
+
+        try {
+          final sizeBytes = await _fileLengthForRecord(record);
+          await _postComplete(
+            submissionId: submissionId,
+            kind: k,
+            sizeBytes: sizeBytes,
+            durationSec: null,
+            accessToken: await getAccessToken(),
+          );
+          await _clearPendingComplete(sid, k);
+          debugPrint(
+              '[HttpUploadService] recovered /complete?file=${k.wireName} for $sid');
+        } catch (e) {
+          debugPrint(
+              '[HttpUploadService] /complete recovery for $taskId failed: $e');
+          anyStillPending = true;
+        }
       }
 
-      // PUT finished while we were dead. Replay /complete (idempotent).
-      try {
-        // sizeBytes / durationSec: we don't have these in the recovery
-        // path. Try the archive file we know the task was uploading
-        // from — background_downloader knows the file path. duration
-        // we have to guess (0 is honest — the field is informational).
-        final sizeBytes = await _fileLengthForRecord(record);
-        await _postComplete(
-          submissionId: submissionId,
-          sizeBytes: sizeBytes,
-          durationSec: 0,
-          accessToken: await getAccessToken(),
-        );
-        await _clearPendingComplete(sessionId);
-        recovered.add(sessionId);
-        debugPrint(
-            '[HttpUploadService] recovered /complete for $sessionId');
-      } catch (e) {
-        debugPrint(
-            '[HttpUploadService] /complete recovery for $sessionId failed: $e');
-        // Leave the entry — next hydrate will retry. If the server has
-        // permanently lost the submission row, this entry will sit
-        // forever; that's acceptable for the 99.99% case and Phase D
-        // can add a "give up after N retries" if it ever bites.
-      }
+      if (!anyStillPending) recovered.add(sid);
     }
     return recovered;
   }
@@ -716,12 +801,8 @@ class HttpUploadService implements UploadService {
   Future<int> _fileLengthForRecord(TaskRecord record) async {
     try {
       final task = record.task;
-      // UploadTask exposes filename + directory + baseDirectory; combine
-      // through Task.filePath() to get the absolute path on disk. If the
-      // file has been deleted since upload (e.g., user manually purged the
-      // recording), fall back to 0 — the size_bytes field is informational.
-      final path = await task.filePath();
-      final file = File(path);
+      final p = await task.filePath();
+      final file = File(p);
       if (await file.exists()) return await file.length();
     } catch (e) {
       debugPrint('[HttpUploadService] file size lookup failed: $e');

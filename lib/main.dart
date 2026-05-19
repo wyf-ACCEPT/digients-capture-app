@@ -76,7 +76,7 @@ void main() async {
       : HttpUploadService(baseUrl: apiBase, deviceId: deviceIdService);
   final uploadController = UploadController(
     service: uploadService,
-    compression: compressionQueue,
+    manager: recordingManager,
     auth: authController,
   );
   await uploadController.hydrate();

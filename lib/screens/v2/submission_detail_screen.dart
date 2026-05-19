@@ -62,12 +62,17 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
         box != null ? box.localToGlobal(Offset.zero) & box.size : null;
     final queue = context.read<CompressionQueue>();
     final sid = _recording!.sessionId;
+    // After /v2 upload (plan 6e19 §5.3) raw source files are cleaned up
+    // — if the cached archive isn't already on disk and the originals
+    // are gone, lazy build would silently fail. Tell the user instead.
+    if (!queue.isReady(sid) && !_manager.hasOriginalsSync(sid)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.shareUnavailableOriginalsGone)));
+      return;
+    }
     try {
-      // Common case after we ship: the archive was built right after the
-      // recording stopped, so this returns instantly. Slow path covers
-      // legacy recordings + ones whose compression hadn't finished yet
-      // when the user tapped Share — the modal then sits up while the
-      // queue's worker isolate finishes the build.
+      // Fast path: archive already on disk (built earlier by a prior
+      // share). Slow path: lazy build under the "compressing…" modal.
       final String? archivePath = queue.isReady(sid)
           ? await _manager.exportRecording(sid)
           : await withExportProgress<String?>(
@@ -320,16 +325,6 @@ class _CloudUploadButton extends StatelessWidget {
           label: isQueued ? l10n.uploadQueuedLabel : l10n.uploadToCloud,
           leadingIcon: Icons.cloud_upload_outlined,
           onPressed: isQueued ? null : () => controller.enqueue(recording),
-        );
-      case UploadStatus.compressing:
-        // Indeterminate stage: the tar+gzip isolate doesn't report progress,
-        // so show a sweeping bar and a label rather than a stale percent.
-        return _UploadingProgress(
-          fraction: null,
-          label: l10n.uploadCompressingLong,
-          accent: c.accent,
-          bg: c.surface,
-          border: c.borderStrong,
         );
       case UploadStatus.uploading:
         return _UploadingProgress(

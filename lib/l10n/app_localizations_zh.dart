@@ -452,6 +452,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get shareUnavailableOriginalsGone => '上传后原始文件已清理，无法再分享。';
+
+  @override
   String get shareSubjectRecording => '第一视角视频录制';
 
   @override

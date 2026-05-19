@@ -7,20 +7,21 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/recording.dart';
-import '../services/compression_queue.dart';
+import '../services/recording_manager.dart';
 import '../services/upload_service.dart';
 import 'auth_controller.dart';
 
 // Per-recording upload status. `idle` is the implicit default for any
-// sessionId we haven't touched yet. Pipeline (gated behind one button):
-//   idle / failed -> queued -> compressing -> uploading -> finalizing -> uploaded
-// `compressing` and `finalizing` carry no byte-level progress; the UI
-// renders them as spinner+label so the user knows the App is working
-// even though the percent isn't moving.
+// sessionId we haven't touched yet. Under the /v2 multi-file pipeline
+// (plan 6e19) the flow is:
+//   idle / failed -> queued -> uploading -> finalizing -> uploaded
+// The old `compressing` stage is gone — we no longer build a tar.gz on
+// the upload path. `finalizing` is a no-percent sentinel emitted by the
+// service after the last PUT lands while the trailing /complete?file=
+// round-trip is in flight.
 enum UploadStatus {
   idle,
   queued,
-  compressing,
   uploading,
   finalizing,
   uploaded,
@@ -41,14 +42,16 @@ class UploadEntry {
   static const idle = UploadEntry(status: UploadStatus.idle);
 }
 
-// Orchestrates uploads of completed recordings to the digients-api backend.
+// Orchestrates uploads of completed recordings to the digients-api
+// backend.
 //
 // `uploaded` sessionIds are persisted to secure storage so the App can
-// remember across cold launches which recordings already shipped — without
-// this, the row pill flips back to idle after every restart and the user
-// re-triggers an upload that the server then has to dedup. The server-side
-// dedup in /v1/submissions/init is the source of truth; this cache just
-// keeps the UI honest and avoids a wasted round-trip per stale recording.
+// remember across cold launches which recordings already shipped —
+// without this, the row pill flips back to idle after every restart and
+// the user re-triggers an upload that the server then has to dedup. The
+// server-side dedup in /v2/submissions/init is the source of truth; this
+// cache just keeps the UI honest and avoids a wasted round-trip per
+// stale recording.
 //
 // Concurrency: one upload at a time. Bulk requests queue serially. The
 // rationale is bandwidth fairness on a phone tethered to factory Wi-Fi —
@@ -58,7 +61,7 @@ class UploadController extends ChangeNotifier {
   static const _persistKey = 'upload_controller.uploaded_session_ids';
 
   final UploadService _service;
-  final CompressionQueue _compression;
+  final RecordingManager _manager;
   final AuthController _auth;
   final FlutterSecureStorage _storage;
 
@@ -70,55 +73,33 @@ class UploadController extends ChangeNotifier {
 
   UploadController({
     required UploadService service,
-    required CompressionQueue compression,
+    required RecordingManager manager,
     required AuthController auth,
     FlutterSecureStorage? storage,
   })  : _service = service,
-        _compression = compression,
+        _manager = manager,
         _auth = auth,
-        _storage = storage ?? const FlutterSecureStorage() {
-    // Mirror the active compression's byte-level progress onto the
-    // current entry so the submissions-list pill can render a real
-    // progress bar (not just a spinner) during the `compressing` stage.
-    // The queue notifies on every progress tick; we ignore notifies that
-    // don't pertain to the in-flight sid.
-    _compression.addListener(_onCompressionChanged);
-  }
+        _storage = storage ?? const FlutterSecureStorage();
 
-  void _onCompressionChanged() {
-    final sid = _current;
-    if (sid == null) return;
-    final entry = _entries[sid];
-    if (entry == null || entry.status != UploadStatus.compressing) return;
-    final p = _compression.progressOf(sid);
-    if ((p - entry.progress).abs() < 1e-4) return;
-    _entries[sid] = UploadEntry(
-      status: UploadStatus.compressing,
-      progress: p,
-    );
-    notifyListeners();
-  }
-
-  // Restore the persisted "already uploaded" set from secure storage. Call
-  // once at App startup before runApp so the first frame already reflects
-  // remembered state and we don't briefly show idle pills for known-uploaded
-  // recordings.
+  // Restore the persisted "already uploaded" set from secure storage.
+  // Call once at App startup before runApp so the first frame already
+  // reflects remembered state and we don't briefly show idle pills for
+  // known-uploaded recordings.
   //
-  // Phase C also drives cold-start recovery here:
+  // Also drives cold-start recovery:
   //   1. Enable background_downloader's persistent task DB (idempotent
-  //      across calls) so allTasks / recordForId can see tasks queued in
-  //      a previous app session.
-  //   2. Restore the `uploaded` set from secure storage (original behavior).
-  //   3. Ask UploadService.recoverPendingCompletes() to retry /complete for
-  //      any upload whose S3 PUT finished while the app was killed but
-  //      whose /complete call never landed. Recovered sessionIds are also
-  //      folded into the uploaded set so the UI reflects them.
+  //      across calls) so allTasks / recordForId can see tasks queued
+  //      in a previous app session.
+  //   2. Restore the `uploaded` set from secure storage.
+  //   3. Ask UploadService.recoverPendingCompletes() to retry
+  //      /complete?file=<kind> for any per-file PUT that finished while
+  //      the app was killed but whose /complete call never landed.
+  //      Recovered sessionIds (= all per-file entries resolved) are
+  //      folded into the uploaded set.
   Future<void> hydrate() async {
     try {
       await FileDownloader().trackTasks();
     } catch (e) {
-      // Not fatal — trackTasks failing only means we lose recovery on
-      // a subsequent cold start. Don't block hydrate.
       debugPrint('[UploadController] trackTasks failed: $e');
     }
 
@@ -153,13 +134,18 @@ class UploadController extends ChangeNotifier {
         changed = true;
       }
       if (recovered.isNotEmpty) {
-        // Fold the recovered ids into the persisted uploaded set so the
-        // next cold start doesn't need to re-recover.
         // ignore: unawaited_futures
         _persistUploaded();
+        // Best-effort post-recovery cleanup so resurrected uploads
+        // shed their originals like a happy-path completion would.
+        for (final sid in recovered) {
+          // ignore: unawaited_futures
+          _manager.cleanupOriginalsAfterUpload(sid);
+        }
       }
     } catch (e) {
-      debugPrint('[UploadController] hydrate recoverPendingCompletes failed: $e');
+      debugPrint(
+          '[UploadController] hydrate recoverPendingCompletes failed: $e');
     }
 
     if (changed) notifyListeners();
@@ -186,14 +172,13 @@ class UploadController extends ChangeNotifier {
   String? get currentSessionId => _current;
   int get queuedCount => _queue.length + (_current != null ? 1 : 0);
 
-  // Queue [recording] for upload. No-op if it's already in flight, queued,
-  // or already uploaded. A previously-failed recording can be re-queued —
-  // that's the retry path.
+  // Queue [recording] for upload. No-op if it's already in flight,
+  // queued, or already uploaded. A previously-failed recording can be
+  // re-queued — that's the retry path.
   void enqueue(Recording recording) {
     final sid = recording.sessionId;
     final current = entryFor(sid).status;
     if (current == UploadStatus.queued ||
-        current == UploadStatus.compressing ||
         current == UploadStatus.uploading ||
         current == UploadStatus.finalizing ||
         current == UploadStatus.uploaded) {
@@ -213,7 +198,6 @@ class UploadController extends ChangeNotifier {
       final sid = r.sessionId;
       final current = entryFor(sid).status;
       if (current == UploadStatus.queued ||
-          current == UploadStatus.compressing ||
           current == UploadStatus.uploading ||
           current == UploadStatus.finalizing ||
           current == UploadStatus.uploaded) {
@@ -230,32 +214,32 @@ class UploadController extends ChangeNotifier {
     }
   }
 
-  // Reset a failed recording back to idle so the UI can re-offer the upload
-  // button. Used when the user dismisses an error without retrying.
+  // Reset a failed recording back to idle so the UI can re-offer the
+  // upload button. Used when the user dismisses an error without
+  // retrying.
   void clearError(String sessionId) {
     if (entryFor(sessionId).status != UploadStatus.failed) return;
     _entries.remove(sessionId);
     notifyListeners();
   }
 
-  // Phase D: cancel any in-flight upload for [sessionId] and wipe all
-  // controller-side state for it. Called when the user deletes the
-  // recording from disk — the archive is about to disappear, so leaving
-  // the background_downloader task pointed at the (soon to be) missing
-  // file would just generate noise. Idempotent.
+  // Cancel any in-flight upload for [sessionId] and wipe all controller-
+  // side state for it. Called when the user deletes the recording from
+  // disk — files are about to disappear, so leaving the background
+  // tasks pointed at the (soon to be) missing files would just generate
+  // noise. Idempotent.
   //
   // Order of operations:
-  //   1. If this sid is currently uploading, cancel the active stream sub
-  //      and release wakelock if it's the last in-flight upload.
-  //   2. Cancel the background_downloader UploadTask so nsurlsessiond
-  //      stops trying to PUT a file that's about to vanish.
-  //   3. Clear the pending-complete marker so a future hydrate doesn't
-  //      try to replay /complete for a canceled task.
-  //   4. Wipe our local entry + queue tracking + persist (so the
-  //      submissions screen no longer shows any upload state for this
-  //      sid). Note: if the sid was already in the `uploaded` set, we
-  //      remove it from there too — the user deleted the recording, so
-  //      we don't owe them a "remembered as uploaded" marker either.
+  //   1. If this sid is currently uploading, cancel the active stream
+  //      sub and release wakelock if it's the last in-flight upload.
+  //   2. Ask UploadService to cancel its per-file background tasks for
+  //      this sid (under /v2 that's up to 4 tasks).
+  //   3. Clear all pending-complete markers for this sid so a future
+  //      hydrate doesn't try to replay /complete for a canceled upload.
+  //   4. Wipe our local entry + queue tracking + persist. If the sid
+  //      was in the `uploaded` set, remove it from there too — the user
+  //      deleted the recording, so we don't owe them a "remembered as
+  //      uploaded" marker either.
   Future<void> cancel(String sessionId) async {
     final wasCurrent = _current == sessionId;
 
@@ -271,9 +255,9 @@ class UploadController extends ChangeNotifier {
     }
 
     try {
-      await FileDownloader().cancelTaskWithId(sessionId);
+      await _service.cancelInFlight(sessionId);
     } catch (e) {
-      debugPrint('[UploadController] cancelTaskWithId($sessionId) failed: $e');
+      debugPrint('[UploadController] cancelInFlight($sessionId) failed: $e');
     }
 
     try {
@@ -289,7 +273,6 @@ class UploadController extends ChangeNotifier {
     }
 
     if (wasCurrent) {
-      // Let the next queued upload (if any) proceed.
       _pump();
     }
   }
@@ -300,33 +283,25 @@ class UploadController extends ChangeNotifier {
     final next = _queue.removeAt(0);
     final recording = _pending.remove(next);
     if (recording == null) {
-      // Shouldn't happen — pending is populated alongside the queue.
       _pump();
       return;
     }
     _current = next;
     _reconcileWakelock();
-    // Initial in-flight status is `compressing`: we now build the archive
-    // on demand inside _start rather than relying on a pre-built one. If
-    // it happens to already be on disk, _start will fast-path through
-    // this stage in milliseconds.
+    // Skip straight to `uploading`. Under /v2 there's no compression
+    // step on the upload path — the 4 source files go straight to S3.
     _entries[next] = const UploadEntry(
-      status: UploadStatus.compressing,
+      status: UploadStatus.uploading,
       progress: 0,
     );
     notifyListeners();
     _start(recording);
   }
 
-  // Keep the screen awake while any upload is in flight. iOS's default
-  // URLSession (what dio rides on) is killed seconds after the app goes
-  // into background — auto screen-lock counts as "background" and was the
-  // top cause of failed multi-GB uploads in Dylan's factory testing.
-  // This wakelock prevents the *idle timer* from firing; it does NOT stop
-  // the user from manually locking the screen or switching apps. The
-  // durable fix is Tier 2 (background URLSession via background_downloader)
-  // tracked in .claude/plan/6e15-plan-background-upload.md.
-  // Idempotent — multiple enable/disable calls collapse to the right state.
+  // Keep the screen awake while any upload is in flight. The
+  // background_downloader plugin survives lock screen on iOS via
+  // nsurlsessiond, but holding the wakelock is still cheap insurance
+  // against jetsam pressure on low-RAM devices.
   void _reconcileWakelock() {
     final shouldHold = _current != null;
     () async {
@@ -350,54 +325,46 @@ class UploadController extends ChangeNotifier {
       return;
     }
 
-    // Stage 1: build the archive if it isn't on disk yet. `waitForReady`
-    // enqueues the recording into the single-worker CompressionQueue and
-    // resolves with the archive path once the worker isolate finishes.
-    // We don't expose a byte-level percent here (the tar+gzip isolate
-    // doesn't report progress); the UI shows a spinner labelled "压缩中".
-    final String archive;
+    // Make sure the thumbnail is on disk — the backend requires all 4
+    // file slots to flip the submission to `queued`, and there's no
+    // mid-flight retry path if thumbnail generation fails after the
+    // other 3 files have already been ack'd.
     try {
-      final result = await _compression.waitForReady(sid);
-      if (result == null) {
-        _finishFailure(sid, 'Compression failed');
+      final thumb = await _manager.ensureThumbnail(sid);
+      if (thumb == null) {
+        _finishFailure(sid, 'Failed to generate thumbnail');
         return;
       }
-      archive = result;
     } catch (e) {
-      _finishFailure(sid, 'Compression error: $e');
+      _finishFailure(sid, 'Thumbnail error: $e');
       return;
     }
 
-    // Stage 2: upload. Flip to `uploading` with a fresh 0% baseline so the
-    // pill goes spinner -> progress bar at the right moment.
-    if (_current != sid) return; // Cancelled / superseded; bail.
-    _entries[sid] = const UploadEntry(
-      status: UploadStatus.uploading,
-      progress: 0,
-    );
-    notifyListeners();
+    final String recordingDir;
+    try {
+      recordingDir = await _manager.recordingDirFor(sid);
+    } catch (e) {
+      _finishFailure(sid, 'Recording dir lookup failed: $e');
+      return;
+    }
 
-    final sizeBytes = ((recording.fileSizeMB ?? 0) * 1024 * 1024).round();
+    if (_current != sid) return; // Cancelled / superseded; bail.
+
     final durationSec = (recording.durationSeconds ?? 0).toDouble();
 
     try {
       _activeSub = _service
           .upload(
             sessionId: sid,
-            archivePath: archive,
-            sizeBytes: sizeBytes,
+            recordingDir: recordingDir,
             durationSec: durationSec,
-            // The service pulls a fresh JWT immediately before each /init
-            // and /complete, so a long PUT can't strand the upload behind
-            // an expired access token.
             getAccessToken: _auth.getFreshAccessToken,
           )
           .listen(
             (p) {
               // `finalizing` is the service's signal that the byte stream
-              // closed and /complete is in flight (cross-region D1 update
-              // can take 1-3s). Render a spinner so the user knows we
-              // aren't hung at 100%.
+              // closed and the trailing /complete is in flight. Render a
+              // spinner so the user knows we aren't hung at 100%.
               final status = p.phase == UploadPhase.finalizing
                   ? UploadStatus.finalizing
                   : UploadStatus.uploading;
@@ -411,11 +378,6 @@ class UploadController extends ChangeNotifier {
               _finishFailure(sid, e.toString());
             },
             onDone: () {
-              // If the stream closes after an error we've already finalized
-              // the entry; don't overwrite the failure state with success.
-              // Stream may close from either `uploading` (server 409 dedup
-              // short-circuit) or `finalizing` (normal happy path after
-              // /complete returns).
               final st = entryFor(sid).status;
               if (st == UploadStatus.uploading ||
                   st == UploadStatus.finalizing) {
@@ -440,6 +402,10 @@ class UploadController extends ChangeNotifier {
     notifyListeners();
     // ignore: unawaited_futures
     _persistUploaded();
+    // Drop the loose source files now that S3 has the canonical copy.
+    // The thumbnail stays for the submissions-list card preview.
+    // ignore: unawaited_futures
+    _manager.cleanupOriginalsAfterUpload(sessionId);
     _pump();
   }
 
@@ -457,10 +423,7 @@ class UploadController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _compression.removeListener(_onCompressionChanged);
     _activeSub?.cancel();
-    // Best-effort release on teardown — don't strand a held wakelock if the
-    // controller is disposed mid-upload (e.g., app shutting down).
     // ignore: unawaited_futures
     WakelockPlus.disable().catchError((_) {});
     super.dispose();

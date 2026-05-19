@@ -455,18 +455,34 @@ class RecordingManager {
     }
   }
 
-  /// After a successful compression, remove the loose `metadata.json`,
-  /// `video.mp4`, and `motion.jsonl` so the recording dir holds only the
-  /// archive (sharable payload) and the thumbnail (UI preview). Halves
-  /// disk usage per recording.
+  /// Absolute path to the recording's directory on disk. Idempotent
+  /// directory create — safe to call before the native recorder has
+  /// written anything. Used by callers (UploadController, etc.) that
+  /// need to address files by FileKind without re-implementing the
+  /// `recording_<sid>` path scheme.
+  Future<String> recordingDirFor(String sessionId) async {
+    final Directory recordingsDir = await _getRecordingsDirectory();
+    _cachedRecordingsDir = recordingsDir;
+    return path.join(recordingsDir.path, 'recording_$sessionId');
+  }
+
+  /// After a successful upload, remove the loose `metadata.json`,
+  /// `video.mp4`, and `motion.jsonl` so the recording dir holds only
+  /// the thumbnail (for UI preview). Frees ~99% of the recording's disk
+  /// footprint while keeping the card preview alive.
   ///
-  /// Defensive: only runs when both the archive AND a thumbnail are
-  /// confirmed on disk. If either is missing we keep the raw files so a
-  /// retry build can still find them.
-  Future<void> cleanupOriginalsAfterCompression(String sessionId) async {
+  /// Unlike the v1 [cleanupOriginalsAfterCompression] this does NOT
+  /// require a tar.gz to exist — under the /v2 multi-file pipeline the
+  /// originals were uploaded directly. Defensive: requires the thumbnail
+  /// to be on disk, otherwise we leave everything intact so a retry can
+  /// still find the source files.
+  ///
+  /// Side effect for the share path: once originals are gone, a later
+  /// "share" of this recording can't lazy-build a tar.gz. Acceptable
+  /// trade-off — share is a pre-upload fallback by design (plan 6e19
+  /// §2.2). Submission_detail short-circuits with a clear toast.
+  Future<void> cleanupOriginalsAfterUpload(String sessionId) async {
     try {
-      final archive = await findArchivePath(sessionId);
-      if (archive == null) return;
       final thumb = await thumbnailPathFor(sessionId);
       if (!await File(thumb).exists()) return;
       final Directory recordingsDir = await _getRecordingsDirectory();
@@ -482,6 +498,18 @@ class RecordingManager {
     } catch (e) {
       print('Error cleaning up originals for $sessionId: $e');
     }
+  }
+
+  /// True when [sessionId]'s raw source files (video / metadata / motion)
+  /// still live on disk. Used by the share path to decide whether a
+  /// lazy tar.gz build is possible — after [cleanupOriginalsAfterUpload]
+  /// has run, only the thumbnail remains and share is unavailable.
+  bool hasOriginalsSync(String sessionId) {
+    final dir = _cachedRecordingsDir;
+    if (dir == null) return false;
+    final recDir = Directory(path.join(dir.path, 'recording_$sessionId'));
+    if (!recDir.existsSync()) return false;
+    return File(path.join(recDir.path, 'video.mp4')).existsSync();
   }
 
   /// If any tar.gz already exists for this recording (e.g. one named

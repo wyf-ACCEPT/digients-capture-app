@@ -459,6 +459,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get shareUnavailableOriginalsGone =>
+      'Originals removed after upload — share is unavailable.';
+
+  @override
   String get shareSubjectRecording => 'Egocentric Video Recording';
 
   @override

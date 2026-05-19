@@ -220,6 +220,7 @@
       }
     }
   },
+  "shareUnavailableOriginalsGone": "Originals removed after upload — share is unavailable.",
   "shareSubjectRecording": "Egocentric Video Recording",
   "shareTextRecording": "Egocentric video recording data package",
   "shareSubjectRecordings": "Egocentric Video Recordings ({count})",

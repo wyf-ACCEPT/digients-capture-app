@@ -173,13 +173,11 @@ class CompressionQueue extends ChangeNotifier {
           notifyListeners();
         },
       );
-      if (result != null) {
-        // Halve disk usage by removing the loose metadata + video + motion
-        // files; the archive contains them, and the thumbnail survives
-        // for UI. cleanupOriginalsAfterCompression refuses if either the
-        // archive or thumbnail is missing, so this is safe.
-        await _manager.cleanupOriginalsAfterCompression(sid);
-      }
+      // Under plan 6e19 (/v2 upload path) compression is only used for
+      // the share fallback, so the build no longer deletes originals —
+      // the user may still want to upload the recording after sharing.
+      // Originals are removed by UploadController after the multi-file
+      // upload ack (RecordingManager.cleanupOriginalsAfterUpload).
     } catch (_) {
       result = null;
     }

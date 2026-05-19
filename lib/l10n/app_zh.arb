@@ -220,6 +220,7 @@
       }
     }
   },
+  "shareUnavailableOriginalsGone": "上传后原始文件已清理，无法再分享。",
   "shareSubjectRecording": "第一视角视频录制",
   "shareTextRecording": "第一视角视频录制数据包",
   "shareSubjectRecordings": "第一视角视频录制（{count} 条）",

@@ -381,43 +381,19 @@ class _SubmissionsScreenState extends State<SubmissionsScreen> {
 
   Future<void> _bulkUploadToCloud() async {
     if (_selectedIds.isEmpty) return;
-    final l10n = context.l10n;
     final auth = context.read<AuthController>();
     if (!auth.canUpload) {
       await promptInviteCodeRequired(context, auth);
       return;
     }
     final upload = context.read<UploadController>();
-    final queue = context.read<CompressionQueue>();
     final selected =
         _recordings.where((r) => _selectedIds.contains(r.sessionId)).toList();
 
-    try {
-      // Ensure archives exist before queueing uploads. The UploadController
-      // would fail-fast otherwise; warming the compression queue first means
-      // the user sees a single "compressing…" modal instead of a parade of
-      // per-recording failure SnackBars.
-      final allReady = selected.every((r) => queue.isReady(r.sessionId));
-      if (!allReady) {
-        await withExportProgress<void>(
-          context,
-          initialMessage: l10n.compressingProgress(1, selected.length),
-          work: (progress) async {
-            for (int i = 0; i < selected.length; i++) {
-              progress.update(l10n.compressingProgress(i + 1, selected.length));
-              await queue.waitForReady(selected[i].sessionId);
-            }
-          },
-        );
-      }
-      if (!mounted) return;
-      upload.enqueueAll(selected);
-      _exitSelection();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.uploadFailedSnack(e.toString()))));
-    }
+    // /v2 uploads the 4 source files directly — no tar.gz pre-warm needed.
+    // UploadController handles thumbnail ensure + per-file dedup inside.
+    upload.enqueueAll(selected);
+    _exitSelection();
   }
 
   Future<void> _delete(Recording r) async {
@@ -887,18 +863,6 @@ class _UploadStatusPill extends StatelessWidget {
         fg = c.textDim;
         bg = c.surface2;
         break;
-      case UploadStatus.compressing:
-        icon = Icons.compress;
-        // Show "compressing" until the worker isolate emits its first
-        // non-zero tick (a couple hundred ms in), then switch to the
-        // byte-level percent so the user sees real movement instead of
-        // a frozen label for the 20–30 s a 7 GB take takes to pack.
-        label = entry.progress > 0
-            ? '${(entry.progress * 100).round()}%'
-            : l10n.uploadCompressingShort;
-        fg = c.accent;
-        bg = c.accentTint;
-        break;
       case UploadStatus.uploading:
         icon = Icons.cloud_upload_outlined;
         label = '${(entry.progress * 100).round()}%';
@@ -925,13 +889,7 @@ class _UploadStatusPill extends StatelessWidget {
         break;
     }
 
-    // Draw the progress fill for any state that carries a meaningful
-    // byte fraction. `compressing` only emits non-zero progress once the
-    // worker has actually started writing bytes, so guarding on
-    // `progress > 0` keeps a stray sub-zero-width fill from flashing in
-    // the first frame after pumping a new sid into compressing.
-    final showProgressFill = entry.status == UploadStatus.uploading ||
-        (entry.status == UploadStatus.compressing && entry.progress > 0);
+    final showProgressFill = entry.status == UploadStatus.uploading;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1015,7 +973,6 @@ class _RowUploadButton extends StatelessWidget {
           semanticLabel: l10n.uploadShort,
         );
       case UploadStatus.queued:
-      case UploadStatus.compressing:
       case UploadStatus.uploading:
       case UploadStatus.finalizing:
         return DCIconButton(

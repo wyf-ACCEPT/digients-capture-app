@@ -944,6 +944,12 @@ abstract class AppLocalizations {
   /// **'导出失败：{error}'**
   String exportFailed(String error);
 
+  /// No description provided for @shareUnavailableOriginalsGone.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传后原始文件已清理，无法再分享。'**
+  String get shareUnavailableOriginalsGone;
+
   /// No description provided for @shareSubjectRecording.
   ///
   /// In zh, this message translates to:
