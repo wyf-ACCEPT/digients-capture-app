@@ -67,11 +67,14 @@ Communication happens through a single MethodChannel: `'digients_app/camera'`
 ### Data Flow
 1. **Recording Request**: Flutter UI → Platform Channel → Native Camera Handler
 2. **Video Capture**: Native AVFoundation/Camera2 → Hardware HEVC Encoder → MP4 file
-3. **Intrinsics Capture**:
-   - iOS: Per-frame via `kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix` → `frames.jsonl`
-   - Android: Static via `LENS_INTRINSIC_CALIBRATION` or derived fallback → `metadata.json`
-4. **Metadata Generation**: Native platform info + camera specs → `metadata.json`
-5. **Export**: Dart tar.gz compression → Share sheet
+3. **Intrinsics Capture** (static, both platforms — written into `metadata.json`):
+   - iOS: Derived from `AVCaptureDevice` (focal length, pixel size, principal point)
+   - Android: Static via `LENS_INTRINSIC_CALIBRATION` or derived fallback
+4. **Motion Capture**: 100 Hz IMU stream (accelerometer + gyroscope) → `motion.jsonl`
+5. **Thumbnail**: First-frame JPEG extracted post-capture → `thumbnail.jpg`
+6. **Metadata Generation**: Native platform info + camera specs + static intrinsics → `metadata.json`
+7. **Upload (v2)**: 4 files direct-PUT to S3 via `digients-api` `/v2/submissions/*`. Backend serves both `/v1/` (legacy tar.gz, kept until 14-day 0-call alarm fires) and `/v2/` during transition; capture-app 0.2.4+ talks `/v2/`.
+8. **Export (lazy share fallback)**: On user share, Dart builds a tar.gz of the 4 files → Share sheet
 
 ### Critical Implementation Details
 
@@ -87,19 +90,20 @@ Communication happens through a single MethodChannel: `'digients_app/camera'`
 - **Audio: Intentionally disabled for privacy**
 - **Stabilization: Disabled to preserve intrinsics accuracy**
 
-#### Output Schema (Section 5 of MOBILE_APP_SPECS.md)
+#### Output Schema
 ```
 recording_<session_id>/
-├── metadata.json       # Complete session metadata
+├── metadata.json       # Session metadata + static camera intrinsics (both platforms)
 ├── video.mp4          # HEVC-encoded video
-└── frames.jsonl       # Per-frame intrinsics (iOS only)
+├── motion.jsonl       # 100 Hz IMU stream (accelerometer + gyroscope)
+└── thumbnail.jpg      # First-frame JPEG (retained after upload for UI card preview)
 ```
 
-Schema version is `"1.0"` and must match the validator expectations.
+After a successful /v2 upload, `metadata.json` / `video.mp4` / `motion.jsonl` are deleted locally to free disk; `thumbnail.jpg` stays. The legacy `frames.jsonl` (iOS per-frame intrinsics, v1.0 schema) is no longer produced — both platforms now write a single set of static intrinsics into `metadata.json`.
 
 #### Reliability Flagging
 The `intrinsics.reliable` boolean indicates whether downstream pipeline should trust the intrinsics:
-- **iOS**: `true` when per-frame intrinsics available AND stabilization disabled
+- **iOS**: `true` when static intrinsics derived from concrete `AVCaptureDevice` properties (not a fallback estimate) AND stabilization disabled
 - **Android**: `true` when `LENS_INTRINSIC_CALIBRATION` available AND hardware level FULL/LEVEL_3 AND stabilization disabled
 
 ## Key Constraints
@@ -107,7 +111,7 @@ The `intrinsics.reliable` boolean indicates whether downstream pipeline should t
 ### Privacy Requirements
 - **No audio recording at runtime**: The app does not capture audio. Native code paths do not call any microphone APIs.
 - **`NSMicrophoneUsageDescription` in Info.plist is required for App Store Connect upload (error 90683)**: audio-playback dependencies (`just_audio` for voice cues, `audio_session`, etc.) reference `AVAudioSession`, which Apple's static analyzer flags as needing a microphone usage description, even when only used for playback. The declared string honestly states "No audio is captured" so the runtime contract matches actual behavior. Do not remove this key.
-- **Local storage only**: No automatic cloud upload in v1
+- **User-initiated cloud upload**: Recordings upload to S3 (via `digients-api` `/v2/submissions/*`) only when the user explicitly taps Upload — no automatic background upload. After all 4 file acks land, the loose source files are removed locally; only `thumbnail.jpg` is retained for the submissions-list card. The legacy "local storage only" v1 stance is gone since 0.2.2 / Tier 1 cloud upload landed.
 
 ### Platform-Specific Considerations
 - **iOS**: Requires iOS 15.0+, `NSCameraUsageDescription` + `NSMicrophoneUsageDescription` (playback-only) in Info.plist, developer signing for device deployment
