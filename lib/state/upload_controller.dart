@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../fixtures/data.dart' show sceneMinorFromTaskId;
 import '../models/recording.dart';
 import '../services/recording_manager.dart';
 import '../services/upload_service.dart';
@@ -352,6 +353,17 @@ class UploadController extends ChangeNotifier {
 
     final durationSec = (recording.durationSeconds ?? 0).toDouble();
 
+    // WF2 (plan 6e20) scene tags. categoryId on Recording is the major
+    // slug; sceneMinorFromTaskId strips the `<major>-` prefix from the
+    // composite task id (e.g. `kitchen-cook` -> `cook`). When either is
+    // missing (older recordings made before the catalog was wired through),
+    // pass null and let the backend fall back to the pre-WF2 layout.
+    final sceneMajor =
+        (recording.categoryId != null && recording.categoryId!.isNotEmpty)
+            ? recording.categoryId
+            : null;
+    final sceneMinor = sceneMinorFromTaskId(recording.taskId, sceneMajor);
+
     try {
       _activeSub = _service
           .upload(
@@ -359,6 +371,8 @@ class UploadController extends ChangeNotifier {
             recordingDir: recordingDir,
             durationSec: durationSec,
             getAccessToken: _auth.getFreshAccessToken,
+            sceneMajor: sceneMajor,
+            sceneMinor: sceneMinor,
           )
           .listen(
             (p) {

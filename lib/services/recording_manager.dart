@@ -634,20 +634,28 @@ class RecordingManager {
     }
   }
 
-  // Build the export-facing slug for a recording. Used as the outer archive
-  // basename so the file the user shares encodes both scene and sub-task.
-  // Task IDs follow the convention `<2-letter-prefix>-<action-slug>` (e.g.
-  // `br-fold-clothes-multi`); we strip the prefix so the category is not
-  // double-encoded. Falls back gracefully when fields are missing on
-  // recordings persisted before this scheme.
+  // Build the export-facing slug for a recording. Used as the outer
+  // archive basename so the file the user shares encodes both major scene
+  // and minor task.
+  //
+  // WF2 catalog convention: task id is `<major>-<minor>` (e.g.
+  // `kitchen-cook`) and matches `categoryId-<minor>`. We strip the
+  // `<categoryId>-` prefix so the category isn't double-encoded.
+  //
+  // Legacy 0.2.3-era recordings used a 2-letter category abbrev prefix
+  // (`lr-pick-remote` under `living-room`); the fallback regex below keeps
+  // those exports readable until they age out.
   String _exportSlug(String sessionId, String? categoryId, String? taskId) {
     String? subSlug;
     if (taskId != null && taskId.isNotEmpty) {
-      // Match exactly the 2-letter category abbrev + dash (lr-, br-, kt-,
-      // bt-, cs-). Tasks that don't follow this convention pass through
-      // unchanged.
-      final match = RegExp(r'^[a-z]{2}-').firstMatch(taskId);
-      subSlug = match != null ? taskId.substring(match.end) : taskId;
+      if (categoryId != null &&
+          categoryId.isNotEmpty &&
+          taskId.startsWith('$categoryId-')) {
+        subSlug = taskId.substring(categoryId.length + 1);
+      } else {
+        final match = RegExp(r'^[a-z]{2}-').firstMatch(taskId);
+        subSlug = match != null ? taskId.substring(match.end) : taskId;
+      }
     }
     final hasCategory = categoryId != null && categoryId.isNotEmpty;
     final hasSub = subSlug != null && subSlug.isNotEmpty;

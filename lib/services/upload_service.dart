@@ -145,11 +145,18 @@ abstract class UploadService {
   // failure. [recordingDir] holds the 4 source files
   // (video.mp4 / metadata.json / motion.jsonl / thumbnail.jpg); the
   // thumbnail is required (caller must ensureThumbnail before calling).
+  //
+  // [sceneMajor] / [sceneMinor] are the WF2 scene tags (plan 6e20). Pass
+  // them together (both non-null) for the scene-tagged S3 layout; omit
+  // both (or null) to fall back to the pre-WF2 layout — backend honors
+  // either shape during the 0.2.4(1) → 0.2.4(2) rollout window.
   Stream<UploadProgress> upload({
     required String sessionId,
     required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
+    String? sceneMajor,
+    String? sceneMinor,
   });
 
   // Cold-start recovery: replay /complete for any (sessionId, fileKind)
@@ -201,6 +208,8 @@ class MockUploadService implements UploadService {
     required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
+    String? sceneMajor,
+    String? sceneMinor,
   }) {
     final controller = StreamController<UploadProgress>();
     final tickInterval = Duration(
@@ -348,6 +357,8 @@ class HttpUploadService implements UploadService {
     required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
+    String? sceneMajor,
+    String? sceneMinor,
   }) {
     final controller = StreamController<UploadProgress>();
     // ignore: unawaited_futures
@@ -357,6 +368,8 @@ class HttpUploadService implements UploadService {
       recordingDir: recordingDir,
       durationSec: durationSec,
       getAccessToken: getAccessToken,
+      sceneMajor: sceneMajor,
+      sceneMinor: sceneMinor,
     );
     return controller.stream;
   }
@@ -367,6 +380,8 @@ class HttpUploadService implements UploadService {
     required String recordingDir,
     required double durationSec,
     required AccessTokenProvider getAccessToken,
+    String? sceneMajor,
+    String? sceneMinor,
   }) async {
     try {
       final deviceUuid = await _deviceId.getOrCreateUuid();
@@ -397,6 +412,8 @@ class HttpUploadService implements UploadService {
         sessionId: sessionId,
         deviceUuid: deviceUuid,
         deviceModel: deviceModel,
+        sceneMajor: sceneMajor,
+        sceneMinor: sceneMinor,
         accessToken: await getAccessToken(),
       );
 
@@ -517,8 +534,25 @@ class HttpUploadService implements UploadService {
     required String sessionId,
     required String deviceUuid,
     required String deviceModel,
+    required String? sceneMajor,
+    required String? sceneMinor,
     required String accessToken,
   }) async {
+    final body = <String, dynamic>{
+      'session_id': sessionId,
+      'device_uuid': deviceUuid,
+      'device_model': deviceModel,
+    };
+    // Scene tags are wire-optional: backend either takes both or neither
+    // (per /v2/init validation in digients-api submissions-v2.ts). Only
+    // include when the caller provided a matched pair.
+    if (sceneMajor != null &&
+        sceneMajor.isNotEmpty &&
+        sceneMinor != null &&
+        sceneMinor.isNotEmpty) {
+      body['scene_major'] = sceneMajor;
+      body['scene_minor'] = sceneMinor;
+    }
     final res = await _client
         .post(
           Uri.parse('$baseUrl/v2/submissions/init'),
@@ -526,11 +560,7 @@ class HttpUploadService implements UploadService {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $accessToken',
           },
-          body: jsonEncode({
-            'session_id': sessionId,
-            'device_uuid': deviceUuid,
-            'device_model': deviceModel,
-          }),
+          body: jsonEncode(body),
         )
         .timeout(_controlTimeout);
     if (res.statusCode == 200 || res.statusCode == 409) {
