@@ -1,0 +1,30 @@
+pubspec.yaml
+  s_0b5468a725c646::t_8200aa571a369f 19
+  s_0b5468a725c646::t_94dfa079cc7c69 93-96
+lib/screens/v2/settings_screen.dart
+  s_0b5468a725c646::t_357e68023699ce 162-165,167-170,172-177,179-181
+  s_0b5468a725c646::t_d78e8bb2de2a08 178
+  s_0b5468a725c646::t_c0ba47b9f122df 203-213
+  s_0b5468a725c646::t_c9bcc61e5bbf0a 4,16-21
+  s_0b5468a725c646::t_8950f97fdc2f1e 159
+ios/Runner/Info.plist
+  s_0b5468a725c646::t_85016f3c4a1857 35-36
+pubspec.lock
+  ai_agent 685-708,717-724
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "e3525490fa7d0436371ca5d02ad964cca12ece9f",
+  "prompts": {},
+  "sessions": {
+    "s_0b5468a725c646": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b79203f-dac8-4eb8-9bd8-f7bfb97c439b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
