@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/tokens.dart';
 import '../../theme/text_styles.dart';
@@ -11,6 +12,13 @@ import '../../state/hand_presence_settings_controller.dart';
 import '../../state/locale_controller.dart';
 import '../../state/theme_controller.dart';
 import '../../fixtures/data.dart';
+
+// Public legal URLs. Terms of Service is not yet a separate page on the
+// marketing site — for now both rows open the privacy policy, which contains
+// the operative terms. Shawn to publish a standalone /legal/terms before
+// public App Store launch.
+const _privacyPolicyUrl = 'https://digients.tech/legal/privacy';
+const _termsOfServiceUrl = 'https://digients.tech/legal/privacy';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -148,18 +156,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(title: l10n.settingsAbout, children: [
                   _SettingsRow(
                       label: l10n.settingsVersion,
-                      valueText: '0.2.4(2)',
+                      valueText: '0.2.5(1)',
                       mono: true),
                   _SettingsRow(
-                      label: l10n.settingsPrivacyPolicy,
-                      trailing: Icon(Icons.chevron_right, color: c.textDim)),
+                    label: l10n.settingsPrivacyPolicy,
+                    trailing: Icon(Icons.chevron_right, color: c.textDim),
+                    onTap: () => _openExternal(context, _privacyPolicyUrl),
+                  ),
                   _SettingsRow(
-                      label: l10n.settingsTermsOfService,
-                      trailing: Icon(Icons.chevron_right, color: c.textDim)),
+                    label: l10n.settingsTermsOfService,
+                    trailing: Icon(Icons.chevron_right, color: c.textDim),
+                    onTap: () => _openExternal(context, _termsOfServiceUrl),
+                  ),
                   _SettingsRow(
-                      label: l10n.settingsOpenSourceLicenses,
-                      trailing: Icon(Icons.chevron_right, color: c.textDim),
-                      isLast: true),
+                    label: l10n.settingsOpenSourceLicenses,
+                    trailing: Icon(Icons.chevron_right, color: c.textDim),
+                    isLast: true,
+                    onTap: () => showLicensePage(
+                      context: context,
+                      applicationName: 'Digients Capture',
+                      applicationVersion: '0.2.5(1)',
+                      applicationLegalese: '© 2026 Digients Tech Pte. Ltd.',
+                    ),
+                  ),
                 ]),
                 _Section(title: '', children: [
                   _SettingsRow(
@@ -177,6 +196,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+Future<void> _openExternal(BuildContext context, String url) async {
+  final uri = Uri.parse(url);
+  final messenger = ScaffoldMessenger.of(context);
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok) {
+    messenger.showSnackBar(
+      SnackBar(content: Text('Could not open $url')),
     );
   }
 }

@@ -32,6 +32,8 @@
 	<string>This app needs camera access to capture egocentric video for robo foundation model training data collection. No audio is recorded to protect privacy.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app uses an audio framework for voice playback during recording. No audio is captured to protect privacy.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>This app reads accelerometer and gyroscope data alongside each video recording so the data can be used to train robotic foundation models. Motion data is stored only with recordings you choose to upload.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app does not access your Photo Library. A bundled upload framework (background_downloader) references Photos APIs that it never invokes in this app, but iOS requires this string be declared anyway.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
