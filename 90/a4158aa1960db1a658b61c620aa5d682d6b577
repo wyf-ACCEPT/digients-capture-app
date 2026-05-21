@@ -1,0 +1,21 @@
+CLAUDE.md
+  s_ec7379af36c47f::t_fa82677ed54a87 114
+  s_ec7379af36c47f::t_81f2c7c67a744e 70-77
+  s_ec7379af36c47f::t_075994a7efada4 93,96,98-99,102,106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "90a4158aa1960db1a658b61c620aa5d682d6b577",
+  "prompts": {},
+  "sessions": {
+    "s_ec7379af36c47f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af6e35cf-0aad-439b-83ea-e50b1dcdfd0e",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
