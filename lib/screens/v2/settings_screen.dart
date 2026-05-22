@@ -156,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(title: l10n.settingsAbout, children: [
                   _SettingsRow(
                       label: l10n.settingsVersion,
-                      valueText: '0.2.5(1)',
+                      valueText: '0.2.5(2)',
                       mono: true),
                   _SettingsRow(
                     label: l10n.settingsPrivacyPolicy,
@@ -175,7 +175,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => showLicensePage(
                       context: context,
                       applicationName: 'Digients Capture',
-                      applicationVersion: '0.2.5(1)',
+                      applicationVersion: '0.2.5(2)',
                       applicationLegalese: '© 2026 Digients Tech Pte. Ltd.',
                     ),
                   ),
@@ -187,9 +187,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => context.read<AuthController>().logout(),
                   ),
                   _SettingsRow(
-                      label: l10n.settingsDeleteAccount,
-                      danger: true,
-                      isLast: true),
+                    label: l10n.settingsDeleteAccount,
+                    danger: true,
+                    isLast: true,
+                    onTap: () => _confirmAndDeleteAccount(context),
+                  ),
                 ]),
               ],
             ),
@@ -208,6 +210,53 @@ Future<void> _openExternal(BuildContext context, String url) async {
     messenger.showSnackBar(
       SnackBar(content: Text('Could not open $url')),
     );
+  }
+}
+
+// In-app account deletion flow (Apple Guideline 5.1.1(v)). Shows a single
+// destructive confirm dialog summarizing what gets deleted and the 30-day
+// retention window, then calls AuthController.deleteAccount() which hits
+// DELETE /v1/auth/me on success. On error, surfaces a SnackBar and leaves
+// the session intact so the user can retry.
+Future<void> _confirmAndDeleteAccount(BuildContext context) async {
+  final isZh = Localizations.localeOf(context).languageCode == 'zh';
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(isZh ? '删除账号？' : 'Delete Account?'),
+      content: Text(
+        isZh
+            ? '此操作不可撤销。\n\n• 账户信息将在 30 天内删除\n• 所有上传的录制将在 30 天内删除\n• 已纳入训练数据集的部分不可撤回'
+            : 'This action cannot be undone.\n\n• Account information will be removed within 30 days\n• All uploaded recordings will be removed within 30 days\n• Data already incorporated into training datasets cannot be retroactively removed',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(isZh ? '取消' : 'Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: Text(isZh ? '删除' : 'Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  try {
+    await context.read<AuthController>().deleteAccount();
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isZh
+                ? '删除失败，请稍后重试'
+                : 'Failed to delete account, please try again',
+          ),
+        ),
+      );
+    }
   }
 }
 

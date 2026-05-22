@@ -47,6 +47,12 @@ abstract class AuthService {
   Future<AuthVerifyResponse> refresh({required String refreshToken});
 
   Future<void> logout({required String refreshToken});
+
+  // Soft-delete the authenticated user's account. Requires a fresh access
+  // token; the server sets users.deleted_at + drops all refresh tokens.
+  // After a successful call the local session and stored refresh token
+  // must be cleared by the caller.
+  Future<void> deleteAccount({required String accessToken});
 }
 
 class AuthException implements Exception {
@@ -136,6 +142,13 @@ class MockAuthService implements AuthService {
     await Future.delayed(_networkLatency);
     // ignore: avoid_print
     print('[MockAuth] Refresh token revoked');
+  }
+
+  @override
+  Future<void> deleteAccount({required String accessToken}) async {
+    await Future.delayed(_networkLatency);
+    // ignore: avoid_print
+    print('[MockAuth] Account soft-deleted');
   }
 
   AuthVerifyResponse _mintResponse({String? phone, String? email}) {
@@ -286,6 +299,30 @@ class HttpAuthService implements AuthService {
     final res = await _post('/v1/auth/logout', {'refreshToken': refreshToken});
     if (res.statusCode == 204) return;
     throw _toException(res, fallbackCode: 'logout_failed');
+  }
+
+  @override
+  Future<void> deleteAccount({required String accessToken}) async {
+    final uri = Uri.parse('$baseUrl/v1/auth/me');
+    try {
+      final res = await _client
+          .delete(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(_timeout);
+      if (res.statusCode == 204) return;
+      throw _toException(res, fallbackCode: 'delete_account_failed');
+    } on SocketException catch (e) {
+      throw AuthException('Network unreachable: ${e.message}', code: 'network');
+    } on TimeoutException {
+      throw AuthException('Request timed out', code: 'timeout');
+    } on http.ClientException catch (e) {
+      throw AuthException('Transport error: ${e.message}', code: 'transport');
+    }
   }
 
   AuthVerifyResponse _mintDemoSession() {

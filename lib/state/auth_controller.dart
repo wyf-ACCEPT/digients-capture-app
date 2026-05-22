@@ -207,6 +207,28 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  // Deletes the user's account on the server, then clears local session
+  // state. Demo sessions (no server-side row) skip the network call and
+  // just clear local state, matching the "Settings → Delete Account is
+  // also valid for demo users to wipe the local skip-sign-in session"
+  // contract. Errors from the server bubble up so the UI can show a
+  // toast and the user can retry; local state is only cleared on
+  // success, so a failed call leaves the session intact.
+  Future<void> deleteAccount() async {
+    final s = _session;
+    if (s == null) {
+      throw AuthException('Not authenticated', code: 'no_session');
+    }
+    final isDemo = !canUpload;
+    if (!isDemo) {
+      final accessToken = await getFreshAccessToken();
+      await _service.deleteAccount(accessToken: accessToken);
+    }
+    await _tokens.deleteRefreshToken();
+    _session = null;
+    notifyListeners();
+  }
+
   Future<void> _adopt(AuthVerifyResponse res) async {
     await _tokens.saveRefreshToken(res.refreshToken);
     _session = AuthSession(accessToken: res.accessToken, profile: res.profile);
