@@ -1,0 +1,31 @@
+lib/state/auth_controller.dart
+  s_0b5468a725c646::t_7de9c44db9d926 210-231
+lib/screens/v2/settings_screen.dart
+  s_0b5468a725c646::t_9fdab6495702cb 190-194
+  s_0b5468a725c646::t_adf1b653afefda 216-262
+  s_0b5468a725c646::t_f96d8ec3480d85 159,178
+pubspec.yaml
+  s_0b5468a725c646::t_7cdbe962ca8da1 19
+ios/Podfile.lock
+  ai_agent 40-41,61,94-95,116
+lib/services/auth_service.dart
+  s_0b5468a725c646::t_ab3e1b570f4cc3 304-327
+  s_0b5468a725c646::t_ad0e2d7e4c75b7 50-55
+  s_0b5468a725c646::t_9853a99c91743f 147-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "eda7ad11a8ef64e01ca27af30bc70a5950092665",
+  "prompts": {},
+  "sessions": {
+    "s_0b5468a725c646": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b79203f-dac8-4eb8-9bd8-f7bfb97c439b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
