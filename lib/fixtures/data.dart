@@ -34,6 +34,10 @@ const fixtureCategories = <Category>[
   Category(id: 'store',     title: '商店',                  taskCount: 4, rewardPoints: 800,  tall: true),
   Category(id: 'garment',   title: '制衣车间',              taskCount: 3, rewardPoints: 600),
   Category(id: 'repair',    title: '维修车间',              taskCount: 3, rewardPoints: 600),
+  // Catch-all: collectors should pick this when the actual scene doesn't
+  // fit any of the 7 industry verticals above. Keep the single 'misc'
+  // task — if a specific minor recurs, give it its own slot.
+  Category(id: 'other',     title: '其他场景',              taskCount: 1, rewardPoints: 200),
 ];
 
 const fixtureProfile = Profile(
@@ -433,6 +437,22 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '地面 / 工作台',
+    steps: [_kGenericStep],
+  ),
+
+  // ──────────────── 其他场景 ────────────────
+  Task(
+    id: 'other-misc',
+    categoryId: 'other',
+    tag: '其他',
+    title: '其他',
+    publisher: 'Digients Tasks',
+    rewardPoints: 200,
+    duration: '60–180 s',
+    slots: '0 / 50 slots',
+    difficulty: 'Easy',
+    lighting: 'Mixed',
+    surface: '未指定',
     steps: [_kGenericStep],
   ),
 ];
