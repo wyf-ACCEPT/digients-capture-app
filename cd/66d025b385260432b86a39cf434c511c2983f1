@@ -1,0 +1,20 @@
+lib/fixtures/data.dart
+  s_0b5468a725c646::t_6e6936b6cb2286 37-40
+  s_0b5468a725c646::t_f6f17e92a6b183 442-457
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "cd66d025b385260432b86a39cf434c511c2983f1",
+  "prompts": {},
+  "sessions": {
+    "s_0b5468a725c646": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b79203f-dac8-4eb8-9bd8-f7bfb97c439b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
