@@ -1,0 +1,19 @@
+android/settings.gradle
+  s_a7a7277cfead02::t_b97e5d273d0f20 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "b9d8d351f48859ffb6d9268e650066904947a372",
+  "prompts": {},
+  "sessions": {
+    "s_a7a7277cfead02": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7fdbb86-b195-44b8-92fb-e59d686b76db",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
