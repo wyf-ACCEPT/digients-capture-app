@@ -1,0 +1,19 @@
+android/app/build.gradle
+  s_0cf342cf5183d5::t_908027dccb97d0 23-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "ce22b622082fd8319cdf65ff18d2a250727cccf5",
+  "prompts": {},
+  "sessions": {
+    "s_0cf342cf5183d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a08f939c-9e50-46fe-9858-297a15046558",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
