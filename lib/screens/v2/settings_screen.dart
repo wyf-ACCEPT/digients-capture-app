@@ -156,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(title: l10n.settingsAbout, children: [
                   _SettingsRow(
                       label: l10n.settingsVersion,
-                      valueText: '0.2.5(2)',
+                      valueText: '0.2.5(3)',
                       mono: true),
                   _SettingsRow(
                     label: l10n.settingsPrivacyPolicy,
@@ -175,7 +175,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => showLicensePage(
                       context: context,
                       applicationName: 'Digients Capture',
-                      applicationVersion: '0.2.5(2)',
+                      applicationVersion: '0.2.5(3)',
                       applicationLegalese: '© 2026 Digients Tech Pte. Ltd.',
                     ),
                   ),

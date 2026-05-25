@@ -767,6 +767,222 @@ class AppLocalizationsZh extends AppLocalizations {
   String get surfaceCounter => '柜台';
 
   @override
+  String get categoryWarehouse => '仓库 / 快递仓 / 分拣站';
+
+  @override
+  String get categoryDelivery => '配送站';
+
+  @override
+  String get categoryInternet => '网吧';
+
+  @override
+  String get categoryStore => '商店';
+
+  @override
+  String get categoryGarment => '制衣车间';
+
+  @override
+  String get categoryRepair => '维修车间';
+
+  @override
+  String get categoryOther => '其他场景';
+
+  @override
+  String get taskTagProcessing => '处理';
+
+  @override
+  String get taskTagCooking => '烹饪';
+
+  @override
+  String get taskTagMixing => '调制';
+
+  @override
+  String get taskTagSorting => '分拣';
+
+  @override
+  String get taskTagPacking => '包装';
+
+  @override
+  String get taskTagHandling => '搬运';
+
+  @override
+  String get taskTagInventory => '盘点';
+
+  @override
+  String get taskTagDelivery => '配送';
+
+  @override
+  String get taskTagOperation => '操作';
+
+  @override
+  String get taskTagService => '服务';
+
+  @override
+  String get taskTagDisplay => '陈列';
+
+  @override
+  String get taskTagHandoff => '交付';
+
+  @override
+  String get taskTagSewing => '缝纫';
+
+  @override
+  String get taskTagRepair => '维修';
+
+  @override
+  String get taskTagTidying => '整理';
+
+  @override
+  String get taskTagOther => '其他';
+
+  @override
+  String get surfaceKitchenFloorWalls => '厨房地面 / 墙面';
+
+  @override
+  String get surfaceCounterUtensils => '台面 / 器具';
+
+  @override
+  String get surfaceSink => '水槽';
+
+  @override
+  String get surfaceStove => '炉灶';
+
+  @override
+  String get surfaceBar => '吧台';
+
+  @override
+  String get surfaceSortingTable => '分拣台';
+
+  @override
+  String get surfaceWorkbench => '工作台';
+
+  @override
+  String get surfaceWarehouseFloor => '仓库地面';
+
+  @override
+  String get surfaceShelving => '货架';
+
+  @override
+  String get surfaceDeliveryVehicle => '配送车 / 站点';
+
+  @override
+  String get surfaceParcelLocker => '快递柜';
+
+  @override
+  String get surfaceStationBar => '机位 / 吧台';
+
+  @override
+  String get surfaceStation => '机位';
+
+  @override
+  String get surfaceStationFloor => '机位 / 地面';
+
+  @override
+  String get surfaceCheckout => '收银台';
+
+  @override
+  String get surfaceFloorShelving => '地面 / 货架';
+
+  @override
+  String get surfaceSewingMachine => '缝纫机';
+
+  @override
+  String get surfaceSewingMachineFloor => '缝纫机 / 地面';
+
+  @override
+  String get surfaceWorkbenchToolRack => '工作台 / 工具架';
+
+  @override
+  String get surfaceFloorWorkbench => '地面 / 工作台';
+
+  @override
+  String get surfaceUnspecified => '未指定';
+
+  @override
+  String get taskKitchenCleanTitle => '环境清洁';
+
+  @override
+  String get taskKitchenToolsTitle => '台面与器具清洁';
+
+  @override
+  String get taskKitchenWashTitle => '食材清洗';
+
+  @override
+  String get taskKitchenCookTitle => '食材烹饪';
+
+  @override
+  String get taskKitchenDrinkTitle => '饮品制备';
+
+  @override
+  String get taskWarehouseSortTitle => '分拣与归类';
+
+  @override
+  String get taskWarehousePackTitle => '包装与封装';
+
+  @override
+  String get taskWarehouseLoadTitle => '货物搬运与装载';
+
+  @override
+  String get taskWarehouseInventoryTitle => '库存盘点与管理';
+
+  @override
+  String get taskWarehouseCleanTitle => '现场清洁维护';
+
+  @override
+  String get taskDeliverySortTitle => '包裹分拣';
+
+  @override
+  String get taskDeliveryDispatchTitle => '包裹装载与配送';
+
+  @override
+  String get taskDeliveryLockerTitle => '快递柜操作';
+
+  @override
+  String get taskInternetServeTitle => '服务递送';
+
+  @override
+  String get taskInternetOperateTitle => '设备控制与操作';
+
+  @override
+  String get taskInternetCleanTitle => '设备与环境清洁';
+
+  @override
+  String get taskStoreDisplayTitle => '商品摆放与陈列';
+
+  @override
+  String get taskStoreBagTitle => '商品包装与装袋';
+
+  @override
+  String get taskStoreHandoverTitle => '顾客递交与交付';
+
+  @override
+  String get taskStoreCleanTitle => '店面清洁维护';
+
+  @override
+  String get taskGarmentSewTitle => '衣物缝纫';
+
+  @override
+  String get taskGarmentFoldTitle => '衣物折叠';
+
+  @override
+  String get taskGarmentCleanTitle => '设备与环境清洁';
+
+  @override
+  String get taskRepairFixTitle => '维修与辅助';
+
+  @override
+  String get taskRepairTidyTitle => '维修车间整理';
+
+  @override
+  String get taskRepairCleanTitle => '环境清洁';
+
+  @override
+  String get taskOtherMiscTitle => '其他';
+
+  @override
+  String get taskGenericStep => '按真实工作场景采集，保持双手清晰可见，避免遮挡画面。';
+
+  @override
   String get taskLrPickRemoteTitle => '拿起并放置遥控器';
 
   @override

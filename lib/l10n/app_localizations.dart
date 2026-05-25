@@ -1538,6 +1538,438 @@ abstract class AppLocalizations {
   /// **'柜台'**
   String get surfaceCounter;
 
+  /// No description provided for @categoryWarehouse.
+  ///
+  /// In zh, this message translates to:
+  /// **'仓库 / 快递仓 / 分拣站'**
+  String get categoryWarehouse;
+
+  /// No description provided for @categoryDelivery.
+  ///
+  /// In zh, this message translates to:
+  /// **'配送站'**
+  String get categoryDelivery;
+
+  /// No description provided for @categoryInternet.
+  ///
+  /// In zh, this message translates to:
+  /// **'网吧'**
+  String get categoryInternet;
+
+  /// No description provided for @categoryStore.
+  ///
+  /// In zh, this message translates to:
+  /// **'商店'**
+  String get categoryStore;
+
+  /// No description provided for @categoryGarment.
+  ///
+  /// In zh, this message translates to:
+  /// **'制衣车间'**
+  String get categoryGarment;
+
+  /// No description provided for @categoryRepair.
+  ///
+  /// In zh, this message translates to:
+  /// **'维修车间'**
+  String get categoryRepair;
+
+  /// No description provided for @categoryOther.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他场景'**
+  String get categoryOther;
+
+  /// No description provided for @taskTagProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'处理'**
+  String get taskTagProcessing;
+
+  /// No description provided for @taskTagCooking.
+  ///
+  /// In zh, this message translates to:
+  /// **'烹饪'**
+  String get taskTagCooking;
+
+  /// No description provided for @taskTagMixing.
+  ///
+  /// In zh, this message translates to:
+  /// **'调制'**
+  String get taskTagMixing;
+
+  /// No description provided for @taskTagSorting.
+  ///
+  /// In zh, this message translates to:
+  /// **'分拣'**
+  String get taskTagSorting;
+
+  /// No description provided for @taskTagPacking.
+  ///
+  /// In zh, this message translates to:
+  /// **'包装'**
+  String get taskTagPacking;
+
+  /// No description provided for @taskTagHandling.
+  ///
+  /// In zh, this message translates to:
+  /// **'搬运'**
+  String get taskTagHandling;
+
+  /// No description provided for @taskTagInventory.
+  ///
+  /// In zh, this message translates to:
+  /// **'盘点'**
+  String get taskTagInventory;
+
+  /// No description provided for @taskTagDelivery.
+  ///
+  /// In zh, this message translates to:
+  /// **'配送'**
+  String get taskTagDelivery;
+
+  /// No description provided for @taskTagOperation.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作'**
+  String get taskTagOperation;
+
+  /// No description provided for @taskTagService.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务'**
+  String get taskTagService;
+
+  /// No description provided for @taskTagDisplay.
+  ///
+  /// In zh, this message translates to:
+  /// **'陈列'**
+  String get taskTagDisplay;
+
+  /// No description provided for @taskTagHandoff.
+  ///
+  /// In zh, this message translates to:
+  /// **'交付'**
+  String get taskTagHandoff;
+
+  /// No description provided for @taskTagSewing.
+  ///
+  /// In zh, this message translates to:
+  /// **'缝纫'**
+  String get taskTagSewing;
+
+  /// No description provided for @taskTagRepair.
+  ///
+  /// In zh, this message translates to:
+  /// **'维修'**
+  String get taskTagRepair;
+
+  /// No description provided for @taskTagTidying.
+  ///
+  /// In zh, this message translates to:
+  /// **'整理'**
+  String get taskTagTidying;
+
+  /// No description provided for @taskTagOther.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他'**
+  String get taskTagOther;
+
+  /// No description provided for @surfaceKitchenFloorWalls.
+  ///
+  /// In zh, this message translates to:
+  /// **'厨房地面 / 墙面'**
+  String get surfaceKitchenFloorWalls;
+
+  /// No description provided for @surfaceCounterUtensils.
+  ///
+  /// In zh, this message translates to:
+  /// **'台面 / 器具'**
+  String get surfaceCounterUtensils;
+
+  /// No description provided for @surfaceSink.
+  ///
+  /// In zh, this message translates to:
+  /// **'水槽'**
+  String get surfaceSink;
+
+  /// No description provided for @surfaceStove.
+  ///
+  /// In zh, this message translates to:
+  /// **'炉灶'**
+  String get surfaceStove;
+
+  /// No description provided for @surfaceBar.
+  ///
+  /// In zh, this message translates to:
+  /// **'吧台'**
+  String get surfaceBar;
+
+  /// No description provided for @surfaceSortingTable.
+  ///
+  /// In zh, this message translates to:
+  /// **'分拣台'**
+  String get surfaceSortingTable;
+
+  /// No description provided for @surfaceWorkbench.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作台'**
+  String get surfaceWorkbench;
+
+  /// No description provided for @surfaceWarehouseFloor.
+  ///
+  /// In zh, this message translates to:
+  /// **'仓库地面'**
+  String get surfaceWarehouseFloor;
+
+  /// No description provided for @surfaceShelving.
+  ///
+  /// In zh, this message translates to:
+  /// **'货架'**
+  String get surfaceShelving;
+
+  /// No description provided for @surfaceDeliveryVehicle.
+  ///
+  /// In zh, this message translates to:
+  /// **'配送车 / 站点'**
+  String get surfaceDeliveryVehicle;
+
+  /// No description provided for @surfaceParcelLocker.
+  ///
+  /// In zh, this message translates to:
+  /// **'快递柜'**
+  String get surfaceParcelLocker;
+
+  /// No description provided for @surfaceStationBar.
+  ///
+  /// In zh, this message translates to:
+  /// **'机位 / 吧台'**
+  String get surfaceStationBar;
+
+  /// No description provided for @surfaceStation.
+  ///
+  /// In zh, this message translates to:
+  /// **'机位'**
+  String get surfaceStation;
+
+  /// No description provided for @surfaceStationFloor.
+  ///
+  /// In zh, this message translates to:
+  /// **'机位 / 地面'**
+  String get surfaceStationFloor;
+
+  /// No description provided for @surfaceCheckout.
+  ///
+  /// In zh, this message translates to:
+  /// **'收银台'**
+  String get surfaceCheckout;
+
+  /// No description provided for @surfaceFloorShelving.
+  ///
+  /// In zh, this message translates to:
+  /// **'地面 / 货架'**
+  String get surfaceFloorShelving;
+
+  /// No description provided for @surfaceSewingMachine.
+  ///
+  /// In zh, this message translates to:
+  /// **'缝纫机'**
+  String get surfaceSewingMachine;
+
+  /// No description provided for @surfaceSewingMachineFloor.
+  ///
+  /// In zh, this message translates to:
+  /// **'缝纫机 / 地面'**
+  String get surfaceSewingMachineFloor;
+
+  /// No description provided for @surfaceWorkbenchToolRack.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作台 / 工具架'**
+  String get surfaceWorkbenchToolRack;
+
+  /// No description provided for @surfaceFloorWorkbench.
+  ///
+  /// In zh, this message translates to:
+  /// **'地面 / 工作台'**
+  String get surfaceFloorWorkbench;
+
+  /// No description provided for @surfaceUnspecified.
+  ///
+  /// In zh, this message translates to:
+  /// **'未指定'**
+  String get surfaceUnspecified;
+
+  /// No description provided for @taskKitchenCleanTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'环境清洁'**
+  String get taskKitchenCleanTitle;
+
+  /// No description provided for @taskKitchenToolsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'台面与器具清洁'**
+  String get taskKitchenToolsTitle;
+
+  /// No description provided for @taskKitchenWashTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'食材清洗'**
+  String get taskKitchenWashTitle;
+
+  /// No description provided for @taskKitchenCookTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'食材烹饪'**
+  String get taskKitchenCookTitle;
+
+  /// No description provided for @taskKitchenDrinkTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'饮品制备'**
+  String get taskKitchenDrinkTitle;
+
+  /// No description provided for @taskWarehouseSortTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'分拣与归类'**
+  String get taskWarehouseSortTitle;
+
+  /// No description provided for @taskWarehousePackTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'包装与封装'**
+  String get taskWarehousePackTitle;
+
+  /// No description provided for @taskWarehouseLoadTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'货物搬运与装载'**
+  String get taskWarehouseLoadTitle;
+
+  /// No description provided for @taskWarehouseInventoryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'库存盘点与管理'**
+  String get taskWarehouseInventoryTitle;
+
+  /// No description provided for @taskWarehouseCleanTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'现场清洁维护'**
+  String get taskWarehouseCleanTitle;
+
+  /// No description provided for @taskDeliverySortTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'包裹分拣'**
+  String get taskDeliverySortTitle;
+
+  /// No description provided for @taskDeliveryDispatchTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'包裹装载与配送'**
+  String get taskDeliveryDispatchTitle;
+
+  /// No description provided for @taskDeliveryLockerTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'快递柜操作'**
+  String get taskDeliveryLockerTitle;
+
+  /// No description provided for @taskInternetServeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务递送'**
+  String get taskInternetServeTitle;
+
+  /// No description provided for @taskInternetOperateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备控制与操作'**
+  String get taskInternetOperateTitle;
+
+  /// No description provided for @taskInternetCleanTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备与环境清洁'**
+  String get taskInternetCleanTitle;
+
+  /// No description provided for @taskStoreDisplayTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品摆放与陈列'**
+  String get taskStoreDisplayTitle;
+
+  /// No description provided for @taskStoreBagTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品包装与装袋'**
+  String get taskStoreBagTitle;
+
+  /// No description provided for @taskStoreHandoverTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'顾客递交与交付'**
+  String get taskStoreHandoverTitle;
+
+  /// No description provided for @taskStoreCleanTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'店面清洁维护'**
+  String get taskStoreCleanTitle;
+
+  /// No description provided for @taskGarmentSewTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'衣物缝纫'**
+  String get taskGarmentSewTitle;
+
+  /// No description provided for @taskGarmentFoldTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'衣物折叠'**
+  String get taskGarmentFoldTitle;
+
+  /// No description provided for @taskGarmentCleanTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备与环境清洁'**
+  String get taskGarmentCleanTitle;
+
+  /// No description provided for @taskRepairFixTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'维修与辅助'**
+  String get taskRepairFixTitle;
+
+  /// No description provided for @taskRepairTidyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'维修车间整理'**
+  String get taskRepairTidyTitle;
+
+  /// No description provided for @taskRepairCleanTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'环境清洁'**
+  String get taskRepairCleanTitle;
+
+  /// No description provided for @taskOtherMiscTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他'**
+  String get taskOtherMiscTitle;
+
+  /// No description provided for @taskGenericStep.
+  ///
+  /// In zh, this message translates to:
+  /// **'按真实工作场景采集，保持双手清晰可见，避免遮挡画面。'**
+  String get taskGenericStep;
+
   /// No description provided for @taskLrPickRemoteTitle.
   ///
   /// In zh, this message translates to:

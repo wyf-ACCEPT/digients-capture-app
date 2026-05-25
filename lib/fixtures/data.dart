@@ -13,17 +13,19 @@ import '../models/task.dart';
 //   - Category.title  = full Chinese name shown in UI
 //   - Task.title      = full Chinese name shown in UI
 //
-// Chinese labels are populated directly in the `title` field; the i18n
-// switch in lib/l10n/localized_fixtures.dart falls through to .title for
-// any id it doesn't explicitly map, so English-locale users also see the
-// Chinese name — intentional, this is China-only deployment.
+// Chinese labels are populated directly in the `title` field as the zh
+// source of truth; lib/l10n/localized_fixtures.dart maps every WF2 id /
+// tag / surface to an English ARB key so English-locale users get
+// translated names. Any id it can't map still falls through to .title
+// (the Chinese label) — keep the switch maps in sync when the catalog
+// changes, or English users regress to Chinese.
 //
 // Each task carries placeholder metadata (rewardPoints / duration /
 // difficulty / lighting / surface / steps). Real per-task instructions
 // will come later when Matt + Dylan author them; for now we render a
 // single generic Chinese reminder so the steps panel isn't empty.
 
-const _kGenericStep =
+const kGenericStep =
     '按真实工作场景采集，保持双手清晰可见，避免遮挡画面。';
 
 const fixtureCategories = <Category>[
@@ -75,7 +77,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '厨房地面 / 墙面',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'kitchen-tools',
@@ -89,7 +91,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '台面 / 器具',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'kitchen-wash',
@@ -103,7 +105,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Bright indoor',
     surface: '水槽',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'kitchen-cook',
@@ -117,7 +119,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Medium',
     lighting: 'Mixed',
     surface: '炉灶',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'kitchen-drink',
@@ -131,7 +133,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Bright indoor',
     surface: '吧台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 
   // ──────────────── 仓库 / 快递仓 / 分拣站 ────────────────
@@ -147,7 +149,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '分拣台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'warehouse-pack',
@@ -161,7 +163,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '工作台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'warehouse-load',
@@ -175,7 +177,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Medium',
     lighting: 'Mixed',
     surface: '仓库地面',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'warehouse-inventory',
@@ -189,7 +191,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '货架',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'warehouse-clean',
@@ -203,7 +205,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '仓库地面',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 
   // ──────────────── 配送站 ────────────────
@@ -219,7 +221,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '分拣台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'delivery-dispatch',
@@ -233,7 +235,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Medium',
     lighting: 'Mixed',
     surface: '配送车 / 站点',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'delivery-locker',
@@ -247,7 +249,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '快递柜',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 
   // ──────────────── 网吧 ────────────────
@@ -263,7 +265,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '机位 / 吧台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'internet-operate',
@@ -277,7 +279,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '机位',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'internet-clean',
@@ -291,7 +293,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '机位 / 地面',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 
   // ──────────────── 商店 ────────────────
@@ -307,7 +309,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '货架',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'store-bag',
@@ -321,7 +323,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '收银台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'store-handover',
@@ -335,7 +337,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Even overhead',
     surface: '收银台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'store-clean',
@@ -349,7 +351,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '地面 / 货架',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 
   // ──────────────── 制衣车间 ────────────────
@@ -365,7 +367,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Medium',
     lighting: 'Bright indoor',
     surface: '缝纫机',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'garment-fold',
@@ -379,7 +381,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Bright indoor',
     surface: '工作台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'garment-clean',
@@ -393,7 +395,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '缝纫机 / 地面',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 
   // ──────────────── 维修车间 ────────────────
@@ -409,7 +411,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Medium',
     lighting: 'Mixed',
     surface: '工作台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'repair-tidy',
@@ -423,7 +425,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '工作台 / 工具架',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
   Task(
     id: 'repair-clean',
@@ -437,7 +439,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '地面 / 工作台',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 
   // ──────────────── 其他场景 ────────────────
@@ -453,7 +455,7 @@ const fixtureTasks = <Task>[
     difficulty: 'Easy',
     lighting: 'Mixed',
     surface: '未指定',
-    steps: [_kGenericStep],
+    steps: [kGenericStep],
   ),
 ];
 

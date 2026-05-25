@@ -778,6 +778,223 @@ class AppLocalizationsEn extends AppLocalizations {
   String get surfaceCounter => 'Counter';
 
   @override
+  String get categoryWarehouse => 'Warehouse / Courier / Sorting';
+
+  @override
+  String get categoryDelivery => 'Delivery Station';
+
+  @override
+  String get categoryInternet => 'Internet Café';
+
+  @override
+  String get categoryStore => 'Store';
+
+  @override
+  String get categoryGarment => 'Garment Workshop';
+
+  @override
+  String get categoryRepair => 'Repair Workshop';
+
+  @override
+  String get categoryOther => 'Other';
+
+  @override
+  String get taskTagProcessing => 'Processing';
+
+  @override
+  String get taskTagCooking => 'Cooking';
+
+  @override
+  String get taskTagMixing => 'Mixing';
+
+  @override
+  String get taskTagSorting => 'Sorting';
+
+  @override
+  String get taskTagPacking => 'Packing';
+
+  @override
+  String get taskTagHandling => 'Handling';
+
+  @override
+  String get taskTagInventory => 'Inventory';
+
+  @override
+  String get taskTagDelivery => 'Delivery';
+
+  @override
+  String get taskTagOperation => 'Operation';
+
+  @override
+  String get taskTagService => 'Service';
+
+  @override
+  String get taskTagDisplay => 'Display';
+
+  @override
+  String get taskTagHandoff => 'Handover';
+
+  @override
+  String get taskTagSewing => 'Sewing';
+
+  @override
+  String get taskTagRepair => 'Repair';
+
+  @override
+  String get taskTagTidying => 'Tidying';
+
+  @override
+  String get taskTagOther => 'Other';
+
+  @override
+  String get surfaceKitchenFloorWalls => 'Kitchen floor / walls';
+
+  @override
+  String get surfaceCounterUtensils => 'Counter / utensils';
+
+  @override
+  String get surfaceSink => 'Sink';
+
+  @override
+  String get surfaceStove => 'Stove';
+
+  @override
+  String get surfaceBar => 'Bar counter';
+
+  @override
+  String get surfaceSortingTable => 'Sorting table';
+
+  @override
+  String get surfaceWorkbench => 'Workbench';
+
+  @override
+  String get surfaceWarehouseFloor => 'Warehouse floor';
+
+  @override
+  String get surfaceShelving => 'Shelving';
+
+  @override
+  String get surfaceDeliveryVehicle => 'Delivery vehicle / station';
+
+  @override
+  String get surfaceParcelLocker => 'Parcel locker';
+
+  @override
+  String get surfaceStationBar => 'Workstation / bar';
+
+  @override
+  String get surfaceStation => 'Workstation';
+
+  @override
+  String get surfaceStationFloor => 'Workstation / floor';
+
+  @override
+  String get surfaceCheckout => 'Checkout counter';
+
+  @override
+  String get surfaceFloorShelving => 'Floor / shelving';
+
+  @override
+  String get surfaceSewingMachine => 'Sewing machine';
+
+  @override
+  String get surfaceSewingMachineFloor => 'Sewing machine / floor';
+
+  @override
+  String get surfaceWorkbenchToolRack => 'Workbench / tool rack';
+
+  @override
+  String get surfaceFloorWorkbench => 'Floor / workbench';
+
+  @override
+  String get surfaceUnspecified => 'Unspecified';
+
+  @override
+  String get taskKitchenCleanTitle => 'Environment Cleaning';
+
+  @override
+  String get taskKitchenToolsTitle => 'Counter & Utensil Cleaning';
+
+  @override
+  String get taskKitchenWashTitle => 'Ingredient Washing';
+
+  @override
+  String get taskKitchenCookTitle => 'Cooking';
+
+  @override
+  String get taskKitchenDrinkTitle => 'Beverage Preparation';
+
+  @override
+  String get taskWarehouseSortTitle => 'Sorting & Categorizing';
+
+  @override
+  String get taskWarehousePackTitle => 'Packing & Sealing';
+
+  @override
+  String get taskWarehouseLoadTitle => 'Goods Handling & Loading';
+
+  @override
+  String get taskWarehouseInventoryTitle => 'Inventory Counting & Management';
+
+  @override
+  String get taskWarehouseCleanTitle => 'Site Cleaning & Maintenance';
+
+  @override
+  String get taskDeliverySortTitle => 'Parcel Sorting';
+
+  @override
+  String get taskDeliveryDispatchTitle => 'Parcel Loading & Dispatch';
+
+  @override
+  String get taskDeliveryLockerTitle => 'Parcel Locker Operation';
+
+  @override
+  String get taskInternetServeTitle => 'Service Delivery';
+
+  @override
+  String get taskInternetOperateTitle => 'Equipment Control & Operation';
+
+  @override
+  String get taskInternetCleanTitle => 'Equipment & Environment Cleaning';
+
+  @override
+  String get taskStoreDisplayTitle => 'Product Placement & Display';
+
+  @override
+  String get taskStoreBagTitle => 'Product Packing & Bagging';
+
+  @override
+  String get taskStoreHandoverTitle => 'Customer Handover';
+
+  @override
+  String get taskStoreCleanTitle => 'Storefront Cleaning & Maintenance';
+
+  @override
+  String get taskGarmentSewTitle => 'Garment Sewing';
+
+  @override
+  String get taskGarmentFoldTitle => 'Garment Folding';
+
+  @override
+  String get taskGarmentCleanTitle => 'Equipment & Environment Cleaning';
+
+  @override
+  String get taskRepairFixTitle => 'Repair & Assist';
+
+  @override
+  String get taskRepairTidyTitle => 'Workshop Tidying';
+
+  @override
+  String get taskRepairCleanTitle => 'Environment Cleaning';
+
+  @override
+  String get taskOtherMiscTitle => 'Other';
+
+  @override
+  String get taskGenericStep =>
+      'Record in a real work setting; keep both hands clearly visible and avoid blocking the frame.';
+
+  @override
   String get taskLrPickRemoteTitle => 'Pick up and place the remote control';
 
   @override
