@@ -20,7 +20,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.digients.capture"
+        // Published Google Play package name. Uses the company-owned domain
+        // (digients.tech → tech.digients.capture), matching the iOS bundle ID.
+        // `namespace` above stays com.digients.capture (internal R/BuildConfig
+        // package only); applicationId and namespace are independent in AGP.
+        applicationId = "tech.digients.capture"
         // API 26+ required: Camera2 LENS_INTRINSIC_CALIBRATION + HEVC encoder.
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
