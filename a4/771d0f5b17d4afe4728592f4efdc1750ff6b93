@@ -1,0 +1,47 @@
+lib/l10n/localized_fixtures.dart
+  s_0cf342cf5183d5::t_9ad56077b89bc0 51-77
+  s_0cf342cf5183d5::t_86785e7a69de36 10-16
+  s_0cf342cf5183d5::t_10ecfbf7cebf27 124-144
+  s_0cf342cf5183d5::t_b7b3e9383f3321 150-156
+  s_0cf342cf5183d5::t_4994a347418af8 27-44
+pubspec.yaml
+  s_0cf342cf5183d5::t_6ac98321b04a30 19
+lib/l10n/app_localizations_zh.dart
+  s_0cf342cf5183d5::t_c6f87042b354aa 770-984
+ios/Runner/PrivacyInfo.xcprivacy
+  s_0cf342cf5183d5::t_19d581dded6e7e 1-54
+lib/l10n/app_zh.arb
+  s_0cf342cf5183d5::t_7170fd8ae0b6f1 388-459
+lib/l10n/app_en.arb
+  s_0cf342cf5183d5::t_4e15987cc1b308 388-459
+ios/Runner.xcodeproj/project.pbxproj
+  s_0cf342cf5183d5::t_951fa5f243ca18 158
+  s_0cf342cf5183d5::t_bca93242561efc 13
+  s_0cf342cf5183d5::t_3ad68a9c08ac11 69
+  s_0cf342cf5183d5::t_e57adfdd1fddf7 277
+lib/l10n/app_localizations.dart
+  s_0cf342cf5183d5::t_c6f87042b354aa 1541-1972
+lib/l10n/app_localizations_en.dart
+  s_0cf342cf5183d5::t_c6f87042b354aa 781-996
+lib/fixtures/data.dart
+  s_0cf342cf5183d5::t_78c27daa8625bd 16-21
+  s_0cf342cf5183d5::t_811a5abf8336fc 28,80,94,108,122,136,152,166,180,194,208,224,238,252,268,282,296,312,326,340,354,370,384,398,414,428,442,458
+lib/screens/v2/settings_screen.dart
+  s_0cf342cf5183d5::t_0a42244ba02233 159,178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "a4771d0f5b17d4afe4728592f4efdc1750ff6b93",
+  "prompts": {},
+  "sessions": {
+    "s_0cf342cf5183d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a08f939c-9e50-46fe-9858-297a15046558",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
