@@ -32,6 +32,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# CI-downloaded release artifacts (AAB/APK) — never committed
+/dist-play/
 
 # Symbolication related
 app.*.symbols
