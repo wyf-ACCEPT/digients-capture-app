@@ -1,0 +1,19 @@
+.gitignore
+  s_e5dff77b999a88::t_344c5acebe8c14 35-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "967c3483f8e2f2b7577721ec012aed78d22f9ae7",
+  "prompts": {},
+  "sessions": {
+    "s_e5dff77b999a88": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f1c35409-5ed3-46a9-9a18-0916d9388efa",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
