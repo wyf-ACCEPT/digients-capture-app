@@ -1,0 +1,23 @@
+ios/Runner.xcodeproj/project.pbxproj
+  s_0cf342cf5183d5::t_89dcf0923eac66 495,626,679
+lib/screens/v2/settings_screen.dart
+  s_0cf342cf5183d5::t_e2cacfed1e61c8 159,178
+pubspec.yaml
+  s_0cf342cf5183d5::t_2becccd57b8c35 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9f039e4bae1b8cadc9922533b698dc9b3e324f89",
+  "prompts": {},
+  "sessions": {
+    "s_0cf342cf5183d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a08f939c-9e50-46fe-9858-297a15046558",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
