@@ -1,0 +1,2 @@
+/* Localized app display name (Simplified Chinese). Shown on-device when system language is zh-Hans. */
+"CFBundleDisplayName" = "数灵数采";

@@ -1,0 +1,2 @@
+/* Localized app display name (English). Falls back to CFBundleDisplayName in Info.plist. */
+"CFBundleDisplayName" = "DiCap";
