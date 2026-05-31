@@ -1,0 +1,30 @@
+ios/Runner/zh-Hans.lproj/InfoPlist.strings
+  s_e4806683d572e3::t_184a88242e8f92 1-2
+ios/Runner/Info.plist
+  s_e4806683d572e3::t_3a746ed3fc790e 10
+ios/Runner.xcodeproj/project.pbxproj
+  s_e4806683d572e3::t_3d45768ad49228 451-459
+  s_e4806683d572e3::t_d1ed3c41f2d104 162
+  s_e4806683d572e3::t_054cebdbec1f1b 255
+  s_e4806683d572e3::t_c7aafd3512d1ae 71-72
+  s_e4806683d572e3::t_4d42876fa3729f 283
+  s_e4806683d572e3::t_e5d18ee87aa4bc 14
+ios/Runner/en.lproj/InfoPlist.strings
+  s_e4806683d572e3::t_4d4e3e30c41a3a 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d53e839a3ad694e78e628f85f9ad6811161f1ef5",
+  "prompts": {},
+  "sessions": {
+    "s_e4806683d572e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe43ba7a-41dd-4ea6-8174-c67608e63c7f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "wyf-ACCEPT <importwyf@gmail.com>"
+    }
+  }
+}
